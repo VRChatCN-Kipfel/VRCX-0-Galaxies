@@ -918,7 +918,8 @@
             "prev": "Previous",
             "next": "Next",
             "next_one": "Next",
-            "skip_all": "Skip all"
+            "skip_all": "Skip all",
+            "source_note": "Announcements come from vrcc.cc. This app only forwards them as-is and makes no guarantees about their content; use the button at the top-right to view the original on the site."
         }
     },
     "nav_menu": {

@@ -222,6 +222,14 @@ export function VrccAnnouncementDialog({
                                 </Button>
                             </div>
                         </div>
+
+                        {/* 来源说明。站方的公告是写给「星遇同频网页」的，正文里会
+                            出现网页上的导航名（快捷栏、我的星…）和只在网页上存在的
+                            功能（添加到主屏幕）。原样转发而不加说明，玩家会以为那是
+                            本应用的东西。这里如实标注来源，不替站方内容做任何担保。 */}
+                        <p className="text-muted-foreground text-[10px] leading-relaxed">
+                            {t('vrcc.announcement.source_note')}
+                        </p>
                     </div>
                 </div>
             </DialogContent>
