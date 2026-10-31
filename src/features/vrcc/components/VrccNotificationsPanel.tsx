@@ -21,14 +21,26 @@ import type {
 const SITE = 'https://vrcc.cc';
 
 /**
+ * 站点**应用界面**的入口。
+ *
+ * 和 `SITE` 不是一回事：`SITE` 是拼路径用的域名基址（例如
+ * `${SITE}/maps/${world}`），而这里要的是「把人送到星遇同频」的地址。
+ * `vrcc.cc` 根路径不是应用本身，`/match` 才是——官方文档里所有指向玩家
+ * 界面的地址（连接页、星卡、地图榜）都挂在 `/match/?...` 下面。
+ */
+const SITE_APP = `${SITE}/match`;
+
+/**
  * 把官方给的**相对路径**拼成完整地址。
  *
  * 官方 `/me/notifications/recent` 的 `url` 形如 `/match/?tab=inbox`，
  * 接在 `https://vrcc.cc` 后面才是可点的链接。已经是绝对地址的原样返回。
+ *
+ * 没有 url 时回退到应用界面而不是站点根：那才是玩家能继续操作的地方。
  */
 function toAbsolute(url: string): string {
     const trimmed = url.trim();
-    if (!trimmed) return SITE;
+    if (!trimmed) return SITE_APP;
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://'))
         return trimmed;
     return `${SITE}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
@@ -244,7 +256,7 @@ function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
                     // 官方 recent 的 url 是**相对路径**（以 /match/ 开头）。
                     // 契约层的 absolute_url() 会拼上站点根；命令层把拼好的
                     // 结果放在同一个字段里，所以我们这里拿到的可以直接用。
-                    const href = item.url ? toAbsolute(item.url) : SITE;
+                    const href = item.url ? toAbsolute(item.url) : SITE_APP;
                     return (
                         <li key={item.id}>
                             <button

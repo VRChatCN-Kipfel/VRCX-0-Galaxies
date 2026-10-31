@@ -735,7 +735,13 @@
         },
         "announcement": {
             "open": "View",
-            "dismiss": "Dismiss this announcement"
+            "dismiss": "Dismiss this announcement",
+            "got_it": "Got it",
+            "view_on_site": "View on site",
+            "prev": "Previous",
+            "next": "Next",
+            "next_one": "Next",
+            "skip_all": "Skip all"
         }
     },
     "nav_menu": {

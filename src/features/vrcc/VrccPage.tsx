@@ -26,29 +26,24 @@ import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/shadcn/tabs';
 
+import { announcementSummary } from './components/VrccAnnouncementBody';
+import { VrccAnnouncementDialog } from './components/VrccAnnouncementDialog';
 import { VrccCurrentMapCard } from './components/VrccCurrentMapCard';
 import { VrccMapsPanel } from './components/VrccMapsPanel';
 import { VrccMePanel } from './components/VrccMePanel';
 import { VrccMutualsPanel } from './components/VrccMutualsPanel';
 import { VrccNotificationsPanel } from './components/VrccNotificationsPanel';
 import { useVrccController, type VrccTab } from './useVrccController';
+import {
+    markSeenIds,
+    normalizeLevel,
+    readBarCursor,
+    readSeenIds,
+    selectPendingAnnouncements,
+    writeBarCursor
+} from './vrccAnnouncementStore';
 import type { VrccAnnouncement } from './vrccApi';
 import { countVrccUnread } from './vrccUnreadCount';
-
-/**
- * 关掉的公告编号，记在本机。公告的编号只增不减：这条和更早的不再显示，
- * 有新的照常出来。
- */
-const DISMISSED_ANNOUNCEMENT_KEY = 'vrcc.dismissedAnnouncement';
-
-function readDismissedAnnouncement(): number | null {
-    try {
-        const id = Number(localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY));
-        return Number.isFinite(id) && id > 0 ? id : null;
-    } catch {
-        return null;
-    }
-}
 
 const VRCC_TABS: readonly VrccTab[] = [
     'maps',
@@ -123,20 +118,50 @@ export function VrccPage() {
         setSearchParams(remaining, { replace: true });
     }, [connected, requestedTab, searchParams, setSearchParams, setTab]);
     const stop = announcements?.stop ?? null;
-    const [dismissedAnnouncement, setDismissedAnnouncement] = useState(
-        readDismissedAnnouncement
+
+    /**
+     * 页内的公告：`bar` 走页顶提示、`pop` 走页面内弹窗。
+     *
+     * `force` 不在这里处理——它归 `VrccAnnouncementHost` 全局弹，同一份内容
+     * 不该因为页面也打开而弹两次。`pop` 也不用全局：那属于「需知」（新功能、
+     * 活动），全局弹就是打扰。
+     *
+     * 已读按 `level` 分开记：`bar` 是水位线（关掉即连同更早的一起不显示），
+     * `pop` 是逐条 id（补发一条旧编号的更正不会因此被吞掉）。
+     */
+    const [barCursor, setBarCursor] = useState<number | null>(() =>
+        readBarCursor()
     );
-    // 公告新的在前：第一条比关掉的那条新的，就是要显示的。
-    const announcement = (announcements?.posts ?? []).find(
-        (post) => (post.id ?? 0) > (dismissedAnnouncement ?? 0)
+    const [seenIds, setSeenIds] = useState<ReadonlySet<number>>(() =>
+        readSeenIds()
     );
-    const dismissAnnouncement = (id: number) => {
-        setDismissedAnnouncement(id);
-        try {
-            localStorage.setItem(DISMISSED_ANNOUNCEMENT_KEY, String(id));
-        } catch {
-            // 存不下就只在这次打开时关掉。
-        }
+
+    const pageAnnouncements = selectPendingAnnouncements(announcements?.posts, {
+        barCursor,
+        seenIds,
+        scope: 'page'
+    });
+    // 页顶 tips 只放 `bar`：那是最轻的一档，一条提示就够。
+    const barPost =
+        pageAnnouncements.find(
+            (post) => normalizeLevel(post.level) === 'bar'
+        ) ?? null;
+    // `pop` 进弹窗序列，可 `‹ 1/3 ›` 翻。
+    const popPosts = pageAnnouncements.filter(
+        (post) => normalizeLevel(post.level) === 'pop'
+    );
+
+    const dismissBar = (id: number) => {
+        writeBarCursor(id);
+        setBarCursor(readBarCursor());
+    };
+    const dismissPop = (id: number) => {
+        markSeenIds([id]);
+        setSeenIds(readSeenIds());
+    };
+    const skipAllPop = (ids: readonly number[]) => {
+        markSeenIds(ids);
+        setSeenIds(readSeenIds());
     };
     const openLink = (url: string) => {
         // 走系统的 `app__open_link`，不要用 `window.open`：Tauri 的 WebView
@@ -227,13 +252,20 @@ export function VrccPage() {
                     </div>
                 )}
 
-                {announcement && (
-                    <VrccAnnouncementLine
-                        post={announcement}
+                {barPost && (
+                    <VrccAnnouncementBar
+                        post={barPost}
                         onOpen={openLink}
-                        onDismiss={dismissAnnouncement}
+                        onDismiss={dismissBar}
                     />
                 )}
+
+                {/* `pop`：页面内弹窗，可 `‹ 1/3 ›` 翻。 */}
+                <VrccAnnouncementDialog
+                    posts={popPosts}
+                    onAdvance={dismissPop}
+                    onSkipAll={skipAllPop}
+                />
 
                 {error && (
                     <div className="border-destructive/40 bg-destructive/10 text-destructive mb-3 flex items-start gap-2 rounded-lg border p-3 text-sm">
@@ -362,12 +394,12 @@ export function VrccPage() {
 }
 
 /**
- * 给所有玩家的公告（`announcements` 的 `posts`），只显示最新一条。
+ * 页顶的 `bar` 公告：一行提示，正文取摘要。
  *
- * 网页上分 `bar` / `pop` / `force` 三种显示法；这里是嵌在页面里的一行，
- * 不弹窗、不拦操作，所以三种一样处理。标题和正文是纯文字，不当 HTML。
+ * `bar` 是三种里最轻的一种，本来就只该占一条。完整正文留给 `pop`/`force`
+ * 的弹窗——那条 765 字、8 个栏目的更新说明塞进一行横条既读不了也排不下。
  */
-function VrccAnnouncementLine({
+function VrccAnnouncementBar({
     post,
     onOpen,
     onDismiss
@@ -377,19 +409,20 @@ function VrccAnnouncementLine({
     onDismiss: (id: number) => void;
 }) {
     const { t } = useTranslation();
-    const link = post.link ?? null;
+    const link = (post.link ?? '').trim();
+    const summary = announcementSummary(post.body ?? null);
     return (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <Megaphone className="text-muted-foreground size-4 shrink-0" />
+        <div className="mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+            <Megaphone className="text-muted-foreground mt-0.5 size-4 shrink-0" />
             <div className="min-w-0 flex-1">
                 <span className="font-medium">{post.title}</span>
-                {post.body && (
+                {summary !== '' && (
                     <span className="text-muted-foreground ml-2 text-xs">
-                        {post.body}
+                        {summary}
                     </span>
                 )}
             </div>
-            {link && (
+            {link !== '' && (
                 <Button
                     variant="link"
                     size="sm"
