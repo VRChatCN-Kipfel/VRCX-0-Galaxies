@@ -7560,17 +7560,20 @@ export type VrccCrossingCards = {
 /**
  * 星轨相交里的「我」的摘要（`GET /me/crossings` 的 `me` 字段）。
  *
- * 只取界面用得到的部分：契约允许服务端返回更多字段，多的直接忽略。
+ * 字段名照官方 `#/components/schemas/Me` 抄：`star`（点亮编号）+ `vrc`
+ * （VRChat 名字），两个都是必填但可为 `null`。早先这里写成了 `{n, name}`，
+ * 那是把「星的编号」和「星名」硬套进来——服务器不会那样回，接上之后只会
+ * 拿到一堆 `null`；而离线测试用的是同一个错误形状，所以一直没暴露。
  */
 export type VrccCrossingMe = {
     /**
-     * 我的星位编号。
+     * 我的点亮编号（官方 `/light/` 那一套）。
      */
-    n?: number | null;
+    star?: number | null;
     /**
-     * 我的星位名称。
+     * 我的 VRChat 名字。
      */
-    name?: string | null;
+    vrc?: string | null;
 };
 /**
  * 一条星轨相交记录（`stars[]` 的条目）。
@@ -7589,7 +7592,11 @@ export type VrccCrossingStar = {
      */
     line?: string | null;
     /**
-     * 星群（内部编号，展示时按 `name`）。
+     * 星群代号。
+     *
+     * 官方 `Group` 是 `"G" / "W" / "Z" / "L" / "A"` 的枚举串，**没有 `name`
+     * 字段**——带名字的是星卡的 `groupName`（「漫游星群」这种）。早先这里
+     * 的注释写「展示时按 `name`」，会让人去找一个不存在的字段。
      */
     group?: string | null;
     /**
