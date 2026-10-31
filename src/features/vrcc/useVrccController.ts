@@ -2,11 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { tauriClient } from '@/platform/tauri/client';
 import { copyTextToClipboard } from '@/services/clipboardService';
-import { openUserDialog, openWorldDialog } from '@/services/dialogService';
+import {
+    openGroupDialog,
+    openUserDialog,
+    openWorldDialog
+} from '@/services/dialogService';
 import i18n from '@/services/i18nService';
 import { openExternalLink } from '@/services/shellIntegrationService';
 import { toast } from '@/services/toastService';
 import { useRuntimeStore } from '@/state/runtimeStore';
+import { useVrccUnreadStore } from '@/state/vrccUnreadStore';
+import { useVrcNotificationStore } from '@/state/vrcNotificationStore';
 
 import {
     vrccApi,
@@ -26,6 +32,7 @@ import {
     type VrccUnread,
     type VrccUsage
 } from './vrccApi';
+import { countVrccUnread } from './vrccUnreadCount';
 
 /**
  * 后端提醒轮询发出的事件名，与 Rust 侧
@@ -56,6 +63,57 @@ const BOARD_REUSE_MS = 60_000;
  * 不可点，玩家就不会用连点去赌「也许这次能过」。
  */
 const DEVICE_AUTH_COOLDOWN_SECS = 5;
+
+/**
+ * 把结构化错误翻译成一句玩家看得懂的话。
+ *
+ * **为什么不直接用 `error.message`**：那是后端给的原文，传输层失败时里面是
+ * `error sending request for url (…)` 这种英文技术串，玩家既看不懂，也判断
+ * 不了该查网络还是该重试。
+ *
+ * 现在按 `layer` + `transportKind` 出文案：
+ * - `input`：我们自己的 bug，只说「操作失败」，细节留给日志
+ * - `transport`：告诉玩家卡在哪一步（DNS / 连不上 / 超时 / 代理）
+ * - `session` / `server`：沿用后端的描述，那些本来就是给人看的
+ *
+ * **`server` 层里有一处例外**：`429 too_many` 打在 `device_code` 上时，额度
+ * 是按**网络出口 IP** 算的（每天 30 个，同一路由下所有人共用），和别人账号的
+ * 额度不是一回事。这句话早先写在 Rust 里，重构后只保留了错误码，所以这里按
+ * `op` 补回来——`op` 一路从 `HttpDetail` 带过来，正是为了让这种「同一个码在
+ * 不同接口下含义不同」的地方有地方判。
+ *
+ * **不假装能分辨「被封」**：RST、端口拒绝、运营商拦截在系统层面一模一样，
+ * 都是建连失败。文案写「可能被拦截」，不写「已被拦截」。
+ */
+export function describeVrccError(error: VrccError): string {
+    if (error.layer === 'input') {
+        // 不该发生。真发生了说明我们构造请求出了错，玩家帮不上忙。
+        return i18n.t('vrcc.error.unknown');
+    }
+
+    if (error.layer === 'transport') {
+        const kind = error.transportKind;
+        if (kind === 'timeout') {
+            return i18n.t('vrcc.error.network.timeout');
+        }
+        // DNS 与建连对玩家的意义不同：前者换 DNS/换网络可能好，后者多半要开代理。
+        // 注意走 SOCKS5 代理时 DNS 由代理解析，这里只会看到 `connect`。
+        if (kind === 'connect') {
+            return i18n.t('vrcc.error.network.connect');
+        }
+        if (kind === 'dns') {
+            return i18n.t('vrcc.error.network.dns');
+        }
+        return i18n.t('vrcc.error.network.generic');
+    }
+
+    // 出口 IP 维度的额度：说成「你自己的次数用完了」会让玩家去查账号。
+    if (error.kind === 'throttled' && error.op === 'device_code') {
+        return i18n.t('vrcc.error.device_code_quota');
+    }
+
+    return error.message || i18n.t('vrcc.error.unknown');
+}
 
 export type VrccTab = 'maps' | 'notifications' | 'mutuals' | 'crossings' | 'me';
 
@@ -91,7 +149,7 @@ type State = {
     /**
      * 「互相连上」这一项失败的原因。
      *
-     * 单独放一个字段而不是共用全局 rror：它以 dev- 标识必然失败（敏感
+     * 单独放一个字段而不是共用全局 error：它以 dev- 标识必然失败（敏感
      * 权限要审核），那是**某个页签的功能没开通**，不是整个页面坏了。塞进
      * 全局错误会让玩家以为连接出了问题。
      */
@@ -219,7 +277,7 @@ export function useVrccController() {
                       );
             toast.add({
                 type: 'error',
-                title: normalized.message || i18n.t('vrcc.error.unknown')
+                title: describeVrccError(normalized)
             });
             patch({ error: normalized });
             if (normalized.kind === 'needsReauth') {
@@ -292,6 +350,19 @@ export function useVrccController() {
         async (mark = false) => {
             const recent = await vrccApi.recentNotifications(mark);
             patch({ recent });
+            if (mark) {
+                // 后端借这次调用把通知中心里那几行按服务端游标标成了已读。
+                // 通知中心是另一条查询、另一份内存快照，不重读就还挂着红点。
+                useVrcNotificationStore
+                    .getState()
+                    .loadForCurrentUser()
+                    .catch((error: unknown) => {
+                        console.warn(
+                            '[vrcc] notification centre reload failed:',
+                            error
+                        );
+                    });
+            }
         },
         [patch]
     );
@@ -659,6 +730,38 @@ export function useVrccController() {
     ]);
 
     /**
+     * 把未读合计同步给侧边栏。
+     *
+     * 侧边栏是常驻组件，而 controller 只在星遇同频页面挂载时跑，所以数字得
+     * 从这里推出去。算的口径和页面标题旁那个角标一致（同一个
+     * `countVrccUnread`），否则两处会显示不同的数字。
+     *
+     * 没连上时推 0：连接断开后留一个旧数字，比不显示更容易误导。
+     */
+    useEffect(() => {
+        const connected = state.connection?.connected ?? false;
+        useVrccUnreadStore.getState().setConnected(connected);
+        useVrccUnreadStore
+            .getState()
+            .setUnreadTotal(
+                connected ? countVrccUnread(state.unread, state.recent) : 0
+            );
+    }, [state.connection?.connected, state.unread, state.recent]);
+
+    /**
+     * 卸载时清掉侧边栏的角标。
+     *
+     * 只清数字不清连接态：玩家可能只是切到别的页面，连接仍然有效，角标在
+     * 下次进页面时会重新拉。真正断开连接时上面的 effect 已经推了 0。
+     */
+    useEffect(
+        () => () => {
+            useVrccUnreadStore.getState().reset();
+        },
+        []
+    );
+
+    /**
      * 切页签。
      *
      * 切到「提醒」时用 `mark=true` 重拉一次：这是玩家真正在看这个列表的时刻，
@@ -920,6 +1023,17 @@ export function useVrccController() {
         openUserDialog({ userId });
     }, []);
 
+    /**
+     * 打开 VRCX-0 自己的群组详情窗。
+     *
+     * 和 `openUser` 同一条合规边界：社区群组的入口只负责把玩家带到我们
+     * 自己的群组页，**加入由玩家在那个界面里自己点**，程序不代发请求。
+     */
+    const openGroup = useCallback((groupId: string) => {
+        if (!groupId.startsWith('grp_')) return;
+        openGroupDialog({ groupId });
+    }, []);
+
     return {
         ...state,
         setTab,
@@ -933,6 +1047,7 @@ export function useVrccController() {
         beginDeviceAuth,
         disconnect,
         openWorld,
-        openUser
+        openUser,
+        openGroup
     };
 }

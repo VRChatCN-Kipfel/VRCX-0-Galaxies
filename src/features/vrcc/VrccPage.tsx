@@ -7,8 +7,9 @@ import {
     Unplug,
     X
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import {
     PageBody,
@@ -25,54 +26,45 @@ import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/shadcn/tabs';
 
+import { announcementSummary } from './components/VrccAnnouncementBody';
+import { VrccAnnouncementDialog } from './components/VrccAnnouncementDialog';
 import { VrccCrossingsPanel } from './components/VrccCrossingsPanel';
 import { VrccCurrentMapCard } from './components/VrccCurrentMapCard';
 import { VrccMapsPanel } from './components/VrccMapsPanel';
 import { VrccMePanel } from './components/VrccMePanel';
 import { VrccMutualsPanel } from './components/VrccMutualsPanel';
 import { VrccNotificationsPanel } from './components/VrccNotificationsPanel';
-import { useVrccController } from './useVrccController';
-import type {
-    VrccAnnouncement,
-    VrccRecentNotifications,
-    VrccUnread
-} from './vrccApi';
+import { useVrccController, type VrccTab } from './useVrccController';
+import {
+    markSeenIds,
+    normalizeLevel,
+    readBarCursor,
+    readSeenIds,
+    selectPendingAnnouncements,
+    writeBarCursor
+} from './vrccAnnouncementStore';
+import type { VrccAnnouncement } from './vrccApi';
+import { countVrccUnread } from './vrccUnreadCount';
 
 /**
- * 关掉的公告编号，记在本机。公告的编号只增不减：这条和更早的不再显示，
- * 有新的照常出来。
- */
-const DISMISSED_ANNOUNCEMENT_KEY = 'vrcc.dismissedAnnouncement';
-
-function readDismissedAnnouncement(): number | null {
-    try {
-        const id = Number(localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY));
-        return Number.isFinite(id) && id > 0 ? id : null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * 页签上的未读数。
+ * 页面**可能**出现的全部页签，含「星轨相交」。
  *
- * 服务器有 `me/unread`（1.13.0 起）时是网页上几处红点的合计；旧服务器上
- * 退回「最近的提醒」里 `id > read` 的条数（`read` 没有时都算未读）。
+ * `crossings` 必须在这里：`VrccTab` 一直包含它，而这份名单在两条分支合并时
+ * 曾经只剩四个，于是 `?tab=crossings` 永远被 `isVrccTab` 挡掉，下面那段
+ * 「服务端要求隐藏时不落过去」的判断成了死代码。要不要真的显示由
+ * `crossingsHidden` 决定，不在识别阶段决定。
  */
-function unreadCount(
-    unread: VrccUnread | null,
-    recent: VrccRecentNotifications | null
-): number {
-    if (unread) {
-        return (
-            (unread.inbox ?? 0) +
-            (unread.cross ?? 0) +
-            (unread.chats ?? 0) +
-            (unread.notes ?? 0)
-        );
-    }
-    const read = recent?.read ?? 0;
-    return (recent?.items ?? []).filter((item) => (item.id ?? 0) > read).length;
+const VRCC_TABS: readonly VrccTab[] = [
+    'maps',
+    'notifications',
+    'mutuals',
+    'crossings',
+    'me'
+];
+
+/** 页面认的页签名。未知值一律忽略，不让它把界面切到一个不存在的页签。 */
+function isVrccTab(value: string | null): value is VrccTab {
+    return value !== null && (VRCC_TABS as readonly string[]).includes(value);
 }
 
 export function VrccPage() {
@@ -112,31 +104,93 @@ export function VrccPage() {
         beginDeviceAuth,
         disconnect,
         openWorld,
-        openUser
+        openUser,
+        openGroup
     } = useVrccController();
 
     const connected = connection?.connected ?? false;
-    const unreadTotal = connected ? unreadCount(unread, recent) : 0;
+    const unreadTotal = connected ? countVrccUnread(unread, recent) : 0;
     // 服务端说这块不该显示时（16–17 岁星池，或玩家关了星轨相交），页签也
     // 一起藏起来，并顺手把停留在这页的玩家送回地图榜——否则会出现「所有
     // 页签都不选中、内容空白」的状态。
     const crossingsHidden = crossings?.hidden === true;
+
+    // 从通知中心点进来时带的页签名。
+    const [searchParams, setSearchParams] = useSearchParams();
+    const requestedTab = searchParams.get('tab');
+    // 用 ref 读隐藏状态：`crossingsHidden` 是每次渲染新算的布尔值，直接进
+    // 依赖数组会让这个 effect 在星轨相交数据回来时白跑一遍（那时页面已经
+    // 落好页签、参数也已经清掉，行为其实不变）。
+    const crossingsHiddenRef = useRef(crossingsHidden);
+    crossingsHiddenRef.current = crossingsHidden;
+    useEffect(() => {
+        // 等连接就绪再应用：`setTab` 在未连接时会直接返回，那时「提醒」页
+        // 该做的已读同步也一并跳过了，页签会落过去而同步没发生。
+        if (!connected || !isVrccTab(requestedTab)) {
+            return;
+        }
+        // 「星轨相交」被服务端要求隐藏时不能落过去：那个页签根本不存在，
+        // 落过去就是一个谁都没选中、内容空白的页面。首帧时数据还没回来，
+        // 现在落到别处反而会误伤——那种情况由下面的 `activeTab` 兜底。
+        const hidden =
+            requestedTab === 'crossings' && crossingsHiddenRef.current;
+        if (!hidden) {
+            setTab(requestedTab);
+        }
+        // 参数用掉就清掉，而且是**无论落没落过去都清**。留着的后果有两个：
+        // 玩家手动切页签时会被它拽回去；以及——`requestedTab` 一直是同一个
+        // 值，后续同一条深链（再点一次同一条通知）就再也触发不了这个 effect。
+        // 早先靠一个 `applied` 布尔去防重入，结果第二次深链被永久吞掉。
+        const remaining = new URLSearchParams(searchParams);
+        remaining.delete('tab');
+        setSearchParams(remaining, { replace: true });
+    }, [connected, requestedTab, searchParams, setSearchParams, setTab]);
     const activeTab = crossingsHidden && tab === 'crossings' ? 'maps' : tab;
     const stop = announcements?.stop ?? null;
-    const [dismissedAnnouncement, setDismissedAnnouncement] = useState(
-        readDismissedAnnouncement
+
+    /**
+     * 页内的公告：`bar` 走页顶提示、`pop` 走页面内弹窗。
+     *
+     * `force` 不在这里处理——它归 `VrccAnnouncementHost` 全局弹，同一份内容
+     * 不该因为页面也打开而弹两次。`pop` 也不用全局：那属于「需知」（新功能、
+     * 活动），全局弹就是打扰。
+     *
+     * 已读按 `level` 分开记：`bar` 是水位线（关掉即连同更早的一起不显示），
+     * `pop` 是逐条 id（补发一条旧编号的更正不会因此被吞掉）。
+     */
+    const [barCursor, setBarCursor] = useState<number | null>(() =>
+        readBarCursor()
     );
-    // 公告新的在前：第一条比关掉的那条新的，就是要显示的。
-    const announcement = (announcements?.posts ?? []).find(
-        (post) => (post.id ?? 0) > (dismissedAnnouncement ?? 0)
+    const [seenIds, setSeenIds] = useState<ReadonlySet<number>>(() =>
+        readSeenIds()
     );
-    const dismissAnnouncement = (id: number) => {
-        setDismissedAnnouncement(id);
-        try {
-            localStorage.setItem(DISMISSED_ANNOUNCEMENT_KEY, String(id));
-        } catch {
-            // 存不下就只在这次打开时关掉。
-        }
+
+    const pageAnnouncements = selectPendingAnnouncements(announcements?.posts, {
+        barCursor,
+        seenIds,
+        scope: 'page'
+    });
+    // 页顶 tips 只放 `bar`：那是最轻的一档，一条提示就够。
+    const barPost =
+        pageAnnouncements.find(
+            (post) => normalizeLevel(post.level) === 'bar'
+        ) ?? null;
+    // `pop` 进弹窗序列，可 `‹ 1/3 ›` 翻。
+    const popPosts = pageAnnouncements.filter(
+        (post) => normalizeLevel(post.level) === 'pop'
+    );
+
+    const dismissBar = (id: number) => {
+        writeBarCursor(id);
+        setBarCursor(readBarCursor());
+    };
+    const dismissPop = (id: number) => {
+        markSeenIds([id]);
+        setSeenIds(readSeenIds());
+    };
+    const skipAllPop = (ids: readonly number[]) => {
+        markSeenIds(ids);
+        setSeenIds(readSeenIds());
     };
     const openLink = (url: string) => {
         // 走系统的 `app__open_link`，不要用 `window.open`：Tauri 的 WebView
@@ -227,13 +281,20 @@ export function VrccPage() {
                     </div>
                 )}
 
-                {announcement && (
-                    <VrccAnnouncementLine
-                        post={announcement}
+                {barPost && (
+                    <VrccAnnouncementBar
+                        post={barPost}
                         onOpen={openLink}
-                        onDismiss={dismissAnnouncement}
+                        onDismiss={dismissBar}
                     />
                 )}
+
+                {/* `pop`：页面内弹窗，可 `‹ 1/3 ›` 翻。 */}
+                <VrccAnnouncementDialog
+                    posts={popPosts}
+                    onAdvance={dismissPop}
+                    onSkipAll={skipAllPop}
+                />
 
                 {error && (
                     <div className="border-destructive/40 bg-destructive/10 text-destructive mb-3 flex items-start gap-2 rounded-lg border p-3 text-sm">
@@ -303,8 +364,11 @@ export function VrccPage() {
 
                         <TabsContent value="maps" className="min-h-0 flex-1">
                             {/* 所在地图卡片放在榜单上方：玩家最关心的是
-                                «我现在这张图怎么样»，而不是全站排行。 */}
-                            {myMap && (
+                                «我现在这张图怎么样»，而不是全站排行。
+                                `off` 是硬阻断：服务层不再把它折成 null，
+                                所以这里必须自己判断——官方要求此时隐藏
+                                这张图的卡片。 */}
+                            {myMap && myMap.off !== true && (
                                 <VrccCurrentMapCard
                                     map={myMap}
                                     onOpenWorld={openWorld}
@@ -343,6 +407,7 @@ export function VrccPage() {
                                 mutuals={mutuals}
                                 mutualsError={mutualsError}
                                 onOpenUser={openUser}
+                                onOpenGroup={openGroup}
                             />
                         </TabsContent>
                         <TabsContent
@@ -398,12 +463,12 @@ export function VrccPage() {
 }
 
 /**
- * 给所有玩家的公告（`announcements` 的 `posts`），只显示最新一条。
+ * 页顶的 `bar` 公告：一行提示，正文取摘要。
  *
- * 网页上分 `bar` / `pop` / `force` 三种显示法；这里是嵌在页面里的一行，
- * 不弹窗、不拦操作，所以三种一样处理。标题和正文是纯文字，不当 HTML。
+ * `bar` 是三种里最轻的一种，本来就只该占一条。完整正文留给 `pop`/`force`
+ * 的弹窗——那条 765 字、8 个栏目的更新说明塞进一行横条既读不了也排不下。
  */
-function VrccAnnouncementLine({
+function VrccAnnouncementBar({
     post,
     onOpen,
     onDismiss
@@ -413,19 +478,20 @@ function VrccAnnouncementLine({
     onDismiss: (id: number) => void;
 }) {
     const { t } = useTranslation();
-    const link = post.link ?? null;
+    const link = (post.link ?? '').trim();
+    const summary = announcementSummary(post.body ?? null);
     return (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <Megaphone className="text-muted-foreground size-4 shrink-0" />
+        <div className="mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+            <Megaphone className="text-muted-foreground mt-0.5 size-4 shrink-0" />
             <div className="min-w-0 flex-1">
                 <span className="font-medium">{post.title}</span>
-                {post.body && (
+                {summary !== '' && (
                     <span className="text-muted-foreground ml-2 text-xs">
-                        {post.body}
+                        {summary}
                     </span>
                 )}
             </div>
-            {link && (
+            {link !== '' && (
                 <Button
                     variant="link"
                     size="sm"
