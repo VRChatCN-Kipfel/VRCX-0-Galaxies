@@ -405,10 +405,12 @@ describe('useVrccController', () => {
         expect(mocks.crossings).not.toHaveBeenCalled();
         expect(mocks.crossingCards).not.toHaveBeenCalled();
 
-        // 玩家切到「星轨相交」：带 mark=true 拉。
+        // 玩家切到「星轨相交」：列表带 mark=true 拉。
         act(() => result.current.setTab('crossings'));
         await waitFor(() => expect(mocks.crossings).toHaveBeenCalledWith(true));
-        expect(mocks.crossingCards).toHaveBeenCalledWith(true);
+        // 星卡**不带** mark：已读只有列表那一条接口能消，星卡再标一次是
+        // 重复动作，而它算第二份读的额度。它只是为了拿 left / max。
+        expect(mocks.crossingCards).toHaveBeenCalledWith(false);
         // 星卡的额度读数被记下来了。
         await waitFor(() => expect(result.current.crossingCards?.left).toBe(3));
     });

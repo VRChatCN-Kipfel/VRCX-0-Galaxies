@@ -376,7 +376,7 @@ impl VrccRemote for FakeRemote {
                 .lock()
                 .unwrap()
                 .clone()
-                .ok_or(VrccError::TokenMissing)?;
+                .ok_or_else(token_missing)?;
             Ok(stars)
         })
     }
@@ -388,11 +388,7 @@ impl VrccRemote for FakeRemote {
             if let Some(error) = self.take_error() {
                 return Err(error);
             }
-            self.cards
-                .lock()
-                .unwrap()
-                .clone()
-                .ok_or(VrccError::TokenMissing)
+            self.cards.lock().unwrap().clone().ok_or_else(token_missing)
         })
     }
 
@@ -1299,10 +1295,10 @@ async fn crossings_requires_connection() {
     // 误以为自己的账号出了问题。
     let service = VrccService::new(Arc::new(MemoryStore::default()), FakeRemote::new());
     let error = service.crossings(false).await.unwrap_err();
-    assert!(matches!(error, VrccError::TokenMissing));
+    assert!(error.is_session_lost());
 
     let error = service.crossing_cards(false).await.unwrap_err();
-    assert!(matches!(error, VrccError::TokenMissing));
+    assert!(error.is_session_lost());
 }
 
 /// 连接好、`crossings` 能返回一条的测试服务。
@@ -1381,12 +1377,7 @@ async fn crossing_cards_falls_back_to_none_on_old_servers() {
     // 这只影响「今天还能连几颗」那一小块——**不能让整个列表跟着失败**，
     // 也不能把令牌当成失效（`not_found` 不是 `gone`）。
     let (service, remote) = crossings_service(None);
-    remote.set_error(VrccError::Api {
-        status: 404,
-        error: "not_found".into(),
-        need: None,
-        why: None,
-    });
+    remote.set_error(http(404, "not_found"));
 
     let cards = service
         .crossing_cards(false)

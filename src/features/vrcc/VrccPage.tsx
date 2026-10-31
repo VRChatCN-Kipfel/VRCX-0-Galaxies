@@ -44,7 +44,7 @@ import {
     writeBarCursor
 } from './vrccAnnouncementStore';
 import type { VrccAnnouncement } from './vrccApi';
-import { countVrccUnread } from './vrccUnreadCount';
+import { countVrccCrossingsUnread, countVrccUnread } from './vrccUnreadCount';
 
 /**
  * 页面**可能**出现的全部页签，含「星轨相交」。
@@ -110,6 +110,9 @@ export function VrccPage() {
 
     const connected = connection?.connected ?? false;
     const unreadTotal = connected ? countVrccUnread(unread, recent) : 0;
+    // 星轨相交自己那几处未读数。它**不算**在 `unreadTotal` 里：那是「提醒」
+    // 页签的数字，两处混在一起时玩家点进去找不到对应条目。
+    const crossingsUnread = connected ? countVrccCrossingsUnread(unread) : 0;
     // 服务端说这块不该显示时（16–17 岁星池，或玩家关了星轨相交），页签也
     // 一起藏起来，并顺手把停留在这页的玩家送回地图榜——否则会出现「所有
     // 页签都不选中、内容空白」的状态。
@@ -355,6 +358,14 @@ export function VrccPage() {
                             {!crossingsHidden && (
                                 <TabsTrigger value="crossings">
                                     {t('vrcc.tab.crossings')}
+                                    {/* 红点挂在**自己**的页签上：那几条未读
+                                        就在这一页里，挂到「提醒」上玩家
+                                        点过去会找不到。 */}
+                                    {crossingsUnread > 0 && (
+                                        <span className="bg-primary/15 text-primary ml-1.5 rounded-full px-1.5 text-[10px] leading-4">
+                                            {crossingsUnread}
+                                        </span>
+                                    )}
                                 </TabsTrigger>
                             )}
                             <TabsTrigger value="me">

@@ -454,9 +454,9 @@ export function useVrccController() {
      * `mark` 只在玩家真的打开这一页时为 true：它会把已读同步到账号，
      * 网页和手机上的红点跟着消。别的场景一律 false。
      *
-     * 星卡的额度（`left` / `max`）是**按天**算的，读一次算第二份读的
-     * 一次，所以这里把它和列表绑在同一个 `mark` 上：后台为了算数字时
-     * 两个都问、两个都花额度，是最贵的用法，也没有任何界面需要它。
+     * **星卡永远不带 `mark`**：已读同步只有列表那一条接口能消红点，星卡再标
+     * 一次是重复动作，而它算**第二份读**的额度。星卡只是为了拿 `left` /
+     * `max` 两个整数，没必要连带一次写。
      */
     const refreshCrossings = useCallback(
         async (mark = false) => {
@@ -466,7 +466,7 @@ export function useVrccController() {
                 // 「今天还能连几颗」这一小块，不该让整个列表失败。
                 const [crossings, cards] = await Promise.all([
                     vrccApi.crossings(mark),
-                    vrccApi.crossingCards(mark).catch(() => null)
+                    vrccApi.crossingCards(false).catch(() => null)
                 ]);
                 // 断开连接会推进代次：断开前发出、断开后才回来的响应
                 // 不能再把状态写回去，否则界面会显示上一个账号的擦肩记录。
@@ -790,9 +790,23 @@ export function useVrccController() {
             if (tab === 'crossings') {
                 // 打开这一页 = 看过了。权限没开通时 `refreshCrossings`
                 // 自己把原因记进 `crossingsError`，不会抛出来。
-                refreshCrossings(true).catch((error) => {
-                    reportError(error, 'refreshCrossings');
-                });
+                refreshCrossings(true).then(
+                    () => {
+                        // `mark=1` 已经把服务端的已读清掉了，但界面上的数字
+                        // 是上一次 `me/unread` 的结果，不重读就会一直亮着，
+                        // 玩家要重开页面才看到它消失。失败不报：红点晚一轮
+                        // 消失比弹一条错误更合适。
+                        refreshUnread(false).catch((error) => {
+                            console.error(
+                                '[vrcc] refreshUnread after mark failed:',
+                                error
+                            );
+                        });
+                    },
+                    (error) => {
+                        reportError(error, 'refreshCrossings');
+                    }
+                );
             }
         },
         [
@@ -800,6 +814,7 @@ export function useVrccController() {
             refreshCrossings,
             refreshMutuals,
             refreshRecent,
+            refreshUnread,
             reportError,
             state.connection?.connected
         ]

@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { countVrccUnread } from './vrccUnreadCount';
+import { countVrccCrossingsUnread, countVrccUnread } from './vrccUnreadCount';
 
 describe('countVrccUnread', () => {
-    it('把四处未读数加总', () => {
+    /**
+     * `cross` **不算**在「提醒」页签的总数里。
+     *
+     * 它属于「星轨相交」那个页签自己的红点。挂在「提醒」上时，玩家点进去
+     * 找不到对应条目——数字说有 2 条新的，列表里一条都没有。
+     */
+    it('不再把 cross 算进「提醒」页签的总数', () => {
         expect(
             countVrccUnread({ inbox: 1, cross: 2, chats: 3, notes: 4 }, null)
-        ).toBe(10);
+        ).toBe(8);
     });
 
     it('缺字段按 0 算，不因 undefined 变成 NaN', () => {
@@ -48,5 +54,25 @@ describe('countVrccUnread', () => {
                 }
             )
         ).toBe(1);
+    });
+});
+
+describe('countVrccCrossingsUnread', () => {
+    it('取 cross 这一项', () => {
+        expect(countVrccCrossingsUnread({ inbox: 5, cross: 2, chats: 1 })).toBe(
+            2
+        );
+    });
+
+    it('只有「提醒」有新的时，星轨相交不亮', () => {
+        expect(countVrccCrossingsUnread({ inbox: 5, cross: 0, chats: 1 })).toBe(
+            0
+        );
+    });
+
+    it('旧服务器没有这一项，回退成 0 而不是拿 recent 去凑', () => {
+        // 那些条目属于提醒，不属于这里；凑一个数字等于凭空造红点。
+        expect(countVrccCrossingsUnread(null)).toBe(0);
+        expect(countVrccCrossingsUnread({ inbox: 1, chats: 0 })).toBe(0);
     });
 });
