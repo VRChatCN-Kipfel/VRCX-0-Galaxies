@@ -21,7 +21,9 @@ const controller = vi.hoisted(() => ({
     tab: 'maps',
     setTab: vi.fn(),
     connected: true,
-    hidden: false
+    hidden: false,
+    // 默认给足权限；要测「没开这个功能」的用例自己改。
+    scope: 'profile notifications maps mutuals crossings' as string | null
 }));
 
 vi.mock('./useVrccController', () => ({
@@ -30,7 +32,10 @@ vi.mock('./useVrccController', () => ({
         setTab: controller.setTab,
         loading: false,
         error: null,
-        connection: { connected: controller.connected },
+        connection: {
+            connected: controller.connected,
+            scope: controller.scope
+        },
         usage: null,
         boards: null,
         boardSort: 'top',
@@ -106,6 +111,7 @@ afterEach(() => {
     controller.tab = 'maps';
     controller.connected = true;
     controller.hidden = false;
+    controller.scope = 'profile notifications maps mutuals crossings';
     controller.setTab.mockReset();
 });
 
@@ -171,6 +177,19 @@ describe('VrccPage 的 ?tab= 深链', () => {
         expect(controller.setTab).not.toHaveBeenCalled();
         // 留着参数会被下一次 effect 反复消费，也会拽住玩家手动的页签切换。
         expect(view.search).not.toContain('tab=');
+    });
+
+    /**
+     * 令牌里没有 `crossings` 时，深链也不该落过去。
+     *
+     * 这是**本地就能判**的事：没给权限的话请求根本发不出去（`403 scope`），
+     * 等响应回来再藏入口等于让玩家先看到、点进去才被告知不行。
+     */
+    it('令牌缺 crossings 权限时，深链不落到这一页', () => {
+        controller.scope = 'profile notifications maps mutuals';
+        renderPage('/vrcc?tab=crossings');
+
+        expect(controller.setTab).not.toHaveBeenCalled();
     });
 
     it('未连接时先不落页签，参数也不消费', () => {

@@ -4,15 +4,15 @@ import { countVrccCrossingsUnread, countVrccUnread } from './vrccUnreadCount';
 
 describe('countVrccUnread', () => {
     /**
-     * `cross` **不算**在「提醒」页签的总数里。
+     * `cross` **算在**合计里，和 Rust 的 `VrccUnread::total()` 同口径。
      *
-     * 它属于「星轨相交」那个页签自己的红点。挂在「提醒」上时，玩家点进去
-     * 找不到对应条目——数字说有 2 条新的，列表里一条都没有。
+     * 侧边栏、腕表、托盘都用这个数，它们不区分「哪一页的新」。摘掉 `cross`
+     * 会让星轨相交的新记录在侧边栏上完全不可见。
      */
-    it('不再把 cross 算进「提醒」页签的总数', () => {
+    it('把四处未读数加总（含 cross，与 Rust total() 一致）', () => {
         expect(
             countVrccUnread({ inbox: 1, cross: 2, chats: 3, notes: 4 }, null)
-        ).toBe(8);
+        ).toBe(10);
     });
 
     it('缺字段按 0 算，不因 undefined 变成 NaN', () => {

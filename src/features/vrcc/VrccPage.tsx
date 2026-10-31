@@ -19,6 +19,7 @@ import {
     PageToolbar
 } from '@/components/layout/PageScaffold';
 import { formatCompactDateTime } from '@/lib/dateTime';
+import { scopeGrants } from '@/lib/vrccScope';
 import { openExternalLink } from '@/services/shellIntegrationService';
 import { toast } from '@/services/toastService';
 import { Badge } from '@/ui/shadcn/badge';
@@ -110,13 +111,22 @@ export function VrccPage() {
 
     const connected = connection?.connected ?? false;
     const unreadTotal = connected ? countVrccUnread(unread, recent) : 0;
-    // 星轨相交自己那几处未读数。它**不算**在 `unreadTotal` 里：那是「提醒」
-    // 页签的数字，两处混在一起时玩家点进去找不到对应条目。
+    // 星轨相交自己那一页的红点。它**也**含在 `unreadTotal` 里（那是侧边栏、
+    // 腕表、托盘共用的合计，和 Rust 的 `VrccUnread::total()` 同口径），
+    // 这里只是给这一页补一个入口角标——未读是这个页签自己的，玩家不该为了
+    // 发现它去翻「提醒」。
     const crossingsUnread = connected ? countVrccCrossingsUnread(unread) : 0;
     // 服务端说这块不该显示时（16–17 岁星池，或玩家关了星轨相交），页签也
     // 一起藏起来，并顺手把停留在这页的玩家送回地图榜——否则会出现「所有
     // 页签都不选中、内容空白」的状态。
-    const crossingsHidden = crossings?.hidden === true;
+    //
+    // **先看本地令牌有没有 `crossings` 权限**：没给的话连请求都发不出去
+    // （`403 scope`），等响应再藏页签等于让玩家先看到入口、点进去才被告知
+    // 不行。令牌的 scope 在 `connection` 里，判断是本地纯函数，不用等网络。
+    // 两者取「或」：任何一边说不行，就不显示这个入口。
+    const crossingsHidden =
+        crossings?.hidden === true ||
+        !scopeGrants(connection?.scope, 'crossings');
 
     // 从通知中心点进来时带的页签名。
     const [searchParams, setSearchParams] = useSearchParams();

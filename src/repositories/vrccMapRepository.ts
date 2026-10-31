@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import { entityQueryPolicies, queryKeys } from '@/lib/entityQueryCache';
 import { normalizeVrccError } from '@/lib/vrccError';
+import { scopeGrants } from '@/lib/vrccScope';
 import { commands } from '@/platform/tauri/bindings';
 import type { VrccMyMap } from '@/platform/tauri/bindings';
 
@@ -341,19 +342,13 @@ export async function prefetchVrccWorldCovers(
  * 那里问的是「该不该替服务器先拦下请求」，不知道就放行（`None => true`，交给
  * 服务器判）；这里问的是「该不该给玩家看一个按钮」，不知道就不给。
  *
- * 官方的 scope 分隔符兼容空格、逗号与 `+`，这里三种都认。
+ * 官方的 scope 分隔符兼容空格、逗号与 `+`，判定本身在
+ * [`scopeGrants`](@/lib/vrccScope)，页面那边用的是同一个。
  */
 export async function fetchVrccScopeGrants(scope: string): Promise<boolean> {
     try {
         const connection = await commands.appVrccConnection();
-        const raw = connection.scope;
-        if (!raw) {
-            return false;
-        }
-        return raw
-            .split(/[\s,+]+/)
-            .map((part) => part.trim())
-            .includes(scope);
+        return scopeGrants(connection.scope, scope);
     } catch {
         return false;
     }

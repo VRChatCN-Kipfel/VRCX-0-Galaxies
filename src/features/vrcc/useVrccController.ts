@@ -462,11 +462,21 @@ export function useVrccController() {
         async (mark = false) => {
             const epoch = personalEpoch.current;
             try {
-                // 星卡是 1.13.0 才有的接口；旧服务器会给 404。那只影响
-                // 「今天还能连几颗」这一小块，不该让整个列表失败。
+                // 星卡是 1.13.0 才有的接口。**404 不用在这里兜**：后端
+                // `crossing_cards` 已经把 `is_not_found()` 转成 `Ok(None)`
+                // 了，这一层再 `.catch(() => null)` 只会把 5xx、传输失败、
+                // 403 一起吞掉——玩家看到的是「今天还能连几颗」那一行莫名
+                // 消失，日志里什么都没有。所以只吞「额度拿不到」这一件事，
+                // 其它错误原样交给外层。
                 const [crossings, cards] = await Promise.all([
                     vrccApi.crossings(mark),
-                    vrccApi.crossingCards(false).catch(() => null)
+                    vrccApi.crossingCards(false).catch((error: unknown) => {
+                        console.error(
+                            '[vrcc] crossing cards failed (quota only):',
+                            error
+                        );
+                        return null;
+                    })
                 ]);
                 // 断开连接会推进代次：断开前发出、断开后才回来的响应
                 // 不能再把状态写回去，否则界面会显示上一个账号的擦肩记录。
