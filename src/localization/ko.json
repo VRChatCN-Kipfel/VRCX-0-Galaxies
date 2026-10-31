@@ -923,6 +923,10 @@
             "source_note": "Announcements come from vrcc.cc. This app only forwards them as-is and makes no guarantees about their content; use the button at the top-right to view the original on the site."
         },
         "crossings": {
+            "loading": "Loading crossings…",
+            "load_failed": "Could not load crossings.",
+            "retry": "Try again",
+            "stale_hint": "Showing the last loaded list; refreshing failed.",
             "need_connect": "별들의 만남 계정에 연결하면 스쳐 지나간 사람을 볼 수 있습니다.",
             "unavailable": "이 계정에서는 별궤도 교차를 사용할 수 없습니다.",
             "needs_scope": "이 기능에는 crossings 권한이 필요합니다. 다시 연결할 때 허용해 주세요.",

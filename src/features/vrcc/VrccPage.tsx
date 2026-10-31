@@ -91,7 +91,9 @@ export function VrccPage() {
         mutualsError,
         crossings,
         crossingCards,
+        crossingsLoading,
         crossingsError,
+        crossingsNeedsScope,
         refreshCrossings,
         service,
         deviceAuth,
@@ -416,6 +418,7 @@ export function VrccPage() {
                                 view={notificationsView}
                                 notes={notes}
                                 notesSupported={notesSupported}
+                                crossingsHidden={crossingsHidden}
                                 onViewChange={setNotificationsView}
                                 onConnect={() => setTab('me')}
                                 onOpenWorld={openWorld}
@@ -439,7 +442,9 @@ export function VrccPage() {
                                 connected={connected}
                                 crossings={crossings}
                                 cards={crossingCards}
+                                loading={crossingsLoading}
                                 crossingsError={crossingsError}
+                                crossingsNeedsScope={crossingsNeedsScope}
                                 onOpenLink={openLink}
                                 onRefresh={() => {
                                     // 手动刷新不算「看过」：这一下可能只是

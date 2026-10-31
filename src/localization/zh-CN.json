@@ -923,6 +923,10 @@
             "source_note": "公告来源于 vrcc.cc，本应用只做原样转发，不对其任意内容做保证；详情请点击右上角按钮在官网查看。"
         },
         "crossings": {
+            "loading": "正在加载星轨相交…",
+            "load_failed": "没能加载星轨相交。",
+            "retry": "重试",
+            "stale_hint": "显示的是上一次的列表，这次刷新失败了。",
             "need_connect": "连接星遇同频账号后，就能看到和你擦肩而过的人。",
             "unavailable": "这个账号暂时用不了星轨相交。",
             "needs_scope": "这项功能需要 crossings 权限。重新连接时勾选它。",

@@ -919,6 +919,10 @@
             "source_note": "Announcements come from vrcc.cc. This app only forwards them as-is and makes no guarantees about their content; use the button at the top-right to view the original on the site."
         },
         "crossings": {
+            "loading": "Loading crossings…",
+            "load_failed": "Could not load crossings.",
+            "retry": "Try again",
+            "stale_hint": "Showing the last loaded list; refreshing failed.",
             "need_connect": "星遇同頻アカウントに接続すると、すれ違った人が見られます。",
             "unavailable": "このアカウントでは星軌交差を利用できません。",
             "needs_scope": "この機能には crossings 権限が必要です。再接続時に許可してください。",

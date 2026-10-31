@@ -923,11 +923,16 @@
             "source_note": "Announcements come from vrcc.cc. This app only forwards them as-is and makes no guarantees about their content; use the button at the top-right to view the original on the site."
         },
         "crossings": {
+            "loading": "Loading crossings…",
+            "load_failed": "Could not load crossings.",
+            "retry": "Try again",
+            "stale_hint": "Showing the last loaded list; refreshing failed.",
             "need_connect": "Connect your star account to see who you crossed paths with.",
             "unavailable": "Crossings is not available for this account yet.",
             "needs_scope": "This feature needs the crossings permission. Reconnect and allow it when asked.",
             "empty": "No crossings yet. People you meet in the same VRChat world show up here.",
-            "count": "{count} crossings",
+            "count_one": "{count} crossing",
+            "count_other": "{count} crossings",
             "quota": "{left} of {max} left today",
             "refresh": "Refresh",
             "unnamed": "Unnamed star",

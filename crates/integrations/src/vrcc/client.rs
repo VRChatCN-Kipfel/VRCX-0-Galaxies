@@ -1393,8 +1393,13 @@ impl VrccClient {
     /// 与 [`Self::crossings`] 的区别：那个是「谁跟我擦过肩」的列表，这个是
     /// 网页「连向我 → 星轨相交」那种完整星卡，另带今天还能连几颗。
     ///
-    /// **算第二份读的额度**（`MoreReads`，与 `/me/today`、`/me/notes` 分开
-    /// 计），所以拉取频率要比列表更克制。只有带 `?mark=1` 才标成看过。
+    /// **算第二份读的额度**（`MoreReads`）。注意是**共享**而不是独立：官方
+    /// 《频率限制》把它和 `/me/today`、`/me/notes`、地图榜一起划进「每个授权
+    /// 每天 1000 次」那一份，不是另一份额度。所以拉取频率要比列表更克制——
+    /// 每拉一次星卡，就少一次留给地图页的次数。
+    ///
+    /// 只有带 `?mark=1` 才标成看过；调用方实际只用 `left` / `max` 两个整数，
+    /// 这层没做裁剪是因为服务器只给整份 `cards[]`。
     pub async fn crossing_cards(&self, mark: bool) -> Result<VrccCrossingCards, VrccError> {
         self.request(Call {
             method: "GET",
@@ -1471,15 +1476,21 @@ fn crossing_cards_path(mark: bool) -> &'static str {
     }
 }
 
-/// 本地限流器的键：接口标识 + 路径。
+/// 本地限流器的键：接口标识 + **路径（不含查询串）**。
 ///
 /// 光用接口标识不够。`me/maps/{world}/page` 对不同的世界、不同的排序是四个不同
 /// 的资源，共用一个键意味着「刚看过 A 就看不到 B」——玩家看到的是「请求太频繁」，
 /// 而真实原因只是两次请求之间要隔三秒。带上路径之后，同一个 URL 才互相排队。
 ///
+/// **查询串必须去掉**：`me/crossings` 和 `me/crossings?mark=1` 是同一个资源，
+/// 只是这次要不要标已读。把它算进键里就变成两个桶——「先点刷新（不 mark）、
+/// 立刻切页签（mark）」能在间隔内连发两次，正好绕开了这个键要挡的东西。
+/// 单独成函数而不是内联，就是为了这一条能被测到。
+///
 /// `op`（进错误详情的那份）仍然用不带路径的 `key`：那是**接口**的身份，消费方
 /// 靠它区分「同一个错误码在不同接口下的不同含义」，路径里的世界 ID 不属于那里。
 fn limiter_key(key: &str, path: &str) -> String {
+    let path = path.split('?').next().unwrap_or(path);
     format!("{key} {path}")
 }
 

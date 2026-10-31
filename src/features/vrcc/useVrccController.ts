@@ -164,15 +164,29 @@ type State = {
     /** 星轨相交的完整星卡（1.13.0 起）；null 表示没拉过或不支持。 */
     crossingCards: VrccCrossingCards | null;
     /**
-     * 「星轨相交」这一项失败的原因。
+     * 正在请求星轨相交。
      *
-     * 与 mutualsError 同理单独放：`dev-` 标识必然拿不到 `crossings`
-     * 敏感权限，那是**某个功能没开通**，不是整个页面坏了。
+     * 和 `crossings === null` 分开：那个只说明「手上没有数据」，既可能是
+     * 还没拉，也可能是拉失败了。合成一个状态的话，面板分不清「加载中」和
+     * 「确实为空」，会先闪一下「还没有擦肩记录」。
+     */
+    crossingsLoading: boolean;
+    /**
+     * 上一次拉取星轨相交失败的原因（人话）；`null` 表示这次成功了。
      *
-     * 不可用的**原因分类**不在这里：它在 `crossings.why` / `crossings.hidden`
-     * 里跟着响应一起存下来，只有一份，不会和它各说各话。
+     * **失败时保留旧的 `crossings`**：清空会让有记录的玩家看到「还没有
+     * 擦肩」，把「这次没拿到」说成了「一条都没有」。界面据此决定是
+     * 「显示旧数据 + 一条提示」还是「空态」。
      */
     crossingsError: string | null;
+    /**
+     * 失败是因为令牌缺 `crossings` 权限（永久性，要重连才能好）。
+     *
+     * 和 `crossingsError` 分开：那一栏是给玩家看的原文，这个是给界面选
+     * 文案用的——缺权限要引导重新授权，网络失败要引导再试一次，两者
+     * 不能用同一句话。
+     */
+    crossingsNeedsScope: boolean;
     service: VrccStatus | null;
     loading: boolean;
     error: VrccError | null;
@@ -207,7 +221,9 @@ const initialState: State = {
     mutualsError: null,
     crossings: null,
     crossingCards: null,
+    crossingsLoading: false,
     crossingsError: null,
+    crossingsNeedsScope: false,
     service: null,
     loading: true,
     error: null,
@@ -461,18 +477,20 @@ export function useVrccController() {
     const refreshCrossings = useCallback(
         async (mark = false) => {
             const epoch = personalEpoch.current;
+            patch({ crossingsLoading: true });
             try {
-                // 星卡是 1.13.0 才有的接口。**404 不用在这里兜**：后端
-                // `crossing_cards` 已经把 `is_not_found()` 转成 `Ok(None)`
-                // 了，这一层再 `.catch(() => null)` 只会把 5xx、传输失败、
-                // 403 一起吞掉——玩家看到的是「今天还能连几颗」那一行莫名
-                // 消失，日志里什么都没有。所以只吞「额度拿不到」这一件事，
-                // 其它错误原样交给外层。
+                // 星卡是 1.13.0 才有的接口，后端已经把 `404 not_found` 转成
+                // `Ok(None)`（旧服务器降级），所以这里**只剩真正的失败**。
+                //
+                // 但星卡只是「今天还能连几颗」那一行的可选信息：它挂了不该
+                // 让整个列表跟着失败。所以一律降级成 `null`（那一行不显示），
+                // 同时把原错误打进日志——**不谎称只有额度问题**：5xx、传输
+                // 失败、403 都会走到这里，日志里如实写是什么。
                 const [crossings, cards] = await Promise.all([
                     vrccApi.crossings(mark),
                     vrccApi.crossingCards(false).catch((error: unknown) => {
                         console.error(
-                            '[vrcc] crossing cards failed (quota only):',
+                            '[vrcc] crossing cards unavailable, hiding the quota row:',
                             error
                         );
                         return null;
@@ -484,29 +502,69 @@ export function useVrccController() {
                 patch({
                     crossings,
                     crossingCards: cards,
-                    crossingsError: null
+                    crossingsLoading: false,
+                    crossingsError: null,
+                    crossingsNeedsScope: false
                 });
                 return crossings;
             } catch (error) {
                 if (epoch !== personalEpoch.current) return null;
-                if (
-                    error instanceof VrccError &&
-                    error.kind === 'missingScope'
-                ) {
-                    // 权限没开通：静默记录，界面在自己的页签里说明。
-                    patch({
-                        crossings: null,
-                        crossingCards: null,
-                        crossingsError: error.message
-                    });
-                    return null;
-                }
-                patch({ crossings: null, crossingCards: null });
+                const isMissingScope =
+                    error instanceof VrccError && error.kind === 'missingScope';
+                // **保留上一次的数据**。失败时清空会让「有记录」的玩家看到
+                // 「还没有擦肩」，把「这次没拿到」说成了「一条都没有」。
+                // 空态只在确实拿到过响应且 `stars` 为空时出现。
+                patch({
+                    crossingsLoading: false,
+                    crossingsError: describeVrccError(
+                        error instanceof VrccError
+                            ? error
+                            : new VrccError(String(error), 'other')
+                    ),
+                    crossingsNeedsScope: isMissingScope
+                });
+                // 缺权限是**预期内**的结果（`dev-` 标识必然要不到敏感权限，
+                // 玩家也可能没开这个功能）。它在自己的页签里说明就够了，
+                // 不该弹 toast、也不该被当成整页的错误。
+                if (isMissingScope) return null;
                 throw error;
             }
         },
         [patch]
     );
+
+    /**
+     * 只问一次「星轨相交对这个玩家可见吗」，不标记已读。
+     *
+     * ## 为什么要探测
+     *
+     * `hide`（16–17 岁星池、或玩家自己在隐私设置里关掉）只有**问过才知道**，
+     * 而官方要求「客户端不应显示此模块」。不探测的话，玩家会先看到页签、
+     * 点进去、两个请求回来后才消失——那等于已经确认了「这功能存在、只是
+     * 没给你」，正是要避免的那件事，只是换了个时间窗口。
+     *
+     * ## 代价
+     *
+     * 每次打开星遇同频页面多 1 次第一份读（1000/天）。这是有意的交换：
+     * 合规要求优先于一次读。只问列表、不连带星卡（星卡是第二份读的额度，
+     * 而可见性在列表的 `hidden` 字段里）。
+     *
+     * 探测失败**不打扰玩家**：页签按「还没确认」处理（照常可见），等玩家
+     * 真的点进去时由 `refreshCrossings` 报真实原因。探测只是提前收敛，不是
+     * 唯一的信息来源。
+     */
+    const probeCrossings = useCallback(async () => {
+        const epoch = personalEpoch.current;
+        try {
+            const crossings = await vrccApi.crossings(false);
+            if (epoch !== personalEpoch.current) return;
+            patch({ crossings, crossingsLoading: false });
+        } catch (error) {
+            if (epoch !== personalEpoch.current) return;
+            // 静默：点进去时还会再问一次，那次才负责报错。
+            console.info('[vrcc] crossings visibility probe skipped:', error);
+        }
+    }, [patch]);
 
     const refreshService = useCallback(async () => {
         try {
@@ -572,15 +630,23 @@ export function useVrccController() {
             void refreshMutuals().catch((error) => {
                 reportError(error, 'refreshMutuals');
             });
-            // 「星轨相交」**不在这里拉**：首屏一定是地图榜那个页签，没人看得见
-            // 它。它又算两份每天额度（列表一份、星卡一份），提前拉等于每次开页
-            // 都白花 2 次。等玩家真切到那一页时 `setTab` 会拉，连 mark 一起做。
+            // 「星轨相交」这里只**探一次可见性**，不拉星卡、不标已读。
+            //
+            // 为什么不索性不拉：`hide`（16–17 岁星池、或玩家自己关了）只有
+            // 问过才知道，而官方要求「客户端不应显示此模块」。不探测的话
+            // 页签会先出现、点进去才消失——那等于已经确认了「这功能存在、
+            // 只是没给你」。多花 1 次第一份读换掉这个时间窗口，值得。
+            //
+            // 星卡（第二份读）仍然等玩家真的切过去才拉：可见性在列表的
+            // `hidden` 字段里，不需要它。
+            void probeCrossings();
             void refreshUnread(true).catch((error) => {
                 reportError(error, 'refreshUnread');
             });
         }
     }, [
         patch,
+        probeCrossings,
         refreshAnnouncements,
         refreshBoards,
         refreshConnection,
@@ -1008,7 +1074,9 @@ export function useVrccController() {
                 mutualsError: null,
                 crossings: null,
                 crossingCards: null,
-                crossingsError: null
+                crossingsLoading: false,
+                crossingsError: null,
+                crossingsNeedsScope: false
             });
         } catch (error) {
             // 可重试的失败（网络不通、正在退避）**后端会刻意保留令牌**，

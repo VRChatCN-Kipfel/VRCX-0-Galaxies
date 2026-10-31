@@ -62,6 +62,7 @@ export function VrccNotificationsPanel({
     view,
     notes,
     notesSupported,
+    crossingsHidden,
     onViewChange,
     onConnect,
     onOpenWorld
@@ -73,6 +74,8 @@ export function VrccNotificationsPanel({
     notes: VrccNotes | null;
     /** 服务器有没有通知中心；还不知道时为 null。 */
     notesSupported: boolean | null;
+    /** 服务端要求整个星轨相交模块不显示（hide）。 */
+    crossingsHidden?: boolean;
     onViewChange: (view: VrccNotificationsView) => void;
     onConnect: () => void;
     /** 通知里带地图的，点开 VRCX-0 自己的世界详情窗。 */
@@ -135,6 +138,7 @@ export function VrccNotificationsPanel({
                     {unread && (
                         <UnreadCounts
                             unread={unread}
+                            crossingsHidden={crossingsHidden}
                             onOpenNotes={
                                 showSwitch
                                     ? () => onViewChange('notes')
@@ -160,21 +164,38 @@ export function VrccNotificationsPanel({
  *
  * 服务器没给的那一项不显示：令牌没有 `crossings` 权限时没有 `cross` 这个键，
  * 显示成 0 会让人以为是「没有新的」。
+ *
+ * `crossingsHidden` 时**连 `cross` 这一项也不显示**。`hide` 的语义是「客户端
+ * 不应显示此模块」，页签藏起来了、这一行却还写着「星轨相交 0」，等于换个
+ * 地方把模块存在这件事说出来。注意它和「没有这个键」是两件事：服务端在这种
+ * 情况下通常仍然返回 `cross: 0`（权限在，只是星池不允许），所以要显式挡。
  */
 function UnreadCounts({
     unread,
+    crossingsHidden,
     onOpenNotes
 }: {
     unread: VrccUnread;
+    /** 服务端要求整个星轨相交模块不显示。 */
+    crossingsHidden?: boolean;
     onOpenNotes?: () => void;
 }) {
     const { t } = useTranslation();
+    // 直接按条件构造，不用 `.filter`：过滤过的数组会丢掉 `key` 的字面量
+    // 联合类型，调用方就得写类型断言。
     const items: Array<{
         key: 'inbox' | 'cross' | 'chats' | 'notes';
         href?: string;
     }> = [
         { key: 'inbox', href: `${SITE}/match/?tab=inbox` },
-        { key: 'cross', href: `${SITE}/match/?tab=inbox&cross` },
+        ...(crossingsHidden
+            ? []
+            : [
+                  {
+                      key: 'cross' as const,
+                      href: `${SITE}/match/?tab=inbox&cross`
+                  }
+              ]),
         { key: 'chats', href: `${SITE}/match/?tab=inbox` },
         { key: 'notes' }
     ];

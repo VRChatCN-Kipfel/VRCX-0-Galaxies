@@ -25,12 +25,13 @@ export function countVrccUnread(
     recent: VrccRecentNotifications | null
 ): number {
     if (unread) {
-        return (
-            (unread.inbox ?? 0) +
-            (unread.cross ?? 0) +
-            (unread.chats ?? 0) +
-            (unread.notes ?? 0)
-        );
+        // 逐项夹到 0 再加，和 Rust `VrccUnread::total()` 的
+        // `.map(|count| count.max(0))` 对齐。服务端给出负数（异常、或以后
+        // 换了字段含义）时，直接相加会算出负的角标——那东西显示不出来，
+        // 还会让「有没有未读」的判断反过来。
+        return [unread.inbox, unread.cross, unread.chats, unread.notes]
+            .map((count) => Math.max(0, count ?? 0))
+            .reduce((sum, count) => sum + count, 0);
     }
     const read = recent?.read ?? 0;
     return (recent?.items ?? []).filter((item) => (item.id ?? 0) > read).length;
@@ -48,5 +49,5 @@ export function countVrccUnread(
  * 拿「最近的提醒」去凑——那些条目属于提醒，不属于这里。
  */
 export function countVrccCrossingsUnread(unread: VrccUnread | null): number {
-    return unread?.cross ?? 0;
+    return Math.max(0, unread?.cross ?? 0);
 }

@@ -1,7 +1,9 @@
 import { ExternalLink, Radar, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { formatRelativeTime } from '@/lib/dateTime';
 import { Button } from '@/ui/shadcn/button';
+import { Spinner } from '@/ui/shadcn/spinner';
 
 import type { VrccCrossingCards, VrccCrossings } from '../vrccApi';
 
@@ -55,7 +57,9 @@ export function VrccCrossingsPanel({
     connected,
     crossings,
     cards,
+    loading,
     crossingsError,
+    crossingsNeedsScope,
     onOpenLink,
     onRefresh
 }: {
@@ -63,8 +67,17 @@ export function VrccCrossingsPanel({
     crossings: VrccCrossings | null;
     /** 完整星卡，只用来显示「今天还能连几颗」。旧服务器上为 null。 */
     cards: VrccCrossingCards | null;
-    /** 这项功能没开通的原因（`dev-` 标识必然要不到 crossings）。 */
+    /** 正在请求。用来区分「加载中」和「确实为空」。 */
+    loading: boolean;
+    /**
+     * 上一次请求失败的原因（人话）；`null` 表示这次成功了。
+     *
+     * 失败时 `crossings` **不会被清空**，所以这里可能是「有数据 + 有一条
+     * 错误提示」，而不是非此即彼。
+     */
     crossingsError?: string | null;
+    /** 失败是因为令牌缺 `crossings` 权限（要重连才好）。 */
+    crossingsNeedsScope?: boolean;
     onOpenLink: (url: string) => void;
     onRefresh: () => void;
 }) {
@@ -107,22 +120,54 @@ export function VrccCrossingsPanel({
         );
     }
 
+    // 手上一条数据都没有时的三种情况，**必须分开**：
+    //
+    // 1. 正在请求 —— 说「加载中」。不能走空态，否则每次开页都先闪一下
+    //    「还没有擦肩记录」。
+    // 2. 请求失败且从没成功过 —— 说「这次没拿到」。把「没拿到」说成
+    //    「一条都没有」是在编造事实。
+    // 3. 成功过、`stars` 为空 —— 才是真的空。
+    if (stars.length === 0 && loading) {
+        return (
+            <div className="text-muted-foreground flex h-40 items-center justify-center gap-2 text-sm">
+                <Spinner className="size-4" />
+                {t('vrcc.crossings.loading')}
+            </div>
+        );
+    }
+
+    if (stars.length === 0 && crossingsError) {
+        return (
+            <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+                <Radar className="size-6" />
+                <div className="leading-relaxed">
+                    {crossingsNeedsScope
+                        ? t('vrcc.crossings.unavailable')
+                        : t('vrcc.crossings.load_failed')}
+                </div>
+                {/* 缺权限要引导重新授权；网络失败要引导再试一次。两句话
+                    不能混用——让网络问题的人去重连，他只会照做然后更困惑。 */}
+                <div className="text-[11px] leading-relaxed">
+                    {crossingsNeedsScope
+                        ? t('vrcc.crossings.needs_scope')
+                        : crossingsError}
+                </div>
+                {!crossingsNeedsScope && (
+                    <Button variant="outline" size="sm" onClick={onRefresh}>
+                        {t('vrcc.crossings.retry')}
+                    </Button>
+                )}
+            </div>
+        );
+    }
+
     if (stars.length === 0) {
         return (
             <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
                 <Radar className="size-6" />
                 <div className="leading-relaxed">
-                    {crossingsError
-                        ? t('vrcc.crossings.unavailable')
-                        : t('vrcc.crossings.empty')}
+                    {t('vrcc.crossings.empty')}
                 </div>
-                {/* 只有真的因为缺权限失败时才提示去开权限。已经有权限、
-                    只是确实还没擦肩的玩家，看到「重新连接一次」只会困惑。 */}
-                {crossingsError && (
-                    <div className="text-[11px] leading-relaxed">
-                        {t('vrcc.crossings.needs_scope')}
-                    </div>
-                )}
             </div>
         );
     }
@@ -148,73 +193,107 @@ export function VrccCrossingsPanel({
                 </Button>
             </div>
 
+            {/* 有旧数据、这次刷新失败：**留着列表**，只在上面加一条提示。
+                把已经看到过的记录清掉，比显示一条过时数据更糟。 */}
+            {crossingsError && (
+                <div className="text-muted-foreground px-1 text-xs">
+                    {crossingsNeedsScope
+                        ? t('vrcc.crossings.needs_scope')
+                        : t('vrcc.crossings.stale_hint')}
+                </div>
+            )}
+
             <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
                 <ul className="divide-y">
-                    {stars.map((star) => (
-                        <li
-                            key={star.n}
-                            className="hover:bg-accent/40 flex items-start gap-3 px-3 py-2"
-                        >
-                            <span className="text-muted-foreground w-8 shrink-0 pt-0.5 text-right text-xs tabular-nums">
-                                #{star.n}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="truncate text-sm font-medium">
-                                        {star.name ??
-                                            t('vrcc.crossings.unnamed')}
-                                    </span>
-                                    {star.fresh && (
-                                        <span className="bg-primary/15 text-primary shrink-0 rounded-full px-1.5 text-[10px] leading-4">
-                                            {t('vrcc.crossings.fresh')}
-                                        </span>
-                                    )}
-                                </div>
-                                {/* 一句话描述；没有就退回匿名星卡介绍。 */}
-                                {(star.line || star.intro) && (
-                                    <div className="text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-relaxed">
-                                        {star.line ?? star.intro}
-                                    </div>
-                                )}
-                                {/* `vrc` 只在双向连上后才有。没连上时显示
-                                    的是「未连线」，不是空白——空白会被读成
-                                    「对方没有名字」。 */}
-                                <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
-                                    {star.mutual ? (
-                                        <span className="flex items-center gap-0.5">
-                                            <ExternalLink className="size-3" />
-                                            {star.vrc ??
-                                                t('vrcc.crossings.mutual')}
-                                        </span>
-                                    ) : star.linked ? (
-                                        <span>
-                                            {t('vrcc.crossings.linked')}
-                                        </span>
-                                    ) : (
-                                        <span>
-                                            {t('vrcc.crossings.not_linked')}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            {/* 网页上「星轨相交」那一页：可以看完整星卡，
-                                也可以从那里连线。客户端不代做连线。 */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="shrink-0"
-                                onClick={() =>
-                                    onOpenLink(
-                                        `${SITE}/match/?tab=inbox&cross=${star.n}`
-                                    )
-                                }
-                                aria-label={t('vrcc.crossings.open_page')}
-                                title={t('vrcc.crossings.open_page')}
+                    {stars.map((star, index) => {
+                        // `n` 是可选字段：服务端省略时是 `undefined`。拿它当
+                        // React key 会让所有缺字段的行撞成同一个 key；
+                        // `?cross=0` 也会指向一个不存在的编号。索引兜底，
+                        // 编号只在真有的时候才用。
+                        const no = star.n ?? 0;
+                        const key = no > 0 ? `n-${no}` : `i-${index}`;
+                        const crossedAt = star.at
+                            ? formatRelativeTime(star.at, { style: 'short' })
+                            : '';
+                        return (
+                            <li
+                                key={key}
+                                className="hover:bg-accent/40 flex items-start gap-3 px-3 py-2"
                             >
-                                <Radar className="size-3.5" />
-                            </Button>
-                        </li>
-                    ))}
+                                <span className="text-muted-foreground w-8 shrink-0 pt-0.5 text-right text-xs tabular-nums">
+                                    {no > 0 ? `#${no}` : '—'}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="truncate text-sm font-medium">
+                                            {star.name ??
+                                                t('vrcc.crossings.unnamed')}
+                                        </span>
+                                        {star.fresh && (
+                                            <span className="bg-primary/15 text-primary shrink-0 rounded-full px-1.5 text-[10px] leading-4">
+                                                {t('vrcc.crossings.fresh')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {/* 一句话描述；没有就退回匿名星卡介绍。 */}
+                                    {(star.line || star.intro) && (
+                                        <div className="text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-relaxed">
+                                            {star.line ?? star.intro}
+                                        </div>
+                                    )}
+                                    {/* `vrc` 只在双向连上后才有。没连上时显示
+                                        的是「未连线」，不是空白——空白会被读成
+                                        「对方没有名字」。 */}
+                                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
+                                        {star.mutual ? (
+                                            <span className="flex items-center gap-0.5">
+                                                <ExternalLink className="size-3" />
+                                                {star.vrc ??
+                                                    t('vrcc.crossings.mutual')}
+                                            </span>
+                                        ) : star.linked ? (
+                                            <span>
+                                                {t('vrcc.crossings.linked')}
+                                            </span>
+                                        ) : (
+                                            <span>
+                                                {t('vrcc.crossings.not_linked')}
+                                            </span>
+                                        )}
+                                        {/* 擦肩发生在什么时候。这一列本来就是
+                                            按时间线索排的，「什么时候」是主线索
+                                            之一；缺字段时整块不渲染，不留「—」。 */}
+                                        {crossedAt && (
+                                            <span className="shrink-0">
+                                                {crossedAt}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                {/* 网页上「星轨相交」那一页：可以看完整星卡，
+                                    也可以从那里连线。客户端不代做连线。
+                                    没有编号时不给按钮——`?cross=0` 指不到东西。 */}
+                                {no > 0 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shrink-0"
+                                        onClick={() =>
+                                            onOpenLink(
+                                                `${SITE}/match/?tab=inbox&cross=${no}`
+                                            )
+                                        }
+                                        aria-label={t(
+                                            'vrcc.crossings.open_page'
+                                        )}
+                                        title={t('vrcc.crossings.open_page')}
+                                    >
+                                        <Radar className="size-3.5" />
+                                    </Button>
+                                )}
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
         </div>

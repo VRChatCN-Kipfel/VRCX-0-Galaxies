@@ -244,14 +244,15 @@ fn crossings_parse_and_the_why_reasons_classify_correctly() {
     use vrcx_0_contracts::vrcc::{VrccCrossingWhy, VrccCrossings};
 
     // 正常一条：有擦肩记录，还没连线。
+    // `group` 用官方枚举串（`G`/`W`/`Z`/`L`/`A`），`me` 用官方 `{star, vrc}`。
     let list: VrccCrossings = parse(
         r#"{"stars":[
-            {"n":77,"name":"拾光旅人","line":"放慢脚步逛世界","group":"g1","star":31,
+            {"n":77,"name":"拾光旅人","line":"放慢脚步逛世界","group":"G","star":31,
              "intro":"平时喜欢在安静的世界拍照、听音乐","vrc":null,
              "linked":false,"mutual":false,"at":1792830000000,"fresh":true},
-            {"n":78,"name":"已连上的","group":"g1","vrc":"StarTraveler",
+            {"n":78,"name":"已连上的","group":"W","vrc":"StarTraveler",
              "linked":true,"mutual":true,"at":1792830000001,"fresh":false}
-        ],"n":2,"why":null,"me":{"n":12,"name":"夜航星"}}"#,
+        ],"n":2,"why":null,"me":{"star":1024,"vrc":"夜航星"}}"#,
     );
 
     assert_eq!(list.stars.len(), 2);
@@ -274,11 +275,16 @@ fn crossings_parse_and_the_why_reasons_classify_correctly() {
     assert!(second.linked && second.mutual);
     assert_eq!(second.vrc.as_deref(), Some("StarTraveler"));
 
-    assert_eq!(list.me.as_ref().and_then(|me| me.n), Some(12));
+    // `me` 是官方的 `{star, vrc}`：点亮编号 + VRChat 名字。
+    assert_eq!(list.me.as_ref().and_then(|me| me.star), Some(1024));
     assert_eq!(
-        list.me.as_ref().and_then(|me| me.name.as_deref()),
+        list.me.as_ref().and_then(|me| me.vrc.as_deref()),
         Some("夜航星")
     );
+
+    // `group` 照官方枚举原样保留，不做映射。
+    assert_eq!(first.group.as_deref(), Some("G"));
+    assert_eq!(second.group.as_deref(), Some("W"));
 
     // 七种 why 取值 + 未知值 + 缺省值。
     assert_eq!(VrccCrossingWhy::parse(None), VrccCrossingWhy::Available);

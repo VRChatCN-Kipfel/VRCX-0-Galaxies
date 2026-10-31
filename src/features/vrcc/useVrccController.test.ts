@@ -379,11 +379,13 @@ describe('useVrccController', () => {
         expect(result.current.crossings?.stars).toHaveLength(0);
     });
 
-    it('首屏不拉星轨相交，切到这一页才拉、并且带 mark=true', async () => {
-        // 两件事一起钉住：
-        // 1. 首屏一定停在地图榜，没人看得见星轨相交。它算两份每天额度
-        //    （列表一份、星卡一份），提前拉就是每次开页白花 2 次。
-        // 2. 玩家真切到这一页 = 看过了，要带 mark=true 把红点消掉。
+    it('首屏只探可见性、不拉星卡；切到这一页才带 mark=true 拉全', async () => {
+        // 三件事一起钉住：
+        // 1. 首屏探一次**列表**（不带 mark），只为了知道 `hidden`——
+        //    `hide` 不探测就会「页签先出现、点进去才消失」，那等于已经
+        //    确认了功能存在，正是官方要求避免的。
+        // 2. 星卡首屏**一定不拉**：它是第二份读的额度，而可见性在列表里。
+        // 3. 玩家真切到这一页 = 看过了，要带 mark=true 把红点消掉。
         //    这条链路错了，红点永远消不掉。
         mocks.crossings.mockResolvedValue({
             stars: [],
@@ -401,8 +403,11 @@ describe('useVrccController', () => {
         const { result } = renderHook(() => useVrccController());
         await waitFor(() => expect(result.current.loading).toBe(false));
 
-        // 首屏：一次都没问过。
-        expect(mocks.crossings).not.toHaveBeenCalled();
+        // 首屏：列表探过一次，**不带 mark**；星卡一次都没问过。
+        await waitFor(() =>
+            expect(mocks.crossings).toHaveBeenCalledWith(false)
+        );
+        expect(mocks.crossings).toHaveBeenCalledTimes(1);
         expect(mocks.crossingCards).not.toHaveBeenCalled();
 
         // 玩家切到「星轨相交」：列表带 mark=true 拉。
@@ -413,6 +418,31 @@ describe('useVrccController', () => {
         expect(mocks.crossingCards).toHaveBeenCalledWith(false);
         // 星卡的额度读数被记下来了。
         await waitFor(() => expect(result.current.crossingCards?.left).toBe(3));
+    });
+
+    /** 探测拿到的 `hidden` 要让页签在玩家点进去之前就消失。 */
+    it('探测到 hidden 后 crossings.hidden 为真，界面据此藏入口', async () => {
+        mocks.crossings.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: 'hide',
+            hidden: true,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() =>
+            expect(result.current.crossings?.hidden).toBe(true)
+        );
+        // 可见性不需要星卡，首屏不该问它。
+        expect(mocks.crossingCards).not.toHaveBeenCalled();
+    });
+
+    /** 探测失败不打扰玩家：页签照常，等点进去那次报真实原因。 */
+    it('探测失败是静默的，不写 crossingsError', async () => {
+        mocks.crossings.mockRejectedValueOnce(new Error('network down'));
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.crossingsError).toBeNull();
     });
 
     it('手动刷新星轨相交不替玩家把记录标成已读', async () => {

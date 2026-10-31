@@ -928,6 +928,10 @@
             "source_note": "Announcements come from vrcc.cc. This app only forwards them as-is and makes no guarantees about their content; use the button at the top-right to view the original on the site."
         },
         "crossings": {
+            "loading": "Loading crossings…",
+            "load_failed": "Could not load crossings.",
+            "retry": "Try again",
+            "stale_hint": "Showing the last loaded list; refreshing failed.",
             "need_connect": "Připojte svůj hvězdný účet, abyste viděli, s kým jste se míjeli.",
             "unavailable": "Křížení nejsou pro tento účet dostupná.",
             "needs_scope": "Tato funkce vyžaduje oprávnění crossings. Připojte se znovu a povolte ho.",
