@@ -187,4 +187,39 @@ describe('网络层文案', () => {
         );
         expect(describeVrccError(error)).toContain('429');
     });
+    /**
+     * `429 too_many` 打在 `device_code` 上是**出口 IP 维度**的额度，不是玩家
+     * 自己账号的。
+     *
+     * 这句话早先硬编码在 Rust 里，重构把错误收敛成只带 HTTP 事实之后没人接，
+     * 于是玩家看到的是一句通用的「请求太频繁」——他会去反复重试、去查账号，
+     * 而真正有效的动作是「换个网络」。`op` 字段一路带过来就是为了这一处。
+     */
+    it('申请连接码被限流时说清是按出口 IP 算的，并让玩家换网络', async () => {
+        const { describeVrccError } = await import('./useVrccController');
+        const { VrccError } = await import('./vrccApi');
+
+        const quota = new VrccError(
+            '星遇同频接口返回 HTTP 429（too_many）',
+            'throttled',
+            null,
+            'server',
+            null,
+            'device_code'
+        );
+        expect(describeVrccError(quota)).toBe('vrcc.error.device_code_quota');
+
+        // 别的接口上的限流仍然是「你自己问太多了」，不能共用这条文案。
+        const boards = new VrccError(
+            '星遇同频接口返回 HTTP 429（too_many）',
+            'throttled',
+            null,
+            'server',
+            null,
+            'boards'
+        );
+        expect(describeVrccError(boards)).not.toBe(
+            'vrcc.error.device_code_quota'
+        );
+    });
 });

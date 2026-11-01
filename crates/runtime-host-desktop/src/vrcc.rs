@@ -393,6 +393,47 @@ impl DesktopVrccRuntime {
             .map_err(|error| VrccFailure::from_error(&error))
     }
 
+    /// 星轨相交：在同房间偶遇过的玩家列表。需要 `crossings` 敏感权限。
+    ///
+    /// `mark` 只在玩家真的打开「星轨相交」页时为 true —— 它会把已读同步到
+    /// 账号，网页和手机上的红点跟着消。后台算未读数时必须传 false。
+    pub async fn crossings(
+        &self,
+        mark: bool,
+    ) -> Result<vrcx_0_contracts::vrcc::VrccCrossings, VrccFailure> {
+        self.service
+            .crossings(mark)
+            .await
+            .map_err(|error| VrccFailure::from_error(&error))
+    }
+
+    /// 只看「星轨相交对这个玩家可见吗」，不标已读。
+    ///
+    /// 界面在打开页面时先调这一条，拿到 `hidden` 再决定入口是否存在——
+    /// 官方要求 `hide` 时不显示此模块，而那只有问过才知道。走的是独立的
+    /// 本地限流槽，不会把玩家随后点开页签那次（带 `mark=1`）挡掉。
+    pub async fn crossings_visibility(
+        &self,
+    ) -> Result<vrcx_0_contracts::vrcc::VrccCrossings, VrccFailure> {
+        self.service
+            .crossings_visibility()
+            .await
+            .map_err(|error| VrccFailure::from_error(&error))
+    }
+
+    /// 星轨相交的完整星卡（1.13.0 起）。算第二份读的额度，不进后台轮询。
+    ///
+    /// 旧服务器上没有这个接口，返回 `None`。
+    pub async fn crossing_cards(
+        &self,
+        mark: bool,
+    ) -> Result<Option<vrcx_0_contracts::vrcc::VrccCrossingCards>, VrccFailure> {
+        self.service
+            .crossing_cards(mark)
+            .await
+            .map_err(|error| VrccFailure::from_error(&error))
+    }
+
     /// 起一个后台轮询任务，把新提醒推成系统通知。
     ///
     /// **为什么要放到 Rust 侧**：原来轮询在前端（`useVrccController` 的

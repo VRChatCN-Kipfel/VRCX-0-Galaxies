@@ -21,6 +21,8 @@ import {
     type VrccBoard,
     type VrccBoardSort,
     type VrccConnection,
+    type VrccCrossingCards,
+    type VrccCrossings,
     type VrccDeviceAuthPrompt,
     type VrccMutuals,
     type VrccMyMap,
@@ -74,6 +76,12 @@ const DEVICE_AUTH_COOLDOWN_SECS = 5;
  * - `transport`：告诉玩家卡在哪一步（DNS / 连不上 / 超时 / 代理）
  * - `session` / `server`：沿用后端的描述，那些本来就是给人看的
  *
+ * **`server` 层里有一处例外**：`429 too_many` 打在 `device_code` 上时，额度
+ * 是按**网络出口 IP** 算的（每天 30 个，同一路由下所有人共用），和别人账号的
+ * 额度不是一回事。这句话早先写在 Rust 里，重构后只保留了错误码，所以这里按
+ * `op` 补回来——`op` 一路从 `HttpDetail` 带过来，正是为了让这种「同一个码在
+ * 不同接口下含义不同」的地方有地方判。
+ *
  * **不假装能分辨「被封」**：RST、端口拒绝、运营商拦截在系统层面一模一样，
  * 都是建连失败。文案写「可能被拦截」，不写「已被拦截」。
  */
@@ -99,10 +107,15 @@ export function describeVrccError(error: VrccError): string {
         return i18n.t('vrcc.error.network.generic');
     }
 
+    // 出口 IP 维度的额度：说成「你自己的次数用完了」会让玩家去查账号。
+    if (error.kind === 'throttled' && error.op === 'device_code') {
+        return i18n.t('vrcc.error.device_code_quota');
+    }
+
     return error.message || i18n.t('vrcc.error.unknown');
 }
 
-export type VrccTab = 'maps' | 'notifications' | 'mutuals' | 'me';
+export type VrccTab = 'maps' | 'notifications' | 'mutuals' | 'crossings' | 'me';
 
 /** 「提醒」页签里看哪一个：最近的提醒，还是通知中心。 */
 export type VrccNotificationsView = 'recent' | 'notes';
@@ -136,11 +149,51 @@ type State = {
     /**
      * 「互相连上」这一项失败的原因。
      *
-     * 单独放一个字段而不是共用全局 rror：它以 dev- 标识必然失败（敏感
+     * 单独放一个字段而不是共用全局 error：它以 dev- 标识必然失败（敏感
      * 权限要审核），那是**某个页签的功能没开通**，不是整个页面坏了。塞进
      * 全局错误会让玩家以为连接出了问题。
      */
     mutualsError: string | null;
+    /**
+     * 「星轨相交」列表；null 表示还没拉过或没权限。
+     *
+     * 与 mutuals 的区别：mutuals 是**双向已连线**的星友，crossings 只是
+     * **同房间擦肩**的人，大多数还没连线。
+     */
+    crossings: VrccCrossings | null;
+    /** 星轨相交的完整星卡（1.13.0 起）；null 表示没拉过或不支持。 */
+    crossingCards: VrccCrossingCards | null;
+    /**
+     * 正在请求星轨相交。
+     *
+     * 和 `crossings === null` 分开：那个只说明「手上没有数据」，既可能是
+     * 还没拉，也可能是拉失败了。合成一个状态的话，面板分不清「加载中」和
+     * 「确实为空」，会先闪一下「还没有擦肩记录」。
+     */
+    crossingsLoading: boolean;
+    /**
+     * 上一次拉取星轨相交失败的原因（人话）；`null` 表示这次成功了。
+     *
+     * **失败时保留旧的 `crossings`**：清空会让有记录的玩家看到「还没有
+     * 擦肩」，把「这次没拿到」说成了「一条都没有」。界面据此决定是
+     * 「显示旧数据 + 一条提示」还是「空态」。
+     */
+    crossingsError: string | null;
+    /**
+     * 失败是因为令牌缺 `crossings` 权限（永久性，要重连才能好）。
+     *
+     * 和 `crossingsError` 分开：那一栏是给玩家看的原文，这个是给界面选
+     * 文案用的——缺权限要引导重新授权，网络失败要引导再试一次，两者
+     * 不能用同一句话。
+     */
+    crossingsNeedsScope: boolean;
+    /**
+     * 已经拿到过至少一次「可见吗」的回答。
+     *
+     * 为 false 表示**还不知道**——探测没回来、或探测失败。界面据此先不
+     * 显示入口：`hide` 的玩家不该因为一次网络抖动就看见这个页签。
+     */
+    crossingsChecked: boolean;
     service: VrccStatus | null;
     loading: boolean;
     error: VrccError | null;
@@ -173,6 +226,12 @@ const initialState: State = {
     myMap: null,
     mutuals: null,
     mutualsError: null,
+    crossings: null,
+    crossingCards: null,
+    crossingsLoading: false,
+    crossingsError: null,
+    crossingsNeedsScope: false,
+    crossingsChecked: false,
     service: null,
     loading: true,
     error: null,
@@ -410,15 +469,121 @@ export function useVrccController() {
     }, [patch]);
 
     /**
-     * 贴纸和材质名目前没有展示方。
+     * 「星轨相交」列表与完整星卡。
      *
-     * 那是星卡上的装饰素材（`url` 由星卡的 `deco.spots` 拼出来），而我们还没有
-     * 星卡展示和编辑，所以不该在页面上占一块「我的」内容——那会让玩家以为自己
-     * 拥有这些贴纸。
+     * 需要 `crossings` 敏感权限。`dev-` 标识拿到的是 `403 scope`——预期内
+     * 的结果（敏感权限要审核），不是故障，所以只记到 `crossingsError`
+     * 供该页签自己显示，不走全局 `reportError`。
      *
-     * 能力面保留在 `vrccApi.stickers()` 和 Rust 那几层里，将来做星卡装扮时直接
-     * 接上即可；这里不再自动拉取，也不在 state 里留一个永远为 null 的字段。
+     * `mark` 只在玩家真的打开这一页时为 true：它会把已读同步到账号，
+     * 网页和手机上的红点跟着消。别的场景一律 false。
+     *
+     * **星卡永远不带 `mark`**：已读同步只有列表那一条接口能消红点，星卡再标
+     * 一次是重复动作，而它算**第二份读**的额度。星卡只是为了拿 `left` /
+     * `max` 两个整数，没必要连带一次写。
      */
+    const refreshCrossings = useCallback(
+        async (mark = false) => {
+            const epoch = personalEpoch.current;
+            patch({ crossingsLoading: true });
+            try {
+                // 星卡是 1.13.0 才有的接口，后端已经把 `404 not_found` 转成
+                // `Ok(None)`（旧服务器降级），所以这里**只剩真正的失败**。
+                //
+                // 但星卡只是「今天还能连几颗」那一行的可选信息：它挂了不该
+                // 让整个列表跟着失败。所以一律降级成 `null`（那一行不显示），
+                // 同时把原错误打进日志——**不谎称只有额度问题**：5xx、传输
+                // 失败、403 都会走到这里，日志里如实写是什么。
+                const [crossings, cards] = await Promise.all([
+                    vrccApi.crossings(mark),
+                    vrccApi.crossingCards(false).catch((error: unknown) => {
+                        console.error(
+                            '[vrcc] crossing cards unavailable, hiding the quota row:',
+                            error
+                        );
+                        return null;
+                    })
+                ]);
+                // 断开连接会推进代次：断开前发出、断开后才回来的响应
+                // 不能再把状态写回去，否则界面会显示上一个账号的擦肩记录。
+                if (epoch !== personalEpoch.current) return null;
+                patch({
+                    crossings,
+                    crossingCards: cards,
+                    crossingsLoading: false,
+                    crossingsError: null,
+                    crossingsNeedsScope: false,
+                    crossingsChecked: true
+                });
+                return crossings;
+            } catch (error) {
+                if (epoch !== personalEpoch.current) return null;
+                const isMissingScope =
+                    error instanceof VrccError && error.kind === 'missingScope';
+                // **保留上一次的数据**。失败时清空会让「有记录」的玩家看到
+                // 「还没有擦肩」，把「这次没拿到」说成了「一条都没有」。
+                // 空态只在确实拿到过响应且 `stars` 为空时出现。
+                patch({
+                    crossingsLoading: false,
+                    crossingsError: describeVrccError(
+                        error instanceof VrccError
+                            ? error
+                            : new VrccError(String(error), 'other')
+                    ),
+                    crossingsNeedsScope: isMissingScope
+                });
+                // 缺权限是**预期内**的结果（`dev-` 标识必然要不到敏感权限，
+                // 玩家也可能没开这个功能）。它在自己的页签里说明就够了，
+                // 不该弹 toast、也不该被当成整页的错误。
+                if (isMissingScope) return null;
+                throw error;
+            }
+        },
+        [patch]
+    );
+
+    /**
+     * 只问一次「星轨相交对这个玩家可见吗」，不标记已读。
+     *
+     * ## 为什么要探测
+     *
+     * `hide`（16–17 岁星池、或玩家自己在隐私设置里关掉）只有**问过才知道**，
+     * 而官方要求「客户端不应显示此模块」。不探测的话，玩家会先看到页签、
+     * 点进去、两个请求回来后才消失——那等于已经确认了「这功能存在、只是
+     * 没给你」，正是要避免的那件事，只是换了个时间窗口。
+     *
+     * ## 代价
+     *
+     * 每次打开星遇同频页面多 1 次第一份读（1000/天）。这是有意的交换：
+     * 合规要求优先于一次读。只问列表、不连带星卡（星卡是第二份读的额度，
+     * 而可见性在列表的 `hidden` 字段里）。
+     *
+     * ## 失败时**不显示**入口
+     *
+     * 探测没回来、或者失败时按「不知道」处理：页签先不显示，页面刷新时
+     * 重试。失败就放行等于把这条又还回去了——`hide` 的玩家会在探测失败
+     * 时看到入口，而那正是要避免的那件事。
+     *
+     * 所以这里要区分「确认可见」和「不知道」：`crossingsChecked` 只在真的
+     * 拿到一次回答后才为 true。
+     */
+    const probeCrossings = useCallback(async () => {
+        const epoch = personalEpoch.current;
+        try {
+            const crossings = await vrccApi.crossingsVisibility();
+            if (epoch !== personalEpoch.current) return;
+            patch({
+                crossings,
+                crossingsChecked: true,
+                crossingsLoading: false
+            });
+        } catch (error) {
+            if (epoch !== personalEpoch.current) return;
+            // 静默：不弹 toast。但**不把 `crossingsChecked` 置真**——界面
+            // 据此继续把入口藏着，页面刷新（`reload`）会再试一次。
+            console.info('[vrcc] crossings visibility probe failed:', error);
+        }
+    }, [patch]);
 
     const refreshService = useCallback(async () => {
         try {
@@ -484,12 +649,23 @@ export function useVrccController() {
             void refreshMutuals().catch((error) => {
                 reportError(error, 'refreshMutuals');
             });
+            // 「星轨相交」这里只**探一次可见性**，不拉星卡、不标已读。
+            //
+            // 为什么不索性不拉：`hide`（16–17 岁星池、或玩家自己关了）只有
+            // 问过才知道，而官方要求「客户端不应显示此模块」。不探测的话
+            // 页签会先出现、点进去才消失——那等于已经确认了「这功能存在、
+            // 只是没给你」。多花 1 次第一份读换掉这个时间窗口，值得。
+            //
+            // 星卡（第二份读）仍然等玩家真的切过去才拉：可见性在列表的
+            // `hidden` 字段里，不需要它。
+            void probeCrossings();
             void refreshUnread(true).catch((error) => {
                 reportError(error, 'refreshUnread');
             });
         }
     }, [
         patch,
+        probeCrossings,
         refreshAnnouncements,
         refreshBoards,
         refreshConnection,
@@ -686,6 +862,10 @@ export function useVrccController() {
      * 切到「提醒」时用 `mark=true` 重拉一次：这是玩家真正在看这个列表的时刻，
      * 服务器据此把已读同步到账号，网页和手机 App 上的红点会跟着消。
      * 官方的做法也是「打开最近的提醒」时才 mark。
+     *
+     * 「星轨相交」同理，而且这里**只有**这一条路会传 `mark=true`：
+     * `load()` 与刷新按钮都传 false。漏掉这一条，玩家永远消不掉红点；
+     * 反过来在别处误传 true，等于替玩家把没看过的记录标成看过。
      */
     const setTab = useCallback(
         (tab: VrccTab) => {
@@ -702,11 +882,34 @@ export function useVrccController() {
                     reportError(error, 'refreshMutuals');
                 });
             }
+            if (tab === 'crossings') {
+                // 打开这一页 = 看过了。权限没开通时 `refreshCrossings`
+                // 自己把原因记进 `crossingsError`，不会抛出来。
+                refreshCrossings(true).then(
+                    () => {
+                        // `mark=1` 已经把服务端的已读清掉了，但界面上的数字
+                        // 是上一次 `me/unread` 的结果，不重读就会一直亮着，
+                        // 玩家要重开页面才看到它消失。失败不报：红点晚一轮
+                        // 消失比弹一条错误更合适。
+                        refreshUnread(false).catch((error) => {
+                            console.error(
+                                '[vrcc] refreshUnread after mark failed:',
+                                error
+                            );
+                        });
+                    },
+                    (error) => {
+                        reportError(error, 'refreshCrossings');
+                    }
+                );
+            }
         },
         [
             patch,
+            refreshCrossings,
             refreshMutuals,
             refreshRecent,
+            refreshUnread,
             reportError,
             state.connection?.connected
         ]
@@ -882,12 +1085,18 @@ export function useVrccController() {
                 recent: null,
                 unread: null,
                 notes: null,
-                // 「所在地图」和「互相连上」都是**上一个账号**的个人数据。
-                // 不清的话，`VrccPage` 只看 `myMap` 是否存在就渲染卡片，
-                // 断开后还会继续显示别人的评分。
+                // 「所在地图」「互相连上」「星轨相交」都是**上一个账号**的
+                // 个人数据。不清的话，`VrccPage` 只看 `myMap` 是否存在就渲染
+                // 卡片，断开后还会继续显示别人的评分和擦肩记录。
                 myMap: null,
                 mutuals: null,
-                mutualsError: null
+                mutualsError: null,
+                crossings: null,
+                crossingCards: null,
+                crossingsLoading: false,
+                crossingsError: null,
+                crossingsNeedsScope: false,
+                crossingsChecked: false
             });
         } catch (error) {
             // 可重试的失败（网络不通、正在退避）**后端会刻意保留令牌**，
@@ -947,6 +1156,7 @@ export function useVrccController() {
         setNotificationsView,
         refreshMyMap,
         refreshMutuals,
+        refreshCrossings,
         beginDeviceAuth,
         disconnect,
         openWorld,

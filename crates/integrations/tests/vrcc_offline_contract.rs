@@ -232,3 +232,120 @@ fn a_malformed_hot_comment_does_not_break_the_whole_board() {
 
     assert!(board.maps[2].hot.is_none());
 }
+
+/// 星轨相交：列表要能解析，且 `why` 的七种取值都要分类正确（外加未知值）。
+///
+/// `why` 的分类**直接影响界面行为**：`hide` 要求客户端把整个模块藏起来
+/// （16–17 岁星池、或玩家在隐私设置里关了星轨相交），而 `verify` / `wait`
+/// 只是「还没准备好」，要显示原因而不是隐藏。两者搞反的后果不对称——
+/// 把 `hide` 当 `verify` 会向不该看到的人暴露「这里有星轨相交」这个事实。
+#[test]
+fn crossings_parse_and_the_why_reasons_classify_correctly() {
+    use vrcx_0_contracts::vrcc::{VrccCrossingWhy, VrccCrossings};
+
+    // 正常一条：有擦肩记录，还没连线。
+    // `group` 用官方枚举串（`G`/`W`/`Z`/`L`/`A`），`me` 用官方 `{star, vrc}`。
+    let list: VrccCrossings = parse(
+        r#"{"stars":[
+            {"n":77,"name":"拾光旅人","line":"放慢脚步逛世界","group":"G","star":31,
+             "intro":"平时喜欢在安静的世界拍照、听音乐","vrc":null,
+             "linked":false,"mutual":false,"at":1792830000000,"fresh":true},
+            {"n":78,"name":"已连上的","group":"W","vrc":"StarTraveler",
+             "linked":true,"mutual":true,"at":1792830000001,"fresh":false}
+        ],"n":2,"why":null,"me":{"star":1024,"vrc":"夜航星"}}"#,
+    );
+
+    assert_eq!(list.stars.len(), 2);
+    assert_eq!(list.why, None);
+
+    let first = &list.stars[0];
+    assert_eq!(first.n, 77);
+    assert_eq!(first.name.as_deref(), Some("拾光旅人"));
+    assert_eq!(first.line.as_deref(), Some("放慢脚步逛世界"));
+    assert_eq!(
+        first.intro.as_deref(),
+        Some("平时喜欢在安静的世界拍照、听音乐")
+    );
+    assert!(!first.linked && !first.mutual);
+    assert!(first.fresh);
+    // 未双向连线时 `vrc` 是 null——这是「连上才解锁」的信息。
+    assert!(first.vrc.is_none());
+
+    let second = &list.stars[1];
+    assert!(second.linked && second.mutual);
+    assert_eq!(second.vrc.as_deref(), Some("StarTraveler"));
+
+    // `me` 是官方的 `{star, vrc}`：点亮编号 + VRChat 名字。
+    assert_eq!(list.me.as_ref().and_then(|me| me.star), Some(1024));
+    assert_eq!(
+        list.me.as_ref().and_then(|me| me.vrc.as_deref()),
+        Some("夜航星")
+    );
+
+    // `group` 照官方枚举原样保留，不做映射。
+    assert_eq!(first.group.as_deref(), Some("G"));
+    assert_eq!(second.group.as_deref(), Some("W"));
+
+    // 七种 why 取值 + 未知值 + 缺省值。
+    assert_eq!(VrccCrossingWhy::parse(None), VrccCrossingWhy::Available);
+    assert_eq!(VrccCrossingWhy::parse(Some("")), VrccCrossingWhy::Available);
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("hide")),
+        VrccCrossingWhy::Hidden
+    );
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("verify")),
+        VrccCrossingWhy::Unverified
+    );
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("wait")),
+        VrccCrossingWhy::WaitingVerify
+    );
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("queued")),
+        VrccCrossingWhy::Queued
+    );
+    assert_eq!(VrccCrossingWhy::parse(Some("sent")), VrccCrossingWhy::Sent);
+    assert_eq!(VrccCrossingWhy::parse(Some("gone")), VrccCrossingWhy::Gone);
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("friend")),
+        VrccCrossingWhy::NotFriend
+    );
+    // 服务器以后加的新原因：认得成 Unknown，但不能解析失败。
+    assert_eq!(
+        VrccCrossingWhy::parse(Some("something-new")),
+        VrccCrossingWhy::Unknown
+    );
+
+    // 只有 `hide` 要求整个模块隐藏。判定收在一处（`is_hidden`），界面只看
+    // `hidden` 字段，不再各自去比字符串。
+    assert!(VrccCrossingWhy::Hidden.is_hidden());
+    for reason in [
+        VrccCrossingWhy::Available,
+        VrccCrossingWhy::Unverified,
+        VrccCrossingWhy::WaitingVerify,
+        VrccCrossingWhy::Queued,
+        VrccCrossingWhy::Sent,
+        VrccCrossingWhy::Gone,
+        VrccCrossingWhy::NotFriend,
+        VrccCrossingWhy::Unknown,
+    ] {
+        assert!(!reason.is_hidden(), "{reason:?} should stay visible");
+    }
+
+    // 解析出来的结构：默认不隐藏，`hide` 时由应用层置上 `hidden`。
+    let mut list: VrccCrossings = parse(r#"{"stars":[],"n":0,"why":"hide"}"#);
+    assert!(!list.hidden, "契约层不替服务器做判断，默认 false");
+    list.settle_visibility();
+    assert!(list.hidden);
+
+    let mut list: VrccCrossings = parse(r#"{"stars":[],"n":0,"why":"verify"}"#);
+    list.settle_visibility();
+    assert!(!list.hidden, "`verify` 只是暂时不可用，不能藏起来");
+
+    // 旧服务器/空列表也要能解析（字段全缺省）。
+    let empty: VrccCrossings = parse(r#"{"stars":[],"n":0,"why":null,"me":null}"#);
+    assert!(empty.stars.is_empty());
+    assert!(empty.me.is_none());
+    assert!(!empty.hidden);
+}

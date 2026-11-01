@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import { entityQueryPolicies, queryKeys } from '@/lib/entityQueryCache';
 import { normalizeVrccError } from '@/lib/vrccError';
+import { scopeGrants } from '@/lib/vrccScope';
 import { commands } from '@/platform/tauri/bindings';
 import type { VrccMyMap } from '@/platform/tauri/bindings';
 
@@ -123,13 +124,21 @@ export async function deleteVrccMapRating(worldId: string) {
  *
  * | `off` | `board` | `pending` | 状态 |
  * |---|---|---|---|
- * | true | — | — | 不给看（后端已转成 `null`） |
+ * | true | — | — | **不得展示**（对象照常返回，`off` 由调用方判） |
  * | false | true | — | 已上榜 |
  * | false | false | true | 已投稿，待审核 |
  * | false | false | false | 未收录 |
  *
- * `off: true` 在服务层就被转成 `null`（官方要求此时隐藏整块），所以调用方
- * 拿到 `null` 时**不要**显示任何打分/投稿入口。
+ * ## `off: true` 由**调用方**判，服务层不再折成 `null`
+ *
+ * 官方的要求是「`off` 为 true 时客户端隐藏这张图的卡片」。早先服务层直接返回
+ * `null`——调用方拿不到对象就不可能误显示，看起来更稳。但那样会把**三种完全
+ * 不同的情况压成同一个 `null`**：被合规隐藏、玩家没连接、以及查不到。界面只能
+ * 一律说「不在榜上」，玩家不知道真正的原因。
+ *
+ * 现在 `off` 原样交出来，调用方必须在**所有其它分支之前**拦掉它，并且只说明
+ * 原因、不给任何数据。已知的两处调用点是 `VrccPage` 的所在地图卡与世界详情页
+ * 的 `WorldVrccPanel`；**新增调用点时别忘了这一步**，不要依赖「反正拿不到」。
  */
 export async function readVrccMyMap(
     worldId: string
@@ -326,24 +335,20 @@ export async function prefetchVrccWorldCovers(
  * 正是这里的分水岭：他们有 `maps` 却没有 `maps.rate`，服务器会回
  * `403 scope`。前端猜不出来，只能读。
  *
- * ## 判定是宽松的
+ * ## 判定是**严格**的：宁可少给，不给一个点了必然失败的按钮
  *
- * 拿不到 scope（未连接、或旧版本没记）时按**没有**处理——宁可让玩家多走
- * 一次重新连接，也不要摆一个点了必然 403 的按钮。
+ * 拿不到 scope（未连接、旧版本没记、或读连接状态本身失败）时按**没有**处理，
+ * 界面于是要求玩家重新连接一次。这是**故意与契约层的 `scope_grants` 相反**：
+ * 那里问的是「该不该替服务器先拦下请求」，不知道就放行（`None => true`，交给
+ * 服务器判）；这里问的是「该不该给玩家看一个按钮」，不知道就不给。
  *
- * 官方的 scope 分隔符兼容空格、逗号与 `+`，这里三种都认。
+ * 官方的 scope 分隔符兼容空格、逗号与 `+`，判定本身在
+ * [`scopeGrants`](@/lib/vrccScope)，页面那边用的是同一个。
  */
 export async function fetchVrccScopeGrants(scope: string): Promise<boolean> {
     try {
         const connection = await commands.appVrccConnection();
-        const raw = connection.scope;
-        if (!raw) {
-            return false;
-        }
-        return raw
-            .split(/[\s,+]+/)
-            .map((part) => part.trim())
-            .includes(scope);
+        return scopeGrants(connection.scope, scope);
     } catch {
         return false;
     }

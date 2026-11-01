@@ -507,3 +507,62 @@ pub async fn app__vrcc_mutuals(
         .await
         .map_err(|failure| AppError::Vrcc { failure })
 }
+
+/// 星轨相交：在同房间偶遇过的玩家列表。需要 `crossings` 敏感权限（要审核）。
+///
+/// `mark` 只在玩家真的打开「星轨相交」页时为 true —— 它会把已读同步到账号，
+/// 网页和手机上的红点跟着消。后台只为算未读数时**必须**传 false。
+///
+/// 返回里的 `hidden` 已经由应用层按 `why` 定好：为 true 时整个模块都不应显示
+/// （16–17 岁星池，或玩家在隐私设置里关了星轨相交）。
+#[tauri::command]
+#[specta::specta]
+pub async fn app__vrcc_crossings(
+    state: State<'_, AppState>,
+    mark: bool,
+) -> Result<vrcx_0_contracts::vrcc::VrccCrossings, AppError> {
+    state
+        .runtime_host()
+        .vrcc()
+        .crossings(mark)
+        .await
+        .map_err(|failure| AppError::Vrcc { failure })
+}
+
+/// 只看「星轨相交对这个玩家可见吗」，不标已读。
+///
+/// 界面在打开星遇同频页面时先调这一条，拿到 `hidden` 再决定入口是否存在。
+/// 官方要求 `hide` 时客户端不显示此模块，而 `hide` 只有问过才知道。
+///
+/// 和 `app__vrcc_crossings(false)` 请求的是同一份数据，存在的理由是本地限流
+/// 槽不同：探测不该把玩家随后点开页签那一次（带 `mark=1`）挡在本地，否则那
+/// 一次根本发不出去，红点也就消不掉。
+#[tauri::command]
+#[specta::specta]
+pub async fn app__vrcc_crossings_visibility(
+    state: State<'_, AppState>,
+) -> Result<vrcx_0_contracts::vrcc::VrccCrossings, AppError> {
+    state
+        .runtime_host()
+        .vrcc()
+        .crossings_visibility()
+        .await
+        .map_err(|failure| AppError::Vrcc { failure })
+}
+
+/// 星轨相交的完整星卡（1.13.0 起）。与列表分开，算第二份读的额度。
+///
+/// 旧服务器上没有这个接口，返回 `null`。
+#[tauri::command]
+#[specta::specta]
+pub async fn app__vrcc_crossing_cards(
+    state: State<'_, AppState>,
+    mark: bool,
+) -> Result<Option<vrcx_0_contracts::vrcc::VrccCrossingCards>, AppError> {
+    state
+        .runtime_host()
+        .vrcc()
+        .crossing_cards(mark)
+        .await
+        .map_err(|failure| AppError::Vrcc { failure })
+}

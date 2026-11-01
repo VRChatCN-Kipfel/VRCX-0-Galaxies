@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     pollNotifications: vi.fn(),
     myMap: vi.fn(),
     mutuals: vi.fn(),
+    crossings: vi.fn(),
+    crossingsVisibility: vi.fn(),
+    crossingCards: vi.fn(),
     today: vi.fn(),
     beginDeviceAuth: vi.fn(),
     deviceAuthPoll: vi.fn(),
@@ -66,6 +69,9 @@ vi.mock('@/platform/tauri/bindings', () => ({
         appVrccPollNotifications: mocks.pollNotifications,
         appVrccMyMap: mocks.myMap,
         appVrccMutuals: mocks.mutuals,
+        appVrccCrossings: mocks.crossings,
+        appVrccCrossingsVisibility: mocks.crossingsVisibility,
+        appVrccCrossingCards: mocks.crossingCards,
         appVrccToday: mocks.today,
         appVrccDeviceAuthBegin: mocks.beginDeviceAuth,
         appVrccDeviceAuthPoll: mocks.deviceAuthPoll,
@@ -139,6 +145,28 @@ beforeEach(() => {
     });
     mocks.myMap.mockResolvedValue(null);
     mocks.mutuals.mockResolvedValue({ stars: [], n: 0 });
+    mocks.crossingsVisibility.mockResolvedValue({
+        stars: [],
+        n: 0,
+        why: null,
+        hidden: false,
+        me: null
+    });
+    // 探测和正式读取是两条调用，各自要有一个默认回答；只设一条会让另一条
+    // 返回 `undefined`，测试里看起来像「拿到了空数据」。
+    mocks.crossings.mockResolvedValue({
+        stars: [],
+        n: 0,
+        why: null,
+        hidden: false,
+        me: null
+    });
+    mocks.crossingCards.mockResolvedValue({
+        cards: [],
+        seen: null,
+        left: null,
+        max: null
+    });
     // 订阅立即返回一个退订函数，模拟 Tauri 正常挂上监听。
     mocks.subscribeNotices.mockResolvedValue(() => {});
 });
@@ -314,6 +342,204 @@ describe('useVrccController', () => {
         );
         expect(result.current.error?.kind).toBe('needsReauth');
         consoleSpy.mockRestore();
+    });
+
+    it('crossings 缺权限时只记在页签里，不弹 toast、不拖垮整页', async () => {
+        // 与 mutuals 同一个道理：`dev-` 标识拿不到 `crossings` 敏感权限，
+        // 线上实返 `403 scope`。这是预期结果，不是故障——只在「星轨相交」
+        // 页签里说明，不该渲染成整页红色横幅。
+        mocks.crossings.mockRejectedValue(
+            Object.assign(new Error('HTTP 403 scope'), {
+                vrcc: { kind: 'missingScope', need: 'crossings' }
+            })
+        );
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        act(() => result.current.setTab('crossings'));
+        await waitFor(() =>
+            expect(result.current.crossingsError).not.toBeNull()
+        );
+
+        expect(result.current.crossingsError).toContain('403');
+        // **不清空已有数据**：失败只加一条原因，不能把手上这份列表抹掉
+        // 变成「一条都没有」。
+        expect(result.current.crossingsNeedsScope).toBe(true);
+        expect(mocks.toastAdd).not.toHaveBeenCalled();
+        // 地图榜与连接状态照旧可用。
+        expect(result.current.boards).not.toBeNull();
+        expect(result.current.connection?.connected).toBe(true);
+    });
+
+    it('crossings 把 hidden 带出来，交给界面隐藏整个模块', async () => {
+        // `hide` 意味着玩家不该看到这个模块（16-17 岁星池，或玩家在隐私
+        // 设置里关了星轨相交）。官方要求客户端不显示，所以控制器必须把
+        // 后端算好的 `hidden` 留在 state 里，不能吞掉——吞掉就会变成一个
+        // 普通空列表，等于向不该看到的人确认「这里有星轨相交」这个事实。
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: 'hide',
+            hidden: true,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        // **不用点进去**：探测本身就是那条回答，`hidden` 在开页时就该到手，
+        // 页签因此在玩家点之前就不存在。
+        await waitFor(() =>
+            expect(result.current.crossings?.hidden).toBe(true)
+        );
+        expect(result.current.crossings?.why).toBe('hide');
+        expect(result.current.crossings?.stars).toHaveLength(0);
+        expect(result.current.crossingsChecked).toBe(true);
+    });
+
+    it('首屏只探可见性、不拉星卡；切到这一页才带 mark=true 拉全', async () => {
+        // 三件事一起钉住：
+        // 1. 首屏探一次**列表**（不带 mark），只为了知道 `hidden`——
+        //    `hide` 不探测就会「页签先出现、点进去才消失」，那等于已经
+        //    确认了功能存在，正是官方要求避免的。
+        // 2. 星卡首屏**一定不拉**：它是第二份读的额度，而可见性在列表里。
+        // 3. 玩家真切到这一页 = 看过了，要带 mark=true 把红点消掉。
+        //    这条链路错了，红点永远消不掉。
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: null,
+            hidden: false,
+            me: null
+        });
+        mocks.crossingCards.mockResolvedValue({
+            cards: [],
+            seen: null,
+            left: 3,
+            max: 5
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // 首屏：**探测**问过（走独立限流槽的那条），列表读取一次都没问过；
+        // 星卡也没问过。
+        await waitFor(() =>
+            expect(mocks.crossingsVisibility).toHaveBeenCalledTimes(1)
+        );
+        expect(mocks.crossings).not.toHaveBeenCalled();
+        expect(mocks.crossingCards).not.toHaveBeenCalled();
+        // 探测成功 → 视为「已确认」，界面可以显示入口。
+        await waitFor(() => expect(result.current.crossingsChecked).toBe(true));
+
+        // 玩家切到「星轨相交」：列表带 mark=true 拉。
+        act(() => result.current.setTab('crossings'));
+        await waitFor(() => expect(mocks.crossings).toHaveBeenCalledWith(true));
+        // 星卡**不带** mark：已读只有列表那一条接口能消，星卡再标一次是
+        // 重复动作，而它算第二份读的额度。它只是为了拿 left / max。
+        expect(mocks.crossingCards).toHaveBeenCalledWith(false);
+        // 星卡的额度读数被记下来了。
+        await waitFor(() => expect(result.current.crossingCards?.left).toBe(3));
+    });
+
+    /**
+     * 探测和玩家那次 `mark=1` 必须是**两条不同的请求**，不能被本地限流
+     * 合成一次。后端用独立的限流槽（`crossings/probe`）保证这一点，这里
+     * 从调用侧钉住：探测走 `crossingsVisibility`，切页签走 `crossings(true)`。
+     */
+    it('探测与切页签是两次不同的调用，互不占用限流槽', async () => {
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: null,
+            hidden: false,
+            me: null
+        });
+        mocks.crossings.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: null,
+            hidden: false,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.crossingsChecked).toBe(true));
+
+        act(() => result.current.setTab('crossings'));
+        await waitFor(() => expect(mocks.crossings).toHaveBeenCalledWith(true));
+        // 探测那条没被复用成带 mark 的调用。
+        expect(mocks.crossingsVisibility).not.toHaveBeenCalledWith(true);
+    });
+
+    /** 探测拿到的 `hidden` 要让页签在玩家点进去之前就消失。 */
+    it('探测到 hidden 后 crossings.hidden 为真，界面据此藏入口', async () => {
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: 'hide',
+            hidden: true,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() =>
+            expect(result.current.crossings?.hidden).toBe(true)
+        );
+        // 可见性不需要星卡，首屏不该问它。
+        expect(mocks.crossingCards).not.toHaveBeenCalled();
+    });
+
+    /** 探测失败不打扰玩家：页签照常，等点进去那次报真实原因。 */
+    it('探测失败是静默的，不写 crossingsError', async () => {
+        mocks.crossingsVisibility.mockRejectedValueOnce(
+            new Error('network down')
+        );
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.crossingsError).toBeNull();
+    });
+
+    it('手动刷新星轨相交不替玩家把记录标成已读', async () => {
+        // 刷新按钮只是「再看看有没有新的」，不是「我看过了」。顺手传
+        // mark=true 会把玩家还没看完的记录标成已读，而且不可撤销、
+        // 不会报错。
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [],
+            n: 0,
+            why: null,
+            hidden: false,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        mocks.crossings.mockClear();
+        await act(async () => {
+            await result.current.refreshCrossings(false);
+        });
+        expect(mocks.crossings).toHaveBeenCalledWith(false);
+    });
+
+    it('断开连接后清掉星轨相交，不把上个账号的记录留在界面上', async () => {
+        // 擦肩记录是**个人数据**。不清的话，断开后页签里还留着别人的
+        // 记录和额度，看起来像是连着的。
+        mocks.crossingsVisibility.mockResolvedValue({
+            stars: [{ n: 77, name: '拾光旅人', linked: false, mutual: false }],
+            n: 1,
+            why: null,
+            hidden: false,
+            me: null
+        });
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // 首屏不拉，先切到那一页把数据填上。
+        act(() => result.current.setTab('crossings'));
+        await waitFor(() =>
+            expect(result.current.crossings?.stars).toHaveLength(1)
+        );
+
+        mocks.disconnect.mockResolvedValue(undefined);
+        await act(async () => {
+            await result.current.disconnect();
+        });
+
+        expect(result.current.crossings).toBeNull();
+        expect(result.current.crossingCards).toBeNull();
     });
 
     it('mutuals 缺权限时只记在页签里，不弹 toast、不拖垮整页', async () => {

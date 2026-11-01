@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { countVrccUnread } from './vrccUnreadCount';
+import { countVrccCrossingsUnread, countVrccUnread } from './vrccUnreadCount';
 
 describe('countVrccUnread', () => {
-    it('把四处未读数加总', () => {
+    /**
+     * `cross` **算在**合计里，和 Rust 的 `VrccUnread::total()` 同口径。
+     *
+     * 侧边栏、腕表、托盘都用这个数，它们不区分「哪一页的新」。摘掉 `cross`
+     * 会让星轨相交的新记录在侧边栏上完全不可见。
+     */
+    it('把四处未读数加总（含 cross，与 Rust total() 一致）', () => {
         expect(
             countVrccUnread({ inbox: 1, cross: 2, chats: 3, notes: 4 }, null)
         ).toBe(10);
@@ -48,5 +54,25 @@ describe('countVrccUnread', () => {
                 }
             )
         ).toBe(1);
+    });
+});
+
+describe('countVrccCrossingsUnread', () => {
+    it('取 cross 这一项', () => {
+        expect(countVrccCrossingsUnread({ inbox: 5, cross: 2, chats: 1 })).toBe(
+            2
+        );
+    });
+
+    it('只有「提醒」有新的时，星轨相交不亮', () => {
+        expect(countVrccCrossingsUnread({ inbox: 5, cross: 0, chats: 1 })).toBe(
+            0
+        );
+    });
+
+    it('旧服务器没有这一项，回退成 0 而不是拿 recent 去凑', () => {
+        // 那些条目属于提醒，不属于这里；凑一个数字等于凭空造红点。
+        expect(countVrccCrossingsUnread(null)).toBe(0);
+        expect(countVrccCrossingsUnread({ inbox: 1, chats: 0 })).toBe(0);
     });
 });

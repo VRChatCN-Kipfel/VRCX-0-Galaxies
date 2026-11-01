@@ -35,6 +35,8 @@ vi.mock('../useMutualPresence', () => ({
     })
 }));
 
+import type { VrccCrossingStar } from '../vrccApi';
+import { VrccCrossingsPanel } from './VrccCrossingsPanel';
 import { VrccMapsPanel } from './VrccMapsPanel';
 import { VrccMutualsPanel } from './VrccMutualsPanel';
 import { VrccNotificationsPanel } from './VrccNotificationsPanel';
@@ -43,6 +45,149 @@ afterEach(() => {
     cleanup();
     presenceState.ready = true;
     presenceState.online.clear();
+});
+
+function renderCrossings(
+    crossings: {
+        why?: string | null;
+        hidden?: boolean;
+        stars?: VrccCrossingStar[];
+    } | null,
+    options: {
+        loading?: boolean;
+        error?: string | null;
+        needsScope?: boolean;
+    } = {}
+) {
+    const { container } = render(
+        <VrccCrossingsPanel
+            connected
+            crossings={
+                crossings
+                    ? {
+                          stars: [],
+                          n: 0,
+                          why: null,
+                          hidden: false,
+                          me: null,
+                          ...crossings
+                      }
+                    : null
+            }
+            cards={null}
+            loading={options.loading ?? false}
+            crossingsError={options.error ?? null}
+            crossingsNeedsScope={options.needsScope ?? false}
+            onOpenLink={() => {}}
+            onRefresh={() => {}}
+        />
+    );
+    return container;
+}
+
+describe('VrccCrossingsPanel', () => {
+    it('hidden 时整块都不渲染，连「不可用」也不说', () => {
+        // 官方要求 `hide` 时客户端不显示此模块。把 `hide` 当成普通空列表，
+        // 等于向不该看到的人确认「这里有星轨相交」这个事实本身——所以这里
+        // 断言的是**一片空白**，不是某段文案。
+        const container = renderCrossings({ why: 'hide', hidden: true });
+        expect(container.innerHTML).toBe('');
+    });
+
+    it('其余 why 要显示原因，而不是把功能藏掉', () => {
+        // `verify` / `friend` 这些是「功能在但暂时用不了」，玩家需要知道
+        // 下一步做什么。藏起来会让人以为功能消失了。
+        renderCrossings({ why: 'verify', hidden: false });
+        expect(screen.getByText('vrcc.crossings.why.verify')).toBeTruthy();
+    });
+
+    it('服务器给没见过的 why 时退回 unknown，不拼键名', () => {
+        // 原来的写法是 `t(`vrcc.crossings.why.${why}`)`——`why` 是服务器给的
+        // 字符串，拼出来可能是 `constructor` / `__proto__` 这种本来就存在的
+        // 对象属性，拿到的不是文案而是对象或 undefined，界面直接炸。
+        // 现在只有白名单里的才拼键名，其余一律 unknown。
+        renderCrossings({ why: 'brand-new-reason', hidden: false });
+        expect(screen.getByText('vrcc.crossings.why.unknown')).toBeTruthy();
+    });
+
+    /**
+     * 加载中不能说「还没有擦肩」。
+     *
+     * `crossings === null` 既可能是「还没拉」也可能是「拉失败了」，
+     * 早先两者都落到空态分支，于是每次开页都先闪一下「还没有擦肩记录」，
+     * 而失败时那句话干脆就是错的。
+     */
+    it('加载中说「加载中」，不说空态', () => {
+        renderCrossings(null, { loading: true });
+        expect(screen.getByText('vrcc.crossings.loading')).toBeTruthy();
+        expect(screen.queryByText('vrcc.crossings.empty')).toBeNull();
+    });
+
+    it('失败且没有数据时说「没拿到」并给重试', () => {
+        renderCrossings(null, { error: 'boom' });
+        expect(screen.getByText('vrcc.crossings.load_failed')).toBeTruthy();
+        expect(screen.getByText('vrcc.crossings.retry')).toBeTruthy();
+        expect(screen.queryByText('vrcc.crossings.empty')).toBeNull();
+    });
+
+    /**
+     * 缺权限是**永久性**的：引导重新授权，而不是让玩家反复点重试。
+     */
+    it('缺权限时说「不可用」并引导重连，不给重试按钮', () => {
+        renderCrossings(null, { error: 'scope', needsScope: true });
+        expect(screen.getByText('vrcc.crossings.unavailable')).toBeTruthy();
+        expect(screen.getByText('vrcc.crossings.needs_scope')).toBeTruthy();
+        expect(screen.queryByText('vrcc.crossings.retry')).toBeNull();
+    });
+
+    /** 确实拿到过响应且 `stars` 为空，才是空态。 */
+    it('确实拿到空列表时才显示空态', () => {
+        renderCrossings({ stars: [], hidden: false });
+        expect(screen.getByText('vrcc.crossings.empty')).toBeTruthy();
+    });
+
+    /**
+     * 有旧数据、这次刷新失败：**留着列表**，加一条提示，不要清成空态。
+     */
+    it('刷新失败但手上有旧数据时，保留列表并提示', () => {
+        renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }], hidden: false },
+            { error: 'boom' }
+        );
+        expect(screen.getByText('旧记录')).toBeTruthy();
+        expect(screen.getByText('vrcc.crossings.stale_hint')).toBeTruthy();
+        expect(screen.queryByText('vrcc.crossings.empty')).toBeNull();
+    });
+
+    /**
+     * `n` 缺失时不能拿 `0` 当 React key，也不能拼出 `?cross=0`。
+     */
+    it('缺编号的记录不给网页直达按钮，编号位显示占位', () => {
+        renderCrossings({
+            stars: [{ name: '甲' }, { name: '乙' }] as VrccCrossingStar[],
+            hidden: false
+        });
+        // 两条都缺编号：都不该出现「打开网页」的按钮。
+        expect(screen.queryByText('vrcc.crossings.open_page')).toBeNull();
+        // 列表照常渲染两条。
+        expect(screen.getByText('甲')).toBeTruthy();
+        expect(screen.getByText('乙')).toBeTruthy();
+    });
+
+    it('没连接时提示先去连接', () => {
+        render(
+            <VrccCrossingsPanel
+                connected={false}
+                crossings={null}
+                cards={null}
+                loading={false}
+                crossingsError={null}
+                onOpenLink={() => {}}
+                onRefresh={() => {}}
+            />
+        );
+        expect(screen.getByText('vrcc.crossings.need_connect')).toBeTruthy();
+    });
 });
 
 function renderNotifications(unread: {

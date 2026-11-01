@@ -19,6 +19,7 @@ import {
     PageToolbar
 } from '@/components/layout/PageScaffold';
 import { formatCompactDateTime } from '@/lib/dateTime';
+import { scopeGrants } from '@/lib/vrccScope';
 import { openExternalLink } from '@/services/shellIntegrationService';
 import { toast } from '@/services/toastService';
 import { Badge } from '@/ui/shadcn/badge';
@@ -28,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/shadcn/tabs';
 
 import { announcementSummary } from './components/VrccAnnouncementBody';
 import { VrccAnnouncementDialog } from './components/VrccAnnouncementDialog';
+import { VrccCrossingsPanel } from './components/VrccCrossingsPanel';
 import { VrccCurrentMapCard } from './components/VrccCurrentMapCard';
 import { VrccMapsPanel } from './components/VrccMapsPanel';
 import { VrccMePanel } from './components/VrccMePanel';
@@ -43,12 +45,21 @@ import {
     writeBarCursor
 } from './vrccAnnouncementStore';
 import type { VrccAnnouncement } from './vrccApi';
-import { countVrccUnread } from './vrccUnreadCount';
+import { countVrccCrossingsUnread, countVrccUnread } from './vrccUnreadCount';
 
+/**
+ * 页面**可能**出现的全部页签，含「星轨相交」。
+ *
+ * `crossings` 必须在这里：`VrccTab` 一直包含它，而这份名单在两条分支合并时
+ * 曾经只剩四个，于是 `?tab=crossings` 永远被 `isVrccTab` 挡掉，下面那段
+ * 「服务端要求隐藏时不落过去」的判断成了死代码。要不要真的显示由
+ * `crossingsHidden` 决定，不在识别阶段决定。
+ */
 const VRCC_TABS: readonly VrccTab[] = [
     'maps',
     'notifications',
     'mutuals',
+    'crossings',
     'me'
 ];
 
@@ -78,6 +89,13 @@ export function VrccPage() {
         myMap,
         mutuals,
         mutualsError,
+        crossings,
+        crossingCards,
+        crossingsLoading,
+        crossingsError,
+        crossingsNeedsScope,
+        crossingsChecked,
+        refreshCrossings,
         service,
         deviceAuth,
         deviceAuthBusy,
@@ -96,27 +114,60 @@ export function VrccPage() {
 
     const connected = connection?.connected ?? false;
     const unreadTotal = connected ? countVrccUnread(unread, recent) : 0;
+    // 星轨相交自己那一页的红点。它**也**含在 `unreadTotal` 里（那是侧边栏、
+    // 腕表、托盘共用的合计，和 Rust 的 `VrccUnread::total()` 同口径），
+    // 这里只是给这一页补一个入口角标——未读是这个页签自己的，玩家不该为了
+    // 发现它去翻「提醒」。
+    const crossingsUnread = connected ? countVrccCrossingsUnread(unread) : 0;
+    // 服务端说这块不该显示时（16–17 岁星池，或玩家关了星轨相交），页签也
+    // 一起藏起来，并顺手把停留在这页的玩家送回地图榜——否则会出现「所有
+    // 页签都不选中、内容空白」的状态。
+    //
+    // 三个条件取「或」，任何一个说不行就不显示入口：
+    //
+    // 1. **令牌有没有 `crossings` 权限**——没给的话连请求都发不出去
+    //    （`403 scope`），等响应再藏页签等于让玩家先看到入口、点进去才被告知
+    //    不行。令牌的 scope 在 `connection` 里，是本地纯函数，不用等网络。
+    // 2. **还没问过**（`!crossingsChecked`）——`hide` 只有问过才知道，没问过
+    //    就当「不知道」，先不显示。探测失败也停在这里，不会因为一次网络抖动
+    //    就把入口放出来；页面刷新会重试。
+    // 3. **服务端说 hidden**。
+    const crossingsHidden =
+        !scopeGrants(connection?.scope, 'crossings') ||
+        !crossingsChecked ||
+        crossings?.hidden === true;
+
     // 从通知中心点进来时带的页签名。
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedTab = searchParams.get('tab');
-    const appliedRequestedTab = useRef(false);
+    // 用 ref 读隐藏状态：`crossingsHidden` 是每次渲染新算的布尔值，直接进
+    // 依赖数组会让这个 effect 在星轨相交数据回来时白跑一遍（那时页面已经
+    // 落好页签、参数也已经清掉，行为其实不变）。
+    const crossingsHiddenRef = useRef(crossingsHidden);
+    crossingsHiddenRef.current = crossingsHidden;
     useEffect(() => {
         // 等连接就绪再应用：`setTab` 在未连接时会直接返回，那时「提醒」页
         // 该做的已读同步也一并跳过了，页签会落过去而同步没发生。
-        if (
-            appliedRequestedTab.current ||
-            !connected ||
-            !isVrccTab(requestedTab)
-        ) {
+        if (!connected || !isVrccTab(requestedTab)) {
             return;
         }
-        appliedRequestedTab.current = true;
-        setTab(requestedTab);
-        // 参数用掉就清掉，免得玩家手动切页签时又被它拽回去。
+        // 「星轨相交」被服务端要求隐藏时不能落过去：那个页签根本不存在，
+        // 落过去就是一个谁都没选中、内容空白的页面。首帧时数据还没回来，
+        // 现在落到别处反而会误伤——那种情况由下面的 `activeTab` 兜底。
+        const hidden =
+            requestedTab === 'crossings' && crossingsHiddenRef.current;
+        if (!hidden) {
+            setTab(requestedTab);
+        }
+        // 参数用掉就清掉，而且是**无论落没落过去都清**。留着的后果有两个：
+        // 玩家手动切页签时会被它拽回去；以及——`requestedTab` 一直是同一个
+        // 值，后续同一条深链（再点一次同一条通知）就再也触发不了这个 effect。
+        // 早先靠一个 `applied` 布尔去防重入，结果第二次深链被永久吞掉。
         const remaining = new URLSearchParams(searchParams);
         remaining.delete('tab');
         setSearchParams(remaining, { replace: true });
     }, [connected, requestedTab, searchParams, setSearchParams, setTab]);
+    const activeTab = crossingsHidden && tab === 'crossings' ? 'maps' : tab;
     const stop = announcements?.stop ?? null;
 
     /**
@@ -300,7 +351,7 @@ export function VrccPage() {
                     </div>
                 ) : (
                     <Tabs
-                        value={tab}
+                        value={activeTab}
                         onValueChange={(value) => setTab(value as typeof tab)}
                         className="flex min-h-0 flex-1 flex-col"
                     >
@@ -319,6 +370,23 @@ export function VrccPage() {
                             <TabsTrigger value="mutuals">
                                 {t('vrcc.tab.mutuals')}
                             </TabsTrigger>
+                            {/* `hidden` 时**连页签都不出现**：面板自己返回
+                                null 只藏住了内容，标签还写着「星轨相交」，
+                                等于照样确认了「这个功能存在、只是没给你」。
+                                官方要求的是客户端不显示此模块。 */}
+                            {!crossingsHidden && (
+                                <TabsTrigger value="crossings">
+                                    {t('vrcc.tab.crossings')}
+                                    {/* 红点挂在**自己**的页签上：那几条未读
+                                        就在这一页里，挂到「提醒」上玩家
+                                        点过去会找不到。 */}
+                                    {crossingsUnread > 0 && (
+                                        <span className="bg-primary/15 text-primary ml-1.5 rounded-full px-1.5 text-[10px] leading-4">
+                                            {crossingsUnread}
+                                        </span>
+                                    )}
+                                </TabsTrigger>
+                            )}
                             <TabsTrigger value="me">
                                 {t('vrcc.tab.me')}
                             </TabsTrigger>
@@ -357,6 +425,7 @@ export function VrccPage() {
                                 view={notificationsView}
                                 notes={notes}
                                 notesSupported={notesSupported}
+                                crossingsHidden={crossingsHidden}
                                 onViewChange={setNotificationsView}
                                 onConnect={() => setTab('me')}
                                 onOpenWorld={openWorld}
@@ -370,6 +439,39 @@ export function VrccPage() {
                                 mutualsError={mutualsError}
                                 onOpenUser={openUser}
                                 onOpenGroup={openGroup}
+                            />
+                        </TabsContent>
+                        <TabsContent
+                            value="crossings"
+                            className="min-h-0 flex-1"
+                        >
+                            <VrccCrossingsPanel
+                                connected={connected}
+                                crossings={crossings}
+                                cards={crossingCards}
+                                loading={crossingsLoading}
+                                crossingsError={crossingsError}
+                                crossingsNeedsScope={crossingsNeedsScope}
+                                onOpenLink={openLink}
+                                onRefresh={() => {
+                                    // 手动刷新不算「看过」：这一下可能只是
+                                    // 想看看有没有新记录，不该顺手替玩家
+                                    // 把红点清掉。`mark=true` 只留给「切到
+                                    // 这一页」那一个动作（见 `setTab`）。
+                                    void refreshCrossings(false).catch(
+                                        (error: unknown) => {
+                                            toast.add({
+                                                type: 'error',
+                                                title:
+                                                    error instanceof Error
+                                                        ? error.message
+                                                        : t(
+                                                              'vrcc.error.unknown'
+                                                          )
+                                            });
+                                        }
+                                    );
+                                }}
                             />
                         </TabsContent>
 
