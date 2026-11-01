@@ -1826,6 +1826,29 @@ mod tests {
             .expect("第二个世界");
     }
 
+    /// 可见性探测不能占住玩家随后那一次读取。
+    ///
+    /// 两条请求问的是同一份列表，路径只差一个 `?mark=1`，而 [`limiter_key`]
+    /// **只剥 `mark`**——所以按默认规则它们本来就是同一个槽。探测发生在打开
+    /// 页面时，紧接着玩家就可能切到这一页，那一次要带 `mark=1` 去清红点：
+    /// 探测先把 30 秒的槽占住，玩家那次就被挡在本地，请求根本没发出去，
+    /// `mark` 永远到不了服务器，红点消不掉，界面上还会弹一句和他动作对不上的
+    /// 「请求太频繁」。
+    ///
+    /// 修复是给探测一个自己的槽（`Call.limiter`）。槽是 `request()` 在本地做的
+    /// 决定，只测纯函数看不到它——所以这条用真实 socket 数「发出去几次」：
+    /// 探测之后紧接着的那次读取必须真的发到服务器，否则 `serve` 只收到一次
+    /// 连接，而这一步会拿到 `ThrottledLocally` 而不是 200。
+    #[tokio::test]
+    async fn the_visibility_probe_does_not_block_the_players_own_read() {
+        let base = serve("200 OK", r#"{"stars":[],"n":0,"why":null,"me":null}"#, 2).await;
+        let client = client_at(base);
+
+        client.crossings_probe().await.expect("探测");
+        // 探测刚发生过，这一步仍然要发得出去。
+        client.crossings(true).await.expect("点开页签");
+    }
+
     /// 写接口吃到当天的 429，不该动任何一份读额度，也不该让所有接口一起退避。
     ///
     /// 赞踩是「地图赞踩 200」、打分是「每天的打分与添图次数」、删除是「各种删除
