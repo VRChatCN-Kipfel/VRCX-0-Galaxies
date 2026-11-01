@@ -561,6 +561,19 @@ const generatedCommands = {
         return await TAURI_INVOKE('app__vrcc_crossings', { mark });
     },
     /**
+     * 只看「星轨相交对这个玩家可见吗」，不标已读。
+     *
+     * 界面在打开星遇同频页面时先调这一条，拿到 `hidden` 再决定入口是否存在。
+     * 官方要求 `hide` 时客户端不显示此模块，而 `hide` 只有问过才知道。
+     *
+     * 和 `app__vrcc_crossings(false)` 请求的是同一份数据，存在的理由是本地限流
+     * 槽不同：探测不该把玩家随后点开页签那一次（带 `mark=1`）挡在本地，否则那
+     * 一次根本发不出去，红点也就消不掉。
+     */
+    async appVrccCrossingsVisibility(): Promise<VrccCrossings> {
+        return await TAURI_INVOKE('app__vrcc_crossings_visibility');
+    },
+    /**
      * 星轨相交的完整星卡（1.13.0 起）。与列表分开，算第二份读的额度。
      *
      * 旧服务器上没有这个接口，返回 `null`。

@@ -200,6 +200,17 @@ export const vrccApi = {
     crossings: (mark = false) => call(() => commands.appVrccCrossings(mark)),
 
     /**
+     * 只问「星轨相交对这个玩家可见吗」，不标已读。
+     *
+     * 返回和 `crossings(false)` 一样，区别在**后端本地限流槽不同**：探测
+     * 不该占住玩家随后点开页签那一次（那一次带 `mark=1` 清红点）。两者共用
+     * 一个 30 秒的槽时，探测会把那次请求直接挡在本地——发不出去，红点就
+     * 永远消不掉，玩家还会在点开页签时看到一句跟他的动作对不上的「太频繁」。
+     */
+    crossingsVisibility: () =>
+        call(() => commands.appVrccCrossingsVisibility()),
+
+    /**
      * 星轨相交的完整星卡（1.13.0 起）。算第二份读的额度。
      *
      * 旧服务器上没有这个接口，返回 null。

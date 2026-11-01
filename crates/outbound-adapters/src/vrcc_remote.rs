@@ -157,6 +157,11 @@ impl VrccRemote for VrccRemoteAdapter {
         Box::pin(async move { self.client().crossings(mark).await })
     }
 
+    /// 用独立限流槽的那条读取，见 [`VrccClient::crossings_probe`]。
+    fn crossings_probe<'a>(&'a self) -> VrccFuture<'a, VrccCrossings> {
+        Box::pin(async move { self.client().crossings_probe().await })
+    }
+
     fn crossing_cards<'a>(&'a self, mark: bool) -> VrccFuture<'a, VrccCrossingCards> {
         Box::pin(async move { self.client().crossing_cards(mark).await })
     }

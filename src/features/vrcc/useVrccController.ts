@@ -187,6 +187,13 @@ type State = {
      * 不能用同一句话。
      */
     crossingsNeedsScope: boolean;
+    /**
+     * 已经拿到过至少一次「可见吗」的回答。
+     *
+     * 为 false 表示**还不知道**——探测没回来、或探测失败。界面据此先不
+     * 显示入口：`hide` 的玩家不该因为一次网络抖动就看见这个页签。
+     */
+    crossingsChecked: boolean;
     service: VrccStatus | null;
     loading: boolean;
     error: VrccError | null;
@@ -224,6 +231,7 @@ const initialState: State = {
     crossingsLoading: false,
     crossingsError: null,
     crossingsNeedsScope: false,
+    crossingsChecked: false,
     service: null,
     loading: true,
     error: null,
@@ -504,7 +512,8 @@ export function useVrccController() {
                     crossingCards: cards,
                     crossingsLoading: false,
                     crossingsError: null,
-                    crossingsNeedsScope: false
+                    crossingsNeedsScope: false,
+                    crossingsChecked: true
                 });
                 return crossings;
             } catch (error) {
@@ -549,20 +558,30 @@ export function useVrccController() {
      * 合规要求优先于一次读。只问列表、不连带星卡（星卡是第二份读的额度，
      * 而可见性在列表的 `hidden` 字段里）。
      *
-     * 探测失败**不打扰玩家**：页签按「还没确认」处理（照常可见），等玩家
-     * 真的点进去时由 `refreshCrossings` 报真实原因。探测只是提前收敛，不是
-     * 唯一的信息来源。
+     * ## 失败时**不显示**入口
+     *
+     * 探测没回来、或者失败时按「不知道」处理：页签先不显示，页面刷新时
+     * 重试。失败就放行等于把这条又还回去了——`hide` 的玩家会在探测失败
+     * 时看到入口，而那正是要避免的那件事。
+     *
+     * 所以这里要区分「确认可见」和「不知道」：`crossingsChecked` 只在真的
+     * 拿到一次回答后才为 true。
      */
     const probeCrossings = useCallback(async () => {
         const epoch = personalEpoch.current;
         try {
-            const crossings = await vrccApi.crossings(false);
+            const crossings = await vrccApi.crossingsVisibility();
             if (epoch !== personalEpoch.current) return;
-            patch({ crossings, crossingsLoading: false });
+            patch({
+                crossings,
+                crossingsChecked: true,
+                crossingsLoading: false
+            });
         } catch (error) {
             if (epoch !== personalEpoch.current) return;
-            // 静默：点进去时还会再问一次，那次才负责报错。
-            console.info('[vrcc] crossings visibility probe skipped:', error);
+            // 静默：不弹 toast。但**不把 `crossingsChecked` 置真**——界面
+            // 据此继续把入口藏着，页面刷新（`reload`）会再试一次。
+            console.info('[vrcc] crossings visibility probe failed:', error);
         }
     }, [patch]);
 
@@ -1076,7 +1095,8 @@ export function useVrccController() {
                 crossingCards: null,
                 crossingsLoading: false,
                 crossingsError: null,
-                crossingsNeedsScope: false
+                crossingsNeedsScope: false,
+                crossingsChecked: false
             });
         } catch (error) {
             // 可重试的失败（网络不通、正在退避）**后端会刻意保留令牌**，

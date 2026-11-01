@@ -22,6 +22,7 @@ const controller = vi.hoisted(() => ({
     setTab: vi.fn(),
     connected: true,
     hidden: false,
+    checked: true,
     // 默认给足权限；要测「没开这个功能」的用例自己改。
     scope: 'profile notifications maps mutuals crossings' as string | null
 }));
@@ -53,6 +54,7 @@ vi.mock('./useVrccController', () => ({
         crossings: controller.hidden ? { stars: [], hidden: true } : null,
         crossingCards: null,
         crossingsError: null,
+        crossingsChecked: controller.checked,
         refreshCrossings: vi.fn(),
         service: null,
         deviceAuth: null,
@@ -111,6 +113,7 @@ afterEach(() => {
     controller.tab = 'maps';
     controller.connected = true;
     controller.hidden = false;
+    controller.checked = true;
     controller.scope = 'profile notifications maps mutuals crossings';
     controller.setTab.mockReset();
 });
@@ -177,6 +180,20 @@ describe('VrccPage 的 ?tab= 深链', () => {
         expect(controller.setTab).not.toHaveBeenCalled();
         // 留着参数会被下一次 effect 反复消费，也会拽住玩家手动的页签切换。
         expect(view.search).not.toContain('tab=');
+    });
+
+    /**
+     * **还没问过**（探测没回来、或探测失败）时，入口也不显示。
+     *
+     * `hide` 只有问过才知道，所以「不知道」必须当成「不行」。失败就放行
+     * 等于把这条还回去：`hide` 的玩家会在网络抖动时看到入口，而那正是官方
+     * 要求避免的那件事。页面刷新会重试探测。
+     */
+    it('可见性还没确认时，深链也不落到这一页', () => {
+        controller.checked = false;
+        renderPage('/vrcc?tab=crossings');
+
+        expect(controller.setTab).not.toHaveBeenCalled();
     });
 
     /**

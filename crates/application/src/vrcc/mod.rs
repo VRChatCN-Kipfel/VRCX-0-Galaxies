@@ -130,6 +130,18 @@ pub trait VrccRemote: Send + Sync {
     fn mutuals<'a>(&'a self) -> VrccFuture<'a, VrccMutuals>;
     /// 星轨相交列表。`mark` 只在玩家真正打开该页时为 true。
     fn crossings<'a>(&'a self, mark: bool) -> VrccFuture<'a, VrccCrossings>;
+    /// 只看「星轨相交对这个玩家可见吗」，不标已读。
+    ///
+    /// 和 `crossings(false)` 请求的是同一份数据，存在的理由是**本地限流槽
+    /// 不一样**：默认实现退化成普通读取，只有真的做限流的实现（`VrccClient`）
+    /// 才覆盖它去用独立的一个槽。
+    ///
+    /// 为什么需要它：可见性探测发生在打开页面时，紧接着玩家就可能切到这个
+    /// 页签，那一次要带 `mark=1` 清红点。两者共用一个 30 秒的槽时，探测会把
+    /// 玩家那次挡在本地——请求发不出去，红点永远消不掉。
+    fn crossings_probe<'a>(&'a self) -> VrccFuture<'a, VrccCrossings> {
+        self.crossings(false)
+    }
     /// 星轨相交的完整星卡（1.13.0 起）。算第二份读的额度。
     fn crossing_cards<'a>(&'a self, mark: bool) -> VrccFuture<'a, VrccCrossingCards>;
 
@@ -1129,6 +1141,26 @@ impl VrccService {
             .await
             .map_err(|error| self.settle(error))?;
         // `why == "hide"` 的判定只在这里做一次，消费方只看 `hidden`。
+        crossings.settle_visibility();
+        Ok(crossings)
+    }
+
+    /// 只看「星轨相交对这个玩家可见吗」，不标已读。
+    ///
+    /// 官方要求 `hide` 时**客户端不显示此模块**，而 `hide` 只有问过才知道。
+    /// 界面在打开星遇同频页面时先调这一条，拿到 `hidden` 再决定入口是否
+    /// 存在——不探测就只能「先显示、点进去再消失」，那等于已经确认了功能
+    /// 存在，正是 `hide` 要避免的。
+    ///
+    /// 走 [`VrccRemote::crossings_probe`] 的独立限流槽：探测不该占住玩家随后
+    /// 点开页签那一次（那一次要带 `mark=1` 清红点）。
+    pub async fn crossings_visibility(&self) -> std::result::Result<VrccCrossings, VrccError> {
+        self.ensure_connected()?;
+        let mut crossings = self
+            .remote
+            .crossings_probe()
+            .await
+            .map_err(|error| self.settle(error))?;
         crossings.settle_visibility();
         Ok(crossings)
     }

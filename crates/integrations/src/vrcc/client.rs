@@ -270,6 +270,17 @@ struct Call<'a> {
     min_gap: Duration,
     /// 算在哪一份每天的额度里；`None` 是没有每天上限的接口。
     bucket: Option<QuotaBucket>,
+    /// 本地限流槽，覆盖默认的「`key` + 路径」。
+    ///
+    /// 默认的槽是按**资源**算的：同一个世界、同一个排序才算同一个资源。
+    /// 但有两种情况「同一份资源」和「同一个操作意图」不是一回事：
+    ///
+    /// - 星轨相交的可见性探测：它问的是同一份列表，可它是**为了决定要不要
+    ///   显示入口**才问的，不该把玩家随后点开页签那一次挡掉（那一次要带
+    ///   `mark=1` 去清红点）。给它单独一个槽，探测就不会占住玩家的位置。
+    ///
+    /// 有值时就原样当槽名，不再拼路径。
+    limiter: Option<&'static str>,
     /// 优先级请求：**不受退避和最小间隔限制，立刻发**。
     ///
     /// 只给 `disconnect` 用。理由：吊销是玩家明确要求的动作，而退避是全局的
@@ -642,12 +653,15 @@ impl VrccClient {
     async fn send_request(&self, call: &Call<'_>) -> Result<reqwest::Response, VrccError> {
         // 优先级请求（吊销）不排队：被退避挡住就永远吊销不了了。
         if !call.bypass_gate {
-            // 限流键带上路径。只按接口标识分组不够：`me/maps/{world}/page`
-            // 对不同世界、不同排序是四个不同的资源，共用一个键等于「刚看过 A
-            // 就看不到 B」——用户看到的是「请求太频繁」，而不是两次请求之间
-            // 隔着 3 秒的间隔。
-            self.acquire(&limiter_key(call.key, call.path), call.min_gap)
-                .await?;
+            // 槽名默认按**资源**算（接口 + 保留表达资源的查询参数），见
+            // [`limiter_key`]。少数调用方给了显式的 `limiter`，那是「同一份
+            // 资源、不同意图」——例如可见性探测，它不该占住玩家随后那一次
+            // 带 `mark=1` 的读取。
+            let slot = match call.limiter {
+                Some(slot) => slot.to_string(),
+                None => limiter_key(call.key, call.path),
+            };
+            self.acquire(&slot, call.min_gap).await?;
         }
 
         let mut builder = self
@@ -786,6 +800,7 @@ impl VrccClient {
             },
             min_gap: Duration::from_secs(60),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -801,6 +816,7 @@ impl VrccClient {
             key: "status",
             min_gap: Duration::from_secs(30),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -852,6 +868,7 @@ impl VrccClient {
             key: "map",
             min_gap: Duration::from_secs(30),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -886,6 +903,7 @@ impl VrccClient {
             key: "map",
             min_gap: Duration::from_secs(30),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -910,6 +928,7 @@ impl VrccClient {
             key: "map_page",
             min_gap: Duration::from_secs(5),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -954,6 +973,7 @@ impl VrccClient {
             // 第二份读。官方《频率限制》把「地图榜和地图页」划进第二份，
             // 和提醒、连线、所在地图那一份（第一份）分开算。
             bucket: Some(QuotaBucket::MoreReads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -997,6 +1017,7 @@ impl VrccClient {
             // 打分有自己的一份额度（官方《频率限制》：「和网页地图榜共用每天的
             // 打分与添图次数」），**不算读**。
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1019,6 +1040,7 @@ impl VrccClient {
                 // 删除算写（官方《频率限制》：「各种删除和合照合计 50」），
                 // 和读的 1000 次不是同一份额度。
                 bucket: None,
+                limiter: None,
                 bypass_gate: false,
             })
             .await?;
@@ -1060,6 +1082,7 @@ impl VrccClient {
             // 赞踩算写（官方《频率限制》：「地图赞踩 200」，每份授权每天），
             // 不占读。
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1077,6 +1100,7 @@ impl VrccClient {
             key: "announcements",
             min_gap: Duration::from_secs(30),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1101,6 +1125,7 @@ impl VrccClient {
             key: "stickers",
             min_gap: Duration::from_secs(3600),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1143,6 +1168,7 @@ impl VrccClient {
             key: DEVICE_CODE_KEY,
             min_gap: Duration::from_secs(5),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1159,6 +1185,7 @@ impl VrccClient {
             key: "device_token",
             min_gap: Duration::from_secs(5),
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1179,6 +1206,7 @@ impl VrccClient {
                 key: "disconnect",
                 min_gap: Duration::from_secs(5),
                 bucket: None,
+                limiter: None,
                 bypass_gate: true,
             })
             .await?;
@@ -1204,6 +1232,7 @@ impl VrccClient {
             key: "notifications",
             min_gap: NOTIFICATIONS_MIN_GAP,
             bucket: None,
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1222,6 +1251,7 @@ impl VrccClient {
             key: "recent",
             min_gap: Duration::from_secs(10),
             bucket: Some(QuotaBucket::Reads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1240,6 +1270,7 @@ impl VrccClient {
             key: "unread",
             min_gap: Duration::from_secs(25),
             bucket: Some(QuotaBucket::Unread),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1255,6 +1286,7 @@ impl VrccClient {
             key: "notes",
             min_gap: Duration::from_secs(10),
             bucket: Some(QuotaBucket::MoreReads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1281,6 +1313,7 @@ impl VrccClient {
             key: "my_map",
             min_gap: Duration::from_secs(3),
             bucket: Some(QuotaBucket::Reads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1302,6 +1335,7 @@ impl VrccClient {
             min_gap: Duration::from_secs(60),
             // 地图榜是第二份读（官方《频率限制》：「地图榜和地图页」）。
             bucket: Some(QuotaBucket::MoreReads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1321,6 +1355,7 @@ impl VrccClient {
             key: "my_maps",
             min_gap: Duration::from_secs(30),
             bucket: Some(QuotaBucket::Reads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1338,6 +1373,7 @@ impl VrccClient {
             key: "today",
             min_gap: Duration::from_secs(30),
             bucket: Some(QuotaBucket::MoreReads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1357,6 +1393,7 @@ impl VrccClient {
             key: "mutuals",
             min_gap: Duration::from_secs(30),
             bucket: Some(QuotaBucket::Reads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1383,6 +1420,34 @@ impl VrccClient {
             key: "crossings",
             min_gap: Duration::from_secs(30),
             bucket: Some(QuotaBucket::Reads),
+            limiter: None,
+            bypass_gate: false,
+        })
+        .await
+    }
+
+    /// 只看「星轨相交对这个玩家可见吗」，不标已读。
+    ///
+    /// 请求和 [`Self::crossings`]`(false)` 完全一样，区别只在**本地限流槽**：
+    /// 这条用独立的一个槽（`crossings/probe`）。
+    ///
+    /// 为什么必须分开：探测发生在打开页面时，紧接着玩家就可能切到这个页签，
+    /// 那一次要带 `mark=1` 把红点清掉。如果两者共用一个 30 秒的槽，探测会
+    /// 把玩家那次读取挡在本地——请求根本发不出去，`mark` 永远到不了服务器，
+    /// 红点消不掉，玩家还会看到一句「请求太频繁」，而那句话是他点开页签时
+    /// 弹出来的，跟他的动作对不上。
+    ///
+    /// 探测本身仍然受 30 秒间隔约束（同一个页面反复重挂不会连发）。
+    pub async fn crossings_probe(&self) -> Result<VrccCrossings, VrccError> {
+        self.request(Call {
+            method: "GET",
+            path: crossings_path(false),
+            body: None,
+            authed: true,
+            key: "crossings",
+            min_gap: Duration::from_secs(30),
+            bucket: Some(QuotaBucket::Reads),
+            limiter: Some("crossings/probe"),
             bypass_gate: false,
         })
         .await
@@ -1410,6 +1475,7 @@ impl VrccClient {
             // 列表是 30 秒，星卡**更宽**：它是第二份读，别跟列表抢窗口。
             min_gap: Duration::from_secs(60),
             bucket: Some(QuotaBucket::MoreReads),
+            limiter: None,
             bypass_gate: false,
         })
         .await
@@ -1476,22 +1542,57 @@ fn crossing_cards_path(mark: bool) -> &'static str {
     }
 }
 
-/// 本地限流器的键：接口标识 + **路径（不含查询串）**。
+/// 本地限流槽的键：接口标识 + **路径，只保留表达资源的那些查询参数**。
 ///
-/// 光用接口标识不够。`me/maps/{world}/page` 对不同的世界、不同的排序是四个不同
-/// 的资源，共用一个键意味着「刚看过 A 就看不到 B」——玩家看到的是「请求太频繁」，
-/// 而真实原因只是两次请求之间要隔三秒。带上路径之后，同一个 URL 才互相排队。
+/// ## 为什么不能只用接口标识
 ///
-/// **查询串必须去掉**：`me/crossings` 和 `me/crossings?mark=1` 是同一个资源，
-/// 只是这次要不要标已读。把它算进键里就变成两个桶——「先点刷新（不 mark）、
-/// 立刻切页签（mark）」能在间隔内连发两次，正好绕开了这个键要挡的东西。
-/// 单独成函数而不是内联，就是为了这一条能被测到。
+/// `me/maps/{world}/page` 对不同的世界、不同的排序是**四个不同的资源**，共用
+/// 一个键意味着「刚看过 A 就看不到 B」——玩家看到的是「请求太频繁」，而真实
+/// 原因只是两次请求之间要隔三秒。`06e6aeb` 就是修这个的。
+///
+/// ## 为什么也不能整条剥掉查询串
+///
+/// 那样会把 `sort` 和 `ids` 一起并进来，于是：
+///
+/// - `me/board?sort=top|week|new|went` 共用一个 60 秒的槽——切一次排序要等
+///   一分钟才能看到，而排序之间本来就是不同的列表；
+/// - `me/maps/{world}/page?sort=hot|new` 并成一个 3 秒的槽；
+/// - 批量查地图时 `maps?ids=...` 换一批 ID 也算同一个资源，榜单换排序后补
+///   封面会自己撞自己。
+///
+/// 这是从另一侧把 `06e6aeb` 修掉的问题又撞了回来。
+///
+/// ## 剥哪些
+///
+/// 只剥**不改变资源身份**的参数：
+///
+/// - `mark`：同一条列表，这次要不要顺手标已读；
+/// - `limit`：同一份列表，这次要几条。
+///
+/// 其余（`sort` / `ids` / 以后新增的）一律保留——默认「留在键里」比默认
+/// 「剥掉」安全：多一个槽最多多一次请求，少一个槽会让玩家看到一个假的
+/// 「请求太频繁」。
 ///
 /// `op`（进错误详情的那份）仍然用不带路径的 `key`：那是**接口**的身份，消费方
 /// 靠它区分「同一个错误码在不同接口下的不同含义」，路径里的世界 ID 不属于那里。
 fn limiter_key(key: &str, path: &str) -> String {
-    let path = path.split('?').next().unwrap_or(path);
-    format!("{key} {path}")
+    let (path, query) = match path.split_once('?') {
+        Some((path, query)) => (path, query),
+        None => (path, ""),
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .filter(|pair| {
+            let name = pair.split('=').next().unwrap_or(pair);
+            !matches!(name, "mark" | "limit")
+        })
+        .collect();
+    if kept.is_empty() {
+        format!("{key} {path}")
+    } else {
+        format!("{key} {path}?{}", kept.join("&"))
+    }
 }
 
 /// 离北京时间下一个零点还有几秒。服务器每天的次数都在这时重置。
@@ -2493,5 +2594,48 @@ mod tests {
         let midnight_utc = 1_793_030_400;
         assert_eq!(secs_until_beijing_midnight_from(midnight_utc - 60), 60);
         assert_eq!(secs_until_beijing_midnight_from(midnight_utc), 86_400);
+    }
+
+    /// 限流槽只剥掉「不改变资源身份」的参数。
+    ///
+    /// 两条相反的错误都出现过，这里一起钉住：
+    ///
+    /// - 用整条路径（含 `mark`）时，「刷新」和「切页签」变成两个槽，能在间隔
+    ///   内连发两次；
+    /// - 把整条查询串剥掉时，`sort` 和 `ids` 又被并进同一个槽——切一次排序要
+    ///   等一整个 `min_gap`（地图榜是 60 秒），批量换一批 ID 也自己撞自己。
+    #[test]
+    fn limiter_key_keeps_identity_and_drops_the_rest() {
+        // `mark` 不改身份：同一条列表，只是这次要不要标已读。
+        assert_eq!(
+            limiter_key("crossings", "me/crossings?mark=1"),
+            limiter_key("crossings", "me/crossings")
+        );
+        // `limit` 同理：同一份列表，只是这次要几条。
+        assert_eq!(
+            limiter_key("boards", "boards?limit=25"),
+            limiter_key("boards", "boards?limit=50")
+        );
+        // `sort` 改身份：不同排序是不同列表。
+        assert_ne!(
+            limiter_key("my_board", "me/board?sort=top"),
+            limiter_key("my_board", "me/board?sort=new")
+        );
+        // `ids` 改身份：换一批世界就是另一次查询。
+        assert_ne!(
+            limiter_key("maps", "maps?ids=wrld_a,wrld_b"),
+            limiter_key("maps", "maps?ids=wrld_c,wrld_d")
+        );
+        // 前两行剩下的那一个具体形状，别让它悄悄变成带 `?` 的怪串。
+        assert_eq!(
+            limiter_key("crossings", "me/crossings?mark=1"),
+            "crossings me/crossings"
+        );
+        assert_eq!(
+            limiter_key("my_board", "me/board?sort=top"),
+            "my_board me/board?sort=top"
+        );
+        // 没有查询串时不多出一个 `?`。
+        assert_eq!(limiter_key("status", "status"), "status status");
     }
 }

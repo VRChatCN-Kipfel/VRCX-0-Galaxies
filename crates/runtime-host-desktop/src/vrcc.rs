@@ -407,6 +407,20 @@ impl DesktopVrccRuntime {
             .map_err(|error| VrccFailure::from_error(&error))
     }
 
+    /// 只看「星轨相交对这个玩家可见吗」，不标已读。
+    ///
+    /// 界面在打开页面时先调这一条，拿到 `hidden` 再决定入口是否存在——
+    /// 官方要求 `hide` 时不显示此模块，而那只有问过才知道。走的是独立的
+    /// 本地限流槽，不会把玩家随后点开页签那次（带 `mark=1`）挡掉。
+    pub async fn crossings_visibility(
+        &self,
+    ) -> Result<vrcx_0_contracts::vrcc::VrccCrossings, VrccFailure> {
+        self.service
+            .crossings_visibility()
+            .await
+            .map_err(|error| VrccFailure::from_error(&error))
+    }
+
     /// 星轨相交的完整星卡（1.13.0 起）。算第二份读的额度，不进后台轮询。
     ///
     /// 旧服务器上没有这个接口，返回 `None`。

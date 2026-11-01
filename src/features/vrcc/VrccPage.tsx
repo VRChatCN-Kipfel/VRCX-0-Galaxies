@@ -94,6 +94,7 @@ export function VrccPage() {
         crossingsLoading,
         crossingsError,
         crossingsNeedsScope,
+        crossingsChecked,
         refreshCrossings,
         service,
         deviceAuth,
@@ -122,13 +123,19 @@ export function VrccPage() {
     // 一起藏起来，并顺手把停留在这页的玩家送回地图榜——否则会出现「所有
     // 页签都不选中、内容空白」的状态。
     //
-    // **先看本地令牌有没有 `crossings` 权限**：没给的话连请求都发不出去
-    // （`403 scope`），等响应再藏页签等于让玩家先看到入口、点进去才被告知
-    // 不行。令牌的 scope 在 `connection` 里，判断是本地纯函数，不用等网络。
-    // 两者取「或」：任何一边说不行，就不显示这个入口。
+    // 三个条件取「或」，任何一个说不行就不显示入口：
+    //
+    // 1. **令牌有没有 `crossings` 权限**——没给的话连请求都发不出去
+    //    （`403 scope`），等响应再藏页签等于让玩家先看到入口、点进去才被告知
+    //    不行。令牌的 scope 在 `connection` 里，是本地纯函数，不用等网络。
+    // 2. **还没问过**（`!crossingsChecked`）——`hide` 只有问过才知道，没问过
+    //    就当「不知道」，先不显示。探测失败也停在这里，不会因为一次网络抖动
+    //    就把入口放出来；页面刷新会重试。
+    // 3. **服务端说 hidden**。
     const crossingsHidden =
-        crossings?.hidden === true ||
-        !scopeGrants(connection?.scope, 'crossings');
+        !scopeGrants(connection?.scope, 'crossings') ||
+        !crossingsChecked ||
+        crossings?.hidden === true;
 
     // 从通知中心点进来时带的页签名。
     const [searchParams, setSearchParams] = useSearchParams();
