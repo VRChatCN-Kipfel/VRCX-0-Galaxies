@@ -8443,6 +8443,10 @@ export type VrccStarCard = {
      */
     star?: number | null;
     /**
+     * 星位坐标，形如 `L2` / `Z1` / `G2`（世界里的固定座位）。
+     */
+    pos?: string | null;
+    /**
      * 对方验证过 VRChat 账号。
      */
     verified?: boolean | null;
@@ -8486,6 +8490,58 @@ export type VrccStarCard = {
      * 保留服务器原样的代号：不认识的也照样收下，界面不认识就不显示。
      */
     why?: string | null;
+    /**
+     * 怎么认识的：什么时候互连、从哪认识、在哪遇见。
+     *
+     * 只在 `/me/crossings/cards` 上见过（本批 6/6 张都有）。官方文档与
+     * `examples/responses.json` 都没写这个键，**属于契约之外、随时可能变**，
+     * 所以整体是 `Option`，界面缺了就不显示那一行。
+     */
+    pair?: VrccStarPair | null;
+};
+/**
+ * 星卡上的「怎么认识的」。
+ *
+ * 网页「星轨相交」里点开一颗星，浮层上那几行就是它拼出来的。
+ */
+export type VrccStarPair = {
+    /**
+     * 互相连上的时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 认识的来源代号，实测有 `yq` / `fof` / `pick` / `cross` / `invite`。
+     *
+     * 官方没有给取值表，这里保留原样字符串，不认识的照样收下。
+     */
+    src?: string | null;
+    /**
+     * 是不是我这边发起的。
+     */
+    mine?: boolean | null;
+    /**
+     * 在哪里遇见。
+     */
+    met?: VrccStarPairMet | null;
+};
+/**
+ * 星卡上「在哪遇见」。
+ */
+export type VrccStarPairMet = {
+    /**
+     * 遇见的时间（毫秒时间戳）。
+     *
+     * 实测同一天的多张卡是**同一个值**（按天取整的样子），所以只能当时刻用，
+     * 不要当成精确到秒的相遇时间。
+     */
+    at?: number | null;
+    /**
+     * VRChat 世界名的**原文**。
+     *
+     * 有些世界名自带「世界名｜社群名」这样的尾巴（分隔符也是世界名的一部分），
+     * 有些就是干干净净一个名字。**不要按分隔符拆**，拆了会把正常世界名拆坏。
+     */
+    world?: string | null;
 };
 /**
  * `GET /status`：不需要 client 标识的探活接口。

@@ -944,6 +944,7 @@
             "linked": "Už jste se propojili",
             "mutual": "Propojeno obousměrně",
             "not_linked": "Zatím nepřipojeno",
+            "met_world": "Crossed in {world}",
             "open_page": "Zobrazit na vrcc.cc",
             "why": {
                 "verify": "Ověřte svůj účet VRChat, abyste mohli používat křížení.",

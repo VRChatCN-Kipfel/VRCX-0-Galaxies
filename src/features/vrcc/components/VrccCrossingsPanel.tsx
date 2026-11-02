@@ -49,9 +49,11 @@ function whyKey(why: string): WhyKey | null {
  * 其余几种原因（未验证、机器人好友排队等）**要显示**并说明下一步，因为
  * 那是「功能在但暂时用不了」。
  *
- * **合规边界**：星轨相交的条目**没有** `vrcUser`（官方只在 `mutuals` 端点
- * 给这个 ID），所以这里不提供「打开玩家详情」，只把玩家送到网页那一页
- * 自己看完整星卡、自己决定连不连。程序不代做任何连线动作，也不代发好友请求。
+ * **合规边界**：列表 `/me/crossings` 的 `stars[]` **没有** `vrcUser`；但
+ * `/me/crossings/cards` 的卡上**有**（本批 6/6 张都带，官方文档没写这个差别）。
+ * 即便拿得到，这一页仍然只把玩家送到网页看完整星卡：官方要求提供「加好友」
+ * 入口时只能打开玩家页让人手动点，**不得由程序代发好友请求**，这里也就没有
+ * 任何自动加好友的通道。
  */
 export function VrccCrossingsPanel({
     connected,
@@ -104,6 +106,13 @@ export function VrccCrossingsPanel({
     const why = crossings?.why ?? null;
     const left = cards?.left;
     const max = cards?.max;
+
+    // 卡片按星编号索引：列表给的是「谁跟我擦过肩」，卡上才带「在哪遇见 / 怎么
+    // 认识的」。旧服务器、或令牌没有 crossings 的完整权限时 `cards` 是 null，
+    // 这些行整块不渲染，列表照常显示。
+    const cardByN = new Map(
+        (cards?.cards ?? []).map((card) => [card.n, card] as const)
+    );
 
     // `why` 非 null 就是「功能在，但暂时用不了」，官方要求把原因告诉玩家。
     //
@@ -233,6 +242,16 @@ export function VrccCrossingsPanel({
                         const crossedAt = star.at
                             ? formatRelativeTime(star.at, { style: 'short' })
                             : '';
+                        // 列表的 `at` 实测经常根本没有（官方标 required，
+                        // 线上 6/6 条都不带），真正的擦肩时间在卡的
+                        // `pair.met.at` 上。两处都缺就不显示时间。
+                        const pair = cardByN.get(no)?.pair ?? null;
+                        const metWorld = pair?.met?.world ?? null;
+                        const metWhen = pair?.met?.at
+                            ? formatRelativeTime(pair.met.at, {
+                                  style: 'short'
+                              })
+                            : '';
                         return (
                             <li
                                 key={key}
@@ -287,6 +306,21 @@ export function VrccCrossingsPanel({
                                             </span>
                                         )}
                                     </div>
+                                    {/* 在哪遇见。世界名是**原文**：有些世界名
+                                        自带「｜社群名」，有些没有，绝不按分隔符拆。
+                                        时间只有日期粒度（同一天的多张卡是同一个
+                                        值），所以这里只当「大约什么时候」。 */}
+                                    {metWorld && (
+                                        <div
+                                            className="text-muted-foreground mt-0.5 truncate text-[11px]"
+                                            title={metWorld}
+                                        >
+                                            {t('vrcc.crossings.met_world', {
+                                                world: metWorld
+                                            })}
+                                            {metWhen && ` · ${metWhen}`}
+                                        </div>
+                                    )}
                                 </div>
                                 {/* 网页上「星轨相交」那一页：可以看完整星卡，
                                     也可以从那里连线。客户端不代做连线。

@@ -387,3 +387,57 @@ fn crossing_cards_keep_the_fields_the_star_card_table_never_lists() {
     assert_eq!(cards.left, Some(5));
     assert_eq!(cards.max, Some(5));
 }
+
+/// `/me/crossings/cards` 的 `pair`：网页「星轨相交」点开一颗星时，浮层上那几行
+/// 全靠它（什么时候互连、从哪认识、在哪遇见）。
+///
+/// 官方文档、`StarCard` 字段表、`examples/responses.json` **都没有这个键**，
+/// 是实测出来的。所以：字段全部可选，缺了界面就不显示那一行；
+/// `met.world` 必须是**世界名原文**——有的世界名自带「｜社群名」，
+/// 有的没有，按分隔符拆会把正常世界名拆坏。
+#[test]
+fn crossing_cards_carry_the_pair_section_the_docs_never_mention() {
+    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+
+    let cards: VrccCrossingCards = parse(
+        r#"{"cards":[
+            {"n":827,"pos":"L2","pair":{"at":1792778779575,"src":"yq","mine":false,
+             "met":{"at":1792900800000,"world":"天井 Skywell｜中文社区 Chinese Community"}}},
+            {"n":859,"pos":"Z0","pair":{"at":1792925092206,"src":"fof","mine":true,
+             "met":{"at":1792900800000,"world":"咖啡厅v1․31"}}},
+            {"n":4,"name":"没有 pair 的旧卡"}
+        ],"left":5,"max":5}"#,
+    );
+
+    assert_eq!(cards.cards.len(), 3);
+
+    let with_club = &cards.cards[0];
+    assert_eq!(with_club.pos.as_deref(), Some("L2"));
+    let pair = with_club.pair.as_ref().expect("pair 必须解析出来");
+    assert_eq!(pair.at, Some(1_792_778_779_575));
+    assert_eq!(pair.src.as_deref(), Some("yq"));
+    assert_eq!(pair.mine, Some(false));
+    let met = pair.met.as_ref().expect("met 必须解析出来");
+    assert_eq!(met.at, Some(1_792_900_800_000));
+    // 世界名原样保留，连全角分隔符一起：这不是「世界 + 社群」的拼接串。
+    assert_eq!(
+        met.world.as_deref(),
+        Some("天井 Skywell｜中文社区 Chinese Community")
+    );
+
+    // 没有分隔符的普通世界名，同样原样保留（它里面还有 U+2024）。
+    let plain = &cards.cards[1];
+    let world = plain
+        .pair
+        .as_ref()
+        .and_then(|pair| pair.met.as_ref())
+        .and_then(|met| met.world.as_deref());
+    assert_eq!(world, Some("咖啡厅v1․31"));
+    assert_eq!(
+        plain.pair.as_ref().and_then(|pair| pair.src.as_deref()),
+        Some("fof")
+    );
+
+    // 没有 `pair` 的卡照旧能读：它不是必填，界面会整块不渲染。
+    assert!(cards.cards[2].pair.is_none());
+}

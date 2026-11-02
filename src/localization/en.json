@@ -940,6 +940,7 @@
             "linked": "You linked them",
             "mutual": "Connected both ways",
             "not_linked": "Not connected yet",
+            "met_world": "Crossed in {world}",
             "open_page": "Open on vrcc.cc",
             "why": {
                 "verify": "Verify your VRChat account to use crossings.",

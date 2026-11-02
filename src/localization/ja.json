@@ -935,6 +935,7 @@
             "linked": "あなたがつながりました",
             "mutual": "双方向でつながっています",
             "not_linked": "まだつながっていません",
+            "met_world": "Crossed in {world}",
             "open_page": "vrcc.cc で見る",
             "why": {
                 "verify": "星軌交差を使うには VRChat アカウントの認証が必要です。",

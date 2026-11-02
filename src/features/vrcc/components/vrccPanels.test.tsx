@@ -35,7 +35,7 @@ vi.mock('../useMutualPresence', () => ({
     })
 }));
 
-import type { VrccCrossingStar } from '../vrccApi';
+import type { VrccCrossingStar, VrccStarCard } from '../vrccApi';
 import { VrccCrossingsPanel } from './VrccCrossingsPanel';
 import { VrccMapsPanel } from './VrccMapsPanel';
 import { VrccMutualsPanel } from './VrccMutualsPanel';
@@ -57,6 +57,8 @@ function renderCrossings(
         loading?: boolean;
         error?: string | null;
         needsScope?: boolean;
+        /** 完整星卡；缺省为 null，等同于旧服务器 / 没有完整权限。 */
+        cards?: { cards: VrccStarCard[]; left?: number; max?: number } | null;
     } = {}
 ) {
     const { container } = render(
@@ -74,7 +76,7 @@ function renderCrossings(
                       }
                     : null
             }
-            cards={null}
+            cards={options.cards ?? null}
             loading={options.loading ?? false}
             crossingsError={options.error ?? null}
             crossingsNeedsScope={options.needsScope ?? false}
@@ -112,6 +114,47 @@ describe('VrccCrossingsPanel', () => {
         });
         expect(screen.getByText('vrcc.crossings.why.friend')).toBeTruthy();
         expect(screen.getByText('旧记录')).toBeTruthy();
+    });
+
+    it('卡上带「在哪遇见」时，行里补一行世界名与时间', () => {
+        // 「在哪个世界擦肩」只有 `/me/crossings/cards` 的 `pair.met.world`
+        // 有，列表端点里完全没有这个字段。所以这一行必须靠卡片补。
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            {
+                cards: {
+                    cards: [
+                        {
+                            n: 5,
+                            pair: {
+                                at: 1792778779575,
+                                src: 'yq',
+                                met: {
+                                    at: 1792900800000,
+                                    world: '天井 Skywell｜中文社区 Chinese Community'
+                                }
+                            }
+                        }
+                    ],
+                    left: 5,
+                    max: 5
+                }
+            }
+        );
+        // 这里的 `t` 只回显键名、`formatRelativeTime` 恒为 now，所以断言键名
+        // 和拼接出来的时间即可；世界名本身由 title 带着。
+        const text = container.textContent ?? '';
+        expect(text).toContain('vrcc.crossings.met_world');
+        expect(text).toContain('· now');
+    });
+
+    it('没有完整星卡时不补那一行，列表照常显示', () => {
+        const container = renderCrossings({
+            stars: [{ n: 5, name: '旧记录' }]
+        });
+        const text = container.textContent ?? '';
+        expect(text).toContain('旧记录');
+        expect(text).not.toContain('vrcc.crossings.met_world');
     });
 
     it('服务器给没见过的 why 时退回 unknown，不拼键名', () => {
