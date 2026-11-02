@@ -592,7 +592,8 @@ fn a_stored_token_reads_as_active() {
 
 #[test]
 fn a_token_from_another_client_is_a_mismatch_not_a_first_run() {
-    // 换了正式标识、或改了配置里的覆盖标识：老令牌必然 `403 client_mismatch`。
+    // 换了正式标识、或改了构建期的 `X-Client`：老令牌对每个请求都会吃
+    // `403 client_mismatch`，令牌整个作废，只能重新授权。
     let store = MemoryStore::with(StoredCredential {
         token: "tok".into(),
         client_id: Some("app_someone_else".into()),
@@ -600,17 +601,75 @@ fn a_token_from_another_client_is_a_mismatch_not_a_first_run() {
     });
     let service = VrccService::new(store.clone(), FakeRemote::new());
     let snapshot = service.snapshot();
-    assert_eq!(snapshot.credential, VrccCredentialState::ClientMismatch);
+    assert_eq!(snapshot.credential, VrccCredentialState::GrantMismatch);
     assert!(!snapshot.connected);
     // 死令牌清掉了，结局留下了：重启后仍然是「不匹配」，不能退化成新人。
     assert!(store.load().unwrap().is_none());
-    assert_eq!(store.outcome(), VrccCredentialState::ClientMismatch);
+    assert_eq!(store.outcome(), VrccCredentialState::GrantMismatch);
     assert_eq!(
         VrccService::new(store, FakeRemote::new())
             .snapshot()
             .credential,
-        VrccCredentialState::ClientMismatch
+        VrccCredentialState::GrantMismatch
     );
+}
+
+#[test]
+fn a_token_with_fewer_scopes_stays_connected() {
+    // 权限是签发时定死的。这个构建要的比令牌拿到的多，缺的那几个接口会一直
+    // `403 scope`——但令牌本身还能用，**不能清掉**，那是白扔一份授权。
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        client_id: Some("dev-test".into()),
+        // `dev-` 标识要的是 `profile notifications maps`，这份令牌只有 `profile`。
+        scope: Some("profile".into()),
+        ..Default::default()
+    });
+    let service = VrccService::new(store.clone(), FakeRemote::new());
+    let snapshot = service.snapshot();
+    assert_eq!(snapshot.credential, VrccCredentialState::ScopeMismatch);
+    assert!(
+        snapshot.connected,
+        "权限不够不等于没连上：提醒和榜单照样能用"
+    );
+    assert!(store.load().unwrap().is_some(), "令牌必须留着");
+    // 这一档不落盘：令牌在，重启后重新比一遍就有同样的结论。
+    assert_eq!(store.outcome(), VrccCredentialState::Never);
+}
+
+#[test]
+fn a_token_with_enough_scopes_is_plain_active() {
+    // 权限刚好够（甚至更多）时不该报任何问题。
+    for scope in [
+        "profile notifications maps",
+        "profile notifications maps mutuals",
+    ] {
+        let store = MemoryStore::with(StoredCredential {
+            token: "tok".into(),
+            client_id: Some("dev-test".into()),
+            scope: Some(scope.into()),
+            ..Default::default()
+        });
+        let service = VrccService::new(store, FakeRemote::new());
+        assert_eq!(
+            service.snapshot().credential,
+            VrccCredentialState::Active,
+            "{scope}"
+        );
+    }
+}
+
+#[test]
+fn an_archive_without_a_recorded_scope_is_not_called_a_mismatch() {
+    // 旧存档没记 `scope`：不知道就说不知道，不要凭空让玩家重新授权。
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        client_id: Some("dev-test".into()),
+        scope: None,
+        ..Default::default()
+    });
+    let service = VrccService::new(store, FakeRemote::new());
+    assert_eq!(service.snapshot().credential, VrccCredentialState::Active);
 }
 
 #[tokio::test]

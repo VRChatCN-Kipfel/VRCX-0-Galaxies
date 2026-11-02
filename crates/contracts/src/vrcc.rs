@@ -2004,9 +2004,45 @@ pub enum VrccCredentialState {
     /// 令牌被服务器判失效（`404 gone`）：玩家在网页上断开、同一个客户端又授权了
     /// 一次、星被删除，以及 1.10.0 起「90 天没调用过任何接口自动断开」。
     Expired,
-    /// 令牌不是当前构建的 `X-Client` 签发的，服务器必然回 `403 client_mismatch`。
-    /// 换了正式标识、或改了配置里的覆盖标识之后会这样。
-    ClientMismatch,
+    /// 授权和当前构建对不上的**两种**情况之一：令牌不是这个 `X-Client` 签发的。
+    ///
+    /// 换了正式标识、或改了构建期的 `X-Client` 之后会这样，服务器对**每个**请求
+    /// 都回 `403 client_mismatch`——令牌整个作废，本地要清掉，玩家得重新授权。
+    ///
+    /// 「权限变了」不属于这一档，见 [`VrccCredentialState::ScopeMismatch`]：那两者
+    /// 看着都是「授权该更新了」，但令牌的命运相反，混在一起就会把一份还能用的
+    /// 授权清掉。
+    GrantMismatch,
+    /// 令牌还在、还能用，但权限比当前构建要求的少。
+    ///
+    /// 权限是**签发时定死的**，事后要更多只能重新授权，所以这种令牌会一直在
+    /// 少数接口上回 `403 scope`。和 [`VrccCredentialState::GrantMismatch`] 的区别
+    /// 是：这里的令牌**必须留下**——它还能收提醒、看榜单，清掉等于白扔一份授权；
+    /// 界面该说的是「重新连一次可以多要一项权限」，而不是「连接已失效」。
+    ///
+    /// 能比出来的前提是本地记了签发时的 `scope`；旧存档没记时不下这个结论。
+    ScopeMismatch,
+}
+
+/// 令牌的权限够不够 `required` 这一串。
+///
+/// 返回缺的那些；权限**够**、或**不知道令牌有哪些权限**（旧存档没记 `scope`）时
+/// 返回空——不知道就说不知道，不要凭空让玩家重新授权。
+///
+/// 只判「要求的是不是都在里面」：令牌比要求多不给结论，多出来的权限不该触发
+/// 任何提示。权限串的分隔符官方用空格，也认逗号和 `+`。
+pub fn missing_scopes(granted: Option<&str>, required: &str) -> Vec<String> {
+    let Some(granted) = granted else {
+        return Vec::new();
+    };
+    let mut missing: Vec<String> = required
+        .split(|c: char| c.is_whitespace() || c == ',' || c == '+')
+        .filter(|item| !item.is_empty())
+        .filter(|item| !scope_grants(Some(granted), item))
+        .map(str::to_string)
+        .collect();
+    missing.dedup();
+    missing
 }
 
 /// 连接状态投影。

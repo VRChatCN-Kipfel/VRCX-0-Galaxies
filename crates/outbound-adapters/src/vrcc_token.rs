@@ -216,7 +216,7 @@ impl LocalVrccTokenStore {
         Ok(match self.load_string(VRCC_OUTCOME_KEY)?.as_deref() {
             Some("disconnected") => VrccCredentialState::Disconnected,
             Some("expired") => VrccCredentialState::Expired,
-            Some("client_mismatch") => VrccCredentialState::ClientMismatch,
+            Some("client_mismatch") => VrccCredentialState::GrantMismatch,
             _ => VrccCredentialState::Never,
         })
     }
@@ -225,12 +225,18 @@ impl LocalVrccTokenStore {
     ///
     /// `Active` / `Never` 落盘时等于把记录清掉：令牌还在时不需要额外记录，
     /// 「从没连过」本来就是「没有记录」。
+    ///
+    /// `ScopeMismatch` 同样不落盘：它不是「令牌没了」的结局，令牌还在，重启后
+    /// 拿它和构建期要求重新比一遍就能得出同样的结论。落一档会写进去再读回来
+    /// 就不成立的记录，不如不写。
     pub fn save_outcome(&self, state: VrccCredentialState) -> crate::Result<()> {
         let value = match state {
             VrccCredentialState::Disconnected => "disconnected",
             VrccCredentialState::Expired => "expired",
-            VrccCredentialState::ClientMismatch => "client_mismatch",
-            VrccCredentialState::Active | VrccCredentialState::Never => "",
+            VrccCredentialState::GrantMismatch => "client_mismatch",
+            VrccCredentialState::Active
+            | VrccCredentialState::Never
+            | VrccCredentialState::ScopeMismatch => "",
         };
         self.save_optional_string(VRCC_OUTCOME_KEY, Some(value))
     }
@@ -404,6 +410,24 @@ mod tests {
             store.load_outcome().expect("load outcome"),
             VrccCredentialState::Never
         );
+    }
+
+    /// 存下来的结局能读回同一档。
+    ///
+    /// `client_mismatch` 这个值不能改名：改名等于把已经在磁盘上的记录读成
+    /// 「从没连过」。
+    #[test]
+    fn every_recorded_outcome_round_trips() {
+        let (db, _dir) = test_db();
+        let store = store_for(Arc::clone(&db), Some("usr_aaaa"));
+        for state in [
+            VrccCredentialState::Disconnected,
+            VrccCredentialState::Expired,
+            VrccCredentialState::GrantMismatch,
+        ] {
+            store.save_outcome(state).expect("save outcome");
+            assert_eq!(store.load_outcome().expect("load outcome"), state);
+        }
     }
 
     /// 结局同样按账号隔离：一个账号断过，不该让另一个账号看起来断过。

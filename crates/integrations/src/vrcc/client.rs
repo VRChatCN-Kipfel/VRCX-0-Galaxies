@@ -1961,6 +1961,28 @@ mod tests {
         assert!(scope_grants(None, "notifications"));
     }
 
+    /// 缺哪些权限，决定界面说的是「重新连一次可以多要一项」还是「连接已失效」。
+    #[test]
+    fn missing_scopes_lists_only_what_is_actually_missing() {
+        use vrcx_0_contracts::vrcc::missing_scopes;
+        // 够：什么都不缺。
+        assert!(missing_scopes(Some("profile notifications maps"), "profile maps").is_empty());
+        // 多出来的权限不触发任何结论。
+        assert!(missing_scopes(Some("profile maps crossings"), "profile").is_empty());
+        // 缺两项就报两项，顺序按要求那一串。
+        assert_eq!(
+            missing_scopes(Some("profile"), "profile notifications crossings"),
+            vec!["notifications", "crossings"]
+        );
+        // 只认整项：`maps.rate` 不等于 `maps`。
+        assert_eq!(
+            missing_scopes(Some("profile maps.rate"), "maps"),
+            vec!["maps"]
+        );
+        // 旧存档没记权限：不知道就不下结论，别凭空让人重新授权。
+        assert!(missing_scopes(None, "profile notifications").is_empty());
+    }
+
     /// 开发态常量本身必须符合官方的 `dev-` 前缀要求——
     /// 否则每个请求都会吃 `403 client_unknown`。
     #[test]

@@ -10,11 +10,11 @@ use std::time::{Duration, Instant};
 
 use vrcx_0_application_core::Result;
 use vrcx_0_contracts::vrcc::{
-    device_auth_scope, is_dev_client, ErrorDetail, ErrorLayer, TransportKind, VrccAnnouncements,
-    VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCredentialState, VrccCrossingCards,
-    VrccCrossings, VrccDeviceCode, VrccError, VrccMapPage, VrccMutuals, VrccMyBoard,
-    VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccNotifications, VrccRatedMaps,
-    VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday,
+    device_auth_scope, is_dev_client, missing_scopes, ErrorDetail, ErrorLayer, TransportKind,
+    VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCredentialState,
+    VrccCrossingCards, VrccCrossings, VrccDeviceCode, VrccError, VrccMapPage, VrccMutuals,
+    VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccNotifications,
+    VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday,
     VrccTokenResponse, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
     VrccWristSummary,
 };
@@ -423,13 +423,26 @@ fn restore_credential(
                 Some(id) => id == current,
             };
             if usable {
+                // 权限也是签发时定死的：这个构建要的权限如果多于令牌拿到的，
+                // 那些接口会一直 `403 scope`。先算出来，连上之后再决定报哪一档。
+                let missing =
+                    missing_scopes(credential.scope.as_deref(), device_auth_scope(&current));
                 remote.connect(
                     credential.token,
                     credential.star,
                     credential.vrc_name,
                     credential.scope,
                 );
-                return VrccCredentialState::Active;
+                if missing.is_empty() {
+                    return VrccCredentialState::Active;
+                }
+                // **不清令牌**：它还能收提醒、看榜单，清掉等于白扔一份授权。
+                // 界面该说的是「重新连一次可以多要一项权限」，不是「连接已失效」。
+                tracing::info!(
+                    ?missing,
+                    "vrcc: the stored token grants fewer scopes than this build asks for"
+                );
+                return VrccCredentialState::ScopeMismatch;
             }
             tracing::info!(
                 stored = signed_by.unwrap_or(""),
@@ -439,10 +452,10 @@ fn restore_credential(
             // 顺手清掉，免得每次启动都重新判断一遍；但**要把结局记下来**，
             // 否则这个账号重启后会变成「从没连过」。
             let _ = store.clear();
-            if let Err(error) = store.save_state(VrccCredentialState::ClientMismatch) {
+            if let Err(error) = store.save_state(VrccCredentialState::GrantMismatch) {
                 tracing::warn!(%error, "vrcc: failed to record the credential outcome");
             }
-            VrccCredentialState::ClientMismatch
+            VrccCredentialState::GrantMismatch
         }
         // 没有令牌：结局由上次离开时记下的那一档决定。
         Ok(None) => match store.load_state() {
