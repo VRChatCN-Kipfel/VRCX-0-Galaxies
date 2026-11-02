@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use vrcx_0_contracts::vrcc::VrccCredentialState;
 use vrcx_0_persistence::{secrets, DatabaseService};
 
 /// 令牌与玩家身份的配置键（**不含** owner 前缀）。
@@ -21,6 +22,12 @@ const VRCC_SCOPE_KEY: &str = "vrccScope";
 /// 得到 `403 client_mismatch`。存下来才能在换标识后认出「这个令牌作废了」，
 /// 而不是启动时照样恢复成「已连接」、之后每次请求都 403。
 const VRCC_CLIENT_ID_KEY: &str = "vrccClientId";
+
+/// 「上一个令牌的结局」的配置键（**不含** owner 前缀）。
+///
+/// 和令牌分开存：`clear` 只清令牌，这一项要留下——否则「连过又手动断开」的账号
+/// 重启后会退化成「从没连过」，界面就会把用过的人当新人再讲一遍入门。
+const VRCC_OUTCOME_KEY: &str = "vrccOutcome";
 
 /// 从配置表读写的令牌仓库。
 ///
@@ -199,6 +206,34 @@ impl LocalVrccTokenStore {
         }
         Ok(())
     }
+
+    /// 读「上一个令牌的结局」。
+    ///
+    /// 没有记录（新账号、或从没连过的账号）时是 [`VrccCredentialState::Never`]。
+    /// 认不出来的值（降级、手改配置文件）也按 `Never` 处理：猜一个结局比承认
+    /// 「不知道」更容易说错话。
+    pub fn load_outcome(&self) -> crate::Result<VrccCredentialState> {
+        Ok(match self.load_string(VRCC_OUTCOME_KEY)?.as_deref() {
+            Some("disconnected") => VrccCredentialState::Disconnected,
+            Some("expired") => VrccCredentialState::Expired,
+            Some("client_mismatch") => VrccCredentialState::ClientMismatch,
+            _ => VrccCredentialState::Never,
+        })
+    }
+
+    /// 写「上一个令牌的结局」。
+    ///
+    /// `Active` / `Never` 落盘时等于把记录清掉：令牌还在时不需要额外记录，
+    /// 「从没连过」本来就是「没有记录」。
+    pub fn save_outcome(&self, state: VrccCredentialState) -> crate::Result<()> {
+        let value = match state {
+            VrccCredentialState::Disconnected => "disconnected",
+            VrccCredentialState::Expired => "expired",
+            VrccCredentialState::ClientMismatch => "client_mismatch",
+            VrccCredentialState::Active | VrccCredentialState::Never => "",
+        };
+        self.save_optional_string(VRCC_OUTCOME_KEY, Some(value))
+    }
 }
 
 #[cfg(test)]
@@ -331,5 +366,63 @@ mod tests {
 
         let error = anonymous.save(&credential("orphan"));
         assert!(error.is_err(), "未登录时保存必须报错");
+    }
+
+    /// 结局和令牌分开存：`clear` 只清令牌，结局要留下。
+    ///
+    /// 这条钉的是「连过又断开」的账号重启后的样子——结局要是跟着令牌一起被
+    /// 清掉，界面就会把用过的人当新人，再讲一遍入门。
+    #[test]
+    fn the_outcome_survives_clearing_the_token() {
+        let (db, _dir) = test_db();
+        let store = store_for(Arc::clone(&db), Some("usr_aaaa"));
+
+        // 新账号：没有记录。
+        assert_eq!(
+            store.load_outcome().expect("load outcome"),
+            VrccCredentialState::Never
+        );
+
+        store
+            .save_outcome(VrccCredentialState::Disconnected)
+            .expect("save outcome");
+        store.save(&credential("token-alice")).expect("save token");
+        store.clear().expect("clear token");
+
+        // 令牌没了，结局还在。
+        assert!(store.load().expect("load").is_none());
+        assert_eq!(
+            store.load_outcome().expect("load outcome"),
+            VrccCredentialState::Disconnected
+        );
+
+        // 重新连上之后记录被清掉，不再报「断开过」。
+        store
+            .save_outcome(VrccCredentialState::Active)
+            .expect("clear outcome");
+        assert_eq!(
+            store.load_outcome().expect("load outcome"),
+            VrccCredentialState::Never
+        );
+    }
+
+    /// 结局同样按账号隔离：一个账号断过，不该让另一个账号看起来断过。
+    #[test]
+    fn outcomes_are_isolated_per_vrchat_account() {
+        let (db, _dir) = test_db();
+        let alice = store_for(Arc::clone(&db), Some("usr_aaaa"));
+        let bob = store_for(Arc::clone(&db), Some("usr_bbbb"));
+
+        alice
+            .save_outcome(VrccCredentialState::Expired)
+            .expect("save alice outcome");
+        assert_eq!(
+            alice.load_outcome().expect("load alice outcome"),
+            VrccCredentialState::Expired
+        );
+        assert_eq!(
+            bob.load_outcome().expect("load bob outcome"),
+            VrccCredentialState::Never
+        );
     }
 }

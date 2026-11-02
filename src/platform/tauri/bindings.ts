@@ -7517,6 +7517,13 @@ export type VrccConnectionSnapshot = {
      */
     expired: boolean;
     /**
+     * 凭据状态。
+     *
+     * 和 `connected` / `expired` 并存而不是替换：那两个是**本会话**的即时判断，
+     * 这一项是**跨重启**的结论——它决定界面要不要把玩家当新人讲一遍。
+     */
+    credential?: VrccCredentialState;
+    /**
      * 星号，已连接且拿到时才有。
      */
     star: number | null;
@@ -7548,6 +7555,42 @@ export type VrccConnectionSnapshot = {
      */
     nextPollAt: number | null;
 };
+/**
+ * 本账号的凭据处在哪一档。
+ *
+ * **为什么不能只靠 `connected` / `expired`**：这两个布尔区分不了「从没连过」和
+ * 「连过又断开」——两者都是 `connected: false, expired: false`。而界面要说的话
+ * 完全不同：前者要讲一遍星遇同频是什么，后者只该说「重新连一次」。
+ *
+ * 落盘的不是这个枚举本身，而是其中「令牌已经不在了」的那几种结局：令牌在时
+ * 一望即知是 [`VrccCredentialState::Active`]，不需要额外记录。
+ */
+export type VrccCredentialState =
+    /**
+     * 这个账号从来没有连过星遇同频。
+     */
+    | 'never'
+    /**
+     * 手里有令牌。
+     */
+    | 'active'
+    /**
+     * 玩家自己在界面上断开的。
+     *
+     * 断开之后重启仍然算这一档，**不要退化成 [`VrccCredentialState::Never`]**：
+     * 那等于把用过的人当新人，再讲一遍入门。
+     */
+    | 'disconnected'
+    /**
+     * 令牌被服务器判失效（`404 gone`）：玩家在网页上断开、同一个客户端又授权了
+     * 一次、星被删除，以及 1.10.0 起「90 天没调用过任何接口自动断开」。
+     */
+    | 'expired'
+    /**
+     * 令牌不是当前构建的 `X-Client` 签发的，服务器必然回 `403 client_mismatch`。
+     * 换了正式标识、或改了配置里的覆盖标识之后会这样。
+     */
+    | 'clientMismatch';
 /**
  * `GET /me/crossings/cards`：星轨相交的完整星卡（1.13.0 起）。
  *

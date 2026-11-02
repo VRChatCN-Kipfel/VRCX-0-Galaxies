@@ -11,11 +11,12 @@ use std::time::{Duration, Instant};
 use vrcx_0_application_core::Result;
 use vrcx_0_contracts::vrcc::{
     device_auth_scope, is_dev_client, ErrorDetail, ErrorLayer, TransportKind, VrccAnnouncements,
-    VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCrossingCards, VrccCrossings,
-    VrccDeviceCode, VrccError, VrccMapPage, VrccMutuals, VrccMyBoard, VrccMyBoardSort, VrccMyMap,
-    VrccMyMapPage, VrccNotes, VrccNotifications, VrccRatedMaps, VrccRatingText,
-    VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccTokenResponse, VrccUnread,
-    VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult, VrccWristSummary,
+    VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCredentialState, VrccCrossingCards,
+    VrccCrossings, VrccDeviceCode, VrccError, VrccMapPage, VrccMutuals, VrccMyBoard,
+    VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccNotifications, VrccRatedMaps,
+    VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday,
+    VrccTokenResponse, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
+    VrccWristSummary,
 };
 
 /// 服务器回答 `me/unread` 是 `404 not_found`（还没更新到 1.13.0）之后，
@@ -36,6 +37,19 @@ pub trait VrccTokenStore: Send + Sync {
     fn load(&self) -> Result<Option<StoredCredential>>;
     fn save(&self, credential: &StoredCredential) -> Result<()>;
     fn clear(&self) -> Result<()>;
+
+    /// 读「上一个令牌的结局」。
+    ///
+    /// 没有记录（新账号、或从没连过的账号）时返回 [`VrccCredentialState::Never`]。
+    /// 令牌还在时以 [`Self::load`] 为准，这里不会给出 `Active`。
+    fn load_state(&self) -> Result<VrccCredentialState>;
+
+    /// 记下「上一个令牌的结局」。
+    ///
+    /// **必须和 [`Self::clear`] 分开**：`clear` 只清令牌，这一项要留着，否则
+    /// 「连过又断开」的账号重启后会退化成「从没连过」。`Active` / `Never`
+    /// 落盘时等于清掉记录。
+    fn save_state(&self, state: VrccCredentialState) -> Result<()>;
 }
 
 /// 一次异步调用的结果。前端/上层都按 [`VrccError`] 分类，所以这里固定用它的
@@ -355,6 +369,11 @@ pub struct VrccService {
     store: Arc<dyn VrccTokenStore>,
     /// 网络端口。实现是 `outbound-adapters` 里的适配器，本层不知道协议细节。
     remote: Arc<dyn VrccRemote>,
+    /// 凭据状态（跨重启）。
+    ///
+    /// 不从 `remote.connection()` 取：那是网络侧会话的即时状态，重启就没了。
+    /// 这一项在构造时从仓库读一次，之后由「连上 / 断开 / 被判失效」三个动作更新。
+    credential: Arc<RwLock<VrccCredentialState>>,
     /// 腕表摘要的缓存。
     ///
     /// 腕表每帧都会读它，所以这里必须是纯内存读取——不能在这里发请求。
@@ -381,14 +400,21 @@ pub struct VrccService {
     boards_cache: Arc<RwLock<HashMap<VrccBoardSort, (u32, VrccBoard)>>>,
 }
 
-impl VrccService {
-    /// 从仓库恢复会话：有令牌就直接进入已连接状态。
-    pub fn new(store: Arc<dyn VrccTokenStore>, remote: Arc<dyn VrccRemote>) -> Self {
-        if let Ok(Some(credential)) = store.load() {
-            // 令牌只能配签发它的那个 `X-Client` 使用。存的标识和现在的不一样
-            // （换了正式标识、或改了配置覆盖），这个令牌必然被服务器回
-            // `403 client_mismatch`——与其恢复成「已连接」再让每次请求都失败，
-            // 不如当作没连，让玩家走一次新的设备授权。
+/// 从仓库恢复会话，并给出「这个账号处在哪一档」。
+///
+/// 只有这里会做「令牌和当前 `X-Client` 是否匹配」的判断：令牌只能配签发它的那个
+/// `X-Client` 使用，换了标识会 `403 client_mismatch`。与其恢复成「已连接」再让每次
+/// 请求都失败，不如当作没连，让玩家走一次新的设备授权。
+///
+/// 读仓库失败不往外抛：构造发生在装配阶段，这里没有能把错误交给玩家的地方。
+/// 退回 [`VrccCredentialState::Never`] 是安全的——最坏结果是把老玩家当新人多讲
+/// 一遍入门，而不是把一个坏令牌当成「已连接」。
+fn restore_credential(
+    store: &Arc<dyn VrccTokenStore>,
+    remote: &Arc<dyn VrccRemote>,
+) -> VrccCredentialState {
+    match store.load() {
+        Ok(Some(credential)) => {
             let signed_by = credential.client_id.as_deref();
             let current = remote.client_id();
             let usable = match signed_by {
@@ -403,19 +429,47 @@ impl VrccService {
                     credential.vrc_name,
                     credential.scope,
                 );
-            } else {
-                tracing::info!(
-                    stored = signed_by.unwrap_or(""),
-                    current = %current,
-                    "vrcc: stored token was issued by a different X-Client; asking for a new authorization"
-                );
-                // 顺手清掉，免得每次启动都重新判断一遍。
-                let _ = store.clear();
+                return VrccCredentialState::Active;
             }
+            tracing::info!(
+                stored = signed_by.unwrap_or(""),
+                current = %current,
+                "vrcc: stored token was issued by a different X-Client; asking for a new authorization"
+            );
+            // 顺手清掉，免得每次启动都重新判断一遍；但**要把结局记下来**，
+            // 否则这个账号重启后会变成「从没连过」。
+            let _ = store.clear();
+            if let Err(error) = store.save_state(VrccCredentialState::ClientMismatch) {
+                tracing::warn!(%error, "vrcc: failed to record the credential outcome");
+            }
+            VrccCredentialState::ClientMismatch
         }
+        // 没有令牌：结局由上次离开时记下的那一档决定。
+        Ok(None) => match store.load_state() {
+            // `Active` 却没有令牌说明记录和实际不符（例如令牌被手动删了），
+            // 当「从没连过」处理，不要显示一个不存在的连接。
+            Ok(state) if state != VrccCredentialState::Active => state,
+            Ok(_) => VrccCredentialState::Never,
+            Err(error) => {
+                tracing::warn!(%error, "vrcc: failed to read the credential outcome");
+                VrccCredentialState::Never
+            }
+        },
+        Err(error) => {
+            tracing::warn!(%error, "vrcc: failed to load the stored credential");
+            VrccCredentialState::Never
+        }
+    }
+}
+
+impl VrccService {
+    /// 从仓库恢复会话：有令牌就直接进入已连接状态。
+    pub fn new(store: Arc<dyn VrccTokenStore>, remote: Arc<dyn VrccRemote>) -> Self {
+        let credential_state = restore_credential(&store, &remote);
         Self {
             store,
             remote,
+            credential: Arc::new(RwLock::new(credential_state)),
             wrist: Arc::new(RwLock::new(None)),
             boards: Arc::new(RwLock::new(HashMap::new())),
             unread: Arc::new(RwLock::new(UnreadCache::default())),
@@ -517,6 +571,7 @@ impl VrccService {
             }
             self.remote.expire();
             self.forget_unread();
+            self.set_credential_state(VrccCredentialState::Expired);
         }
         error
     }
@@ -561,12 +616,34 @@ impl VrccService {
         self.remote.client_id()
     }
 
+    /// 凭据状态（跨重启）。界面据此决定要不要把玩家当新人讲一遍。
+    pub fn credential_state(&self) -> VrccCredentialState {
+        self.credential
+            .read()
+            .map(|state| *state)
+            .unwrap_or_default()
+    }
+
+    /// 更新凭据状态并落盘。
+    ///
+    /// 落盘失败只记日志、不回滚：内存里已经是新状态，界面按它显示是对的；
+    /// 最坏情况是下次启动读到旧结局，不会因此把一个坏令牌显示成「已连接」。
+    fn set_credential_state(&self, state: VrccCredentialState) {
+        if let Ok(mut guard) = self.credential.write() {
+            *guard = state;
+        }
+        if let Err(error) = self.store.save_state(state) {
+            tracing::warn!(%error, ?state, "vrcc: failed to record the credential outcome");
+        }
+    }
+
     pub fn snapshot(&self) -> VrccConnectionSnapshot {
         let connection = self.remote.connection();
         let client_is_dev = is_dev_client(&connection.client);
         VrccConnectionSnapshot {
             connected: connection.connected,
             expired: connection.expired,
+            credential: self.credential_state(),
             star: connection.star,
             vrc_name: connection.vrc_name,
             scope: connection.scope,
@@ -751,6 +828,7 @@ impl VrccService {
                     credential.vrc_name,
                     credential.scope,
                 );
+                self.set_credential_state(VrccCredentialState::Active);
                 Ok(VrccDeviceAuthStep::Connected(self.snapshot()))
             }
             Err(error) if error.is_authorization_pending() => Ok(VrccDeviceAuthStep::Pending {
@@ -793,6 +871,8 @@ impl VrccService {
         })?;
         self.remote.disconnect();
         self.forget_unread();
+        // 玩家自己断的：重启之后仍然算这一档，不要退回「从没连过」。
+        self.set_credential_state(VrccCredentialState::Disconnected);
         match revoke {
             Ok(()) => Ok(()),
             // 令牌本来就无效，等于已经断开了。

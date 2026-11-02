@@ -75,13 +75,28 @@ fn token_missing() -> VrccError {
 #[derive(Default)]
 struct MemoryStore {
     inner: Mutex<Option<StoredCredential>>,
+    /// 「上一个令牌的结局」。和令牌分开：`clear` 不动它，这也是真仓库的行为。
+    outcome: Mutex<VrccCredentialState>,
 }
 
 impl MemoryStore {
     fn with(credential: StoredCredential) -> Arc<Self> {
         Arc::new(Self {
             inner: Mutex::new(Some(credential)),
+            ..Self::default()
         })
+    }
+
+    /// 造一个「只剩结局、没有令牌」的仓库：模拟重启之后的样子。
+    fn with_outcome(state: VrccCredentialState) -> Arc<Self> {
+        Arc::new(Self {
+            outcome: Mutex::new(state),
+            ..Self::default()
+        })
+    }
+
+    fn outcome(&self) -> VrccCredentialState {
+        *self.outcome.lock().unwrap()
     }
 }
 
@@ -97,6 +112,19 @@ impl VrccTokenStore for MemoryStore {
 
     fn clear(&self) -> Result<()> {
         *self.inner.lock().unwrap() = None;
+        Ok(())
+    }
+
+    fn load_state(&self) -> Result<VrccCredentialState> {
+        Ok(self.outcome())
+    }
+
+    fn save_state(&self, state: VrccCredentialState) -> Result<()> {
+        // 与真实仓库一致：`Active` / `Never` 落盘等于把记录清掉。
+        *self.outcome.lock().unwrap() = match state {
+            VrccCredentialState::Active | VrccCredentialState::Never => VrccCredentialState::Never,
+            other => other,
+        };
         Ok(())
     }
 }
@@ -508,6 +536,8 @@ fn a_gone_token_is_dropped_and_remembered_as_expired() {
     let snapshot = service.snapshot();
     assert!(!snapshot.connected);
     assert!(snapshot.expired, "界面要能说出是失效，不是玩家自己断开的");
+    // 跨重启的结论也要是「失效」，而不是退化成「从没连过」。
+    assert_eq!(snapshot.credential, VrccCredentialState::Expired);
     // 本地存的令牌也清掉了，重启后不会拿着死令牌再问。
     assert!(store.load().unwrap().is_none());
     // 未读数不再属于任何人；令牌也没了，腕表整块消失（底栏回落到玩家数）。
@@ -535,6 +565,87 @@ fn other_404s_leave_the_token_alone() {
         assert!(!service.snapshot().expired, "{code}");
         assert!(store.load().unwrap().is_some(), "{code}");
     }
+}
+
+// ---------------------------------------------------------------------------
+// 凭据状态：界面靠它决定「要不要把玩家当新人讲一遍」
+//
+// 这一组测的都是**跨重启**的结论：只有 `connected` / `expired` 两个布尔时，
+// 「从没连过」和「连过又断开」长得一模一样。
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_fresh_account_has_never_connected() {
+    let service = VrccService::new(Arc::new(MemoryStore::default()), FakeRemote::new());
+    assert_eq!(service.snapshot().credential, VrccCredentialState::Never);
+}
+
+#[test]
+fn a_stored_token_reads_as_active() {
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        ..Default::default()
+    });
+    let service = VrccService::new(store, FakeRemote::new());
+    assert_eq!(service.snapshot().credential, VrccCredentialState::Active);
+}
+
+#[test]
+fn a_token_from_another_client_is_a_mismatch_not_a_first_run() {
+    // 换了正式标识、或改了配置里的覆盖标识：老令牌必然 `403 client_mismatch`。
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        client_id: Some("app_someone_else".into()),
+        ..Default::default()
+    });
+    let service = VrccService::new(store.clone(), FakeRemote::new());
+    let snapshot = service.snapshot();
+    assert_eq!(snapshot.credential, VrccCredentialState::ClientMismatch);
+    assert!(!snapshot.connected);
+    // 死令牌清掉了，结局留下了：重启后仍然是「不匹配」，不能退化成新人。
+    assert!(store.load().unwrap().is_none());
+    assert_eq!(store.outcome(), VrccCredentialState::ClientMismatch);
+    assert_eq!(
+        VrccService::new(store, FakeRemote::new())
+            .snapshot()
+            .credential,
+        VrccCredentialState::ClientMismatch
+    );
+}
+
+#[tokio::test]
+async fn a_manual_disconnect_survives_a_restart() {
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        ..Default::default()
+    });
+    let remote = FakeRemote::new();
+    remote.mark_connected();
+    let service = VrccService::new(store.clone(), remote);
+    service.disconnect().await.unwrap();
+    assert_eq!(
+        service.snapshot().credential,
+        VrccCredentialState::Disconnected
+    );
+
+    // 重启：只凭仓库重建，仍然是「玩家自己断的」。
+    let restarted = VrccService::new(store, FakeRemote::new());
+    assert_eq!(
+        restarted.snapshot().credential,
+        VrccCredentialState::Disconnected
+    );
+}
+
+#[test]
+fn connecting_again_clears_the_recorded_outcome() {
+    let store = MemoryStore::with_outcome(VrccCredentialState::Expired);
+    let service = VrccService::new(store.clone(), FakeRemote::new());
+    assert_eq!(service.snapshot().credential, VrccCredentialState::Expired);
+
+    // 设备授权成功的等价动作：记录被清掉，状态回到「已连接」。
+    service.set_credential_state(VrccCredentialState::Active);
+    assert_eq!(store.outcome(), VrccCredentialState::Never);
+    assert_eq!(service.snapshot().credential, VrccCredentialState::Active);
 }
 
 #[test]

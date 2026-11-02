@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use vrcx_0_contracts::vrcc::{is_dev_client, VrccConnectionSnapshot};
+use vrcx_0_contracts::vrcc::{is_dev_client, VrccConnectionSnapshot, VrccCredentialState};
 
 use super::client::VrccClient;
 
@@ -173,11 +173,24 @@ pub struct VrccSessionSnapshot {
 }
 
 impl From<VrccSessionSnapshot> for VrccConnectionSnapshot {
+    /// 会话层只说得出现在有没有令牌、以及这次会话里令牌有没有被服务器判失效。
+    ///
+    /// `Disconnected` / `ClientMismatch` 这里永远不会出现：那是跨重启的记录，
+    /// 只有应用层的 `VrccService::snapshot` 知道。前端拿到的快照走那条路径，
+    /// 这个转换是给会话层自己的测试用的，所以宁可少说，也不编一个结局出来。
     fn from(snapshot: VrccSessionSnapshot) -> Self {
         let client_is_dev = is_dev_client(&snapshot.client);
+        let credential = if snapshot.connected {
+            VrccCredentialState::Active
+        } else if snapshot.expired {
+            VrccCredentialState::Expired
+        } else {
+            VrccCredentialState::Never
+        };
         VrccConnectionSnapshot {
             connected: snapshot.connected,
             expired: snapshot.expired,
+            credential,
             star: snapshot.star,
             vrc_name: snapshot.vrc_name,
             scope: snapshot.scope,

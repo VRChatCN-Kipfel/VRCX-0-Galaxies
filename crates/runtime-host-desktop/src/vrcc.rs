@@ -6,10 +6,11 @@ use std::time::Duration;
 use serde_json::json;
 use vrcx_0_application::vrcc::{StoredCredential, VrccFailure, VrccService, VrccTokenStore};
 use vrcx_0_contracts::vrcc::{
-    scope_grants, VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccMapPage,
-    VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccRatedMaps,
-    VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccUnread,
-    VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult, VrccWristSummary,
+    scope_grants, VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot,
+    VrccCredentialState, VrccMapPage, VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage,
+    VrccNotes, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers,
+    VrccToday, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
+    VrccWristSummary,
 };
 use vrcx_0_integrations::vrcc::{resolve_client_id, VrccError};
 use vrcx_0_outbound_adapters::LocalVrccTokenStore;
@@ -47,6 +48,14 @@ impl VrccTokenStore for TokenStoreAdapter {
 
     fn clear(&self) -> vrcx_0_application_core::Result<()> {
         self.inner.clear()
+    }
+
+    fn load_state(&self) -> vrcx_0_application_core::Result<VrccCredentialState> {
+        self.inner.load_outcome()
+    }
+
+    fn save_state(&self, state: VrccCredentialState) -> vrcx_0_application_core::Result<()> {
+        self.inner.save_outcome(state)
     }
 }
 
