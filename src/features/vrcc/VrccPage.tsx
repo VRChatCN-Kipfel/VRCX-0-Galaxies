@@ -365,7 +365,7 @@ export function VrccPage() {
                         onValueChange={(value) => setTab(value as typeof tab)}
                         className="flex min-h-0 flex-1 flex-col"
                     >
-                        <TabsList className="shrink-0">
+                        <TabsList data-tour="vrcc-tabs" className="shrink-0">
                             <TabsTrigger value="maps">
                                 {t('vrcc.tab.maps')}
                             </TabsTrigger>

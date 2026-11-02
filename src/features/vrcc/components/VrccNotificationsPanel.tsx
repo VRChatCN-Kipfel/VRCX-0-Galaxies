@@ -103,7 +103,10 @@ export function VrccNotificationsPanel({
     return (
         <div className="flex h-full min-h-0 flex-col gap-2">
             {(showSwitch || unread) && (
-                <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1">
+                <div
+                    data-tour="vrcc-notif-header"
+                    className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1"
+                >
                     {showSwitch && (
                         <ToggleGroup
                             variant="outline"
@@ -271,7 +274,10 @@ function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+        <div
+            data-tour="vrcc-notif-list"
+            className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+        >
             <ul className="divide-y">
                 {items.map((item) => {
                     // 官方 recent 的 url 是**相对路径**（以 /match/ 开头）。

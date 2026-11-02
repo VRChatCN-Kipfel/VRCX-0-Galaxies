@@ -10,7 +10,19 @@ import { publishNavNavigateRequested } from '@/shared/events/navLayoutEvents';
  */
 const VRCC_ROUTE = '/vrcc';
 
-export type VrccTabTarget = 'maps' | 'notifications' | 'mutuals' | 'me';
+/**
+ * 可跳转的页签名。
+ *
+ * 必须和 `useVrccController` 的 `VrccTab` 完全一致——少一个（例如 `crossings`）
+ * 不会在别处报错，只会在真正要跳过去的时候才发现跳不了。导览会依次跳到
+ * 每一个页签，所以这里必须是全集。
+ */
+export type VrccTabTarget =
+    | 'maps'
+    | 'notifications'
+    | 'mutuals'
+    | 'crossings'
+    | 'me';
 
 /**
  * 跳到星遇同频的某个页签。

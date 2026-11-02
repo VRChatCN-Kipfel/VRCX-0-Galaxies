@@ -203,7 +203,10 @@ export function VrccCrossingsPanel({
                 </div>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+            <div
+                data-tour="vrcc-crossings-list"
+                className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+            >
                 <ul className="divide-y">
                     {stars.map((star, index) => {
                         // `n` 是可选字段：服务端省略时是 `undefined`。拿它当

@@ -68,7 +68,10 @@ export function VrccMapsPanel({
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <div className="text-muted-foreground flex shrink-0 items-center gap-2 px-1 pb-2 text-xs">
+            <div
+                data-tour="vrcc-maps-sorts"
+                className="text-muted-foreground flex shrink-0 items-center gap-2 px-1 pb-2 text-xs"
+            >
                 {sortSupported && (
                     <ToggleGroup
                         variant="outline"
@@ -116,7 +119,10 @@ export function VrccMapsPanel({
                     {t('vrcc.maps.empty')}
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+                <div
+                    data-tour="vrcc-maps-list"
+                    className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+                >
                     <ul className="divide-y">
                         {maps.map((map, index) => {
                             // 本周榜只按本周的打分排，`rank` 却还是总榜名次：
@@ -126,6 +132,10 @@ export function VrccMapsPanel({
                             return (
                                 <li
                                     key={map.world}
+                                    // 导览靠它拿到「玩家此刻看得见的第一行」是哪个
+                                    // 世界，再打开那张图的详情。从 DOM 取而不是再
+                                    // 请求一次榜单：数据已经在界面上了。
+                                    data-world={map.world}
                                     // 用整个 `<li>` 观察，而不是那个 32px 的图：
                                     // 判断的是「这一行有没有露在视口里」。
                                     ref={(element) =>

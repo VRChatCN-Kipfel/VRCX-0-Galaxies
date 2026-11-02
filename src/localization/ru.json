@@ -957,14 +957,79 @@
                 "unknown": "Пересечения временно недоступны."
             }
         },
-        "first_run": {
-            "title": "What is Xingyu Tongpin?",
-            "what": "Xingyu Tongpin (vrcc.cc) is a community site for VRChat players in Chinese-speaking spheres: map rankings, star cards, and alerts about people you have come across.",
-            "why": "This app shows that data natively. Most of it needs one authorization first: recent alerts, map pages and your own star card all hang off the token you get after approving.",
-            "consent": "Approving happens on vrcc.cc in your browser: the site lists exactly which permissions it asks for, and the terms you agree to there are the site’s own. The token stays on this machine and is only ever sent to vrcc.cc.",
-            "start": "Connect now",
-            "later": "Later",
-            "reopen": "How it works"
+        "tour": {
+            "next": "Next",
+            "prev": "Back",
+            "done": "Got it",
+            "intro": {
+                "title": "A short tour of Xingyu Tongpin",
+                "description": "This integration brings the community site vrcc.cc into this app: map rankings, alerts, and the people you have come across. The next few steps point at the actual controls, one at a time. Press Esc at any point to stop."
+            },
+            "entry": {
+                "title": "Where it lives",
+                "description": "Xingyu Tongpin has its own entry in the sidebar. The number on the right is how many things are unread across all of its tabs; it only appears once you are connected."
+            },
+            "connect": {
+                "title": "Connect once",
+                "description": "Most of what this integration shows needs one authorization. Press start and a code appears; approve it on vrcc.cc in your browser and this page connects by itself. The token stays on this machine and is only ever sent to vrcc.cc."
+            },
+            "tabs": {
+                "title": "Four tabs",
+                "description": "Rankings are public, so this tab works without connecting. Alerts and the rest need the token. Tabs you do not have permission for simply will not appear."
+            },
+            "current_map": {
+                "title": "The map you are in",
+                "description": "When the world you are currently in is on the board, its score, rank and number of raters show up here. Nothing shows up when it is not on the board."
+            },
+            "board": {
+                "title": "The board itself",
+                "description": "One row per map: rank, name, average score and how many people rated it. Click any row to open that map in this app’s own world dialog."
+            },
+            "sorts": {
+                "title": "Sort the board",
+                "description": "Switch between the overall board, this week and newly listed. If the server is on an older version it does not support these, and the switch stays hidden rather than pretending to work."
+            },
+            "detail": {
+                "title": "The map page",
+                "description": "Opening a map shows what the board cannot fit: the score breakdown, how many people have been there, and what the site thought of it."
+            },
+            "rating": {
+                "title": "Rate it and leave a note",
+                "description": "You can give a map a score and write a short note here. Both are sent under your own account, and the site requires that you press the button yourself — which is why the tour only points at it and never presses it for you."
+            },
+            "outro": {
+                "title": "That is it",
+                "description": "You can replay this tour any time from the link at the bottom of the \"me\" tab. If you disconnect later, the data here goes quiet until you connect again."
+            },
+            "reopen": "Replay the tour",
+            "notif_views": {
+                "title": "Two views",
+                "description": "Recent lists what the site pushed to you lately, newest first. Notes is the notification list from the site itself, read-only — switching between them does not mark anything as read."
+            },
+            "unread": {
+                "title": "Four counters",
+                "description": "These are the red-dot numbers from the site: new connections towards you, crossings, private messages, and notes. Each one is clickable and opens the matching page on vrcc.cc, where you can actually reply. The count from the crossings one is not on the site and does not appear here."
+            },
+            "notif_open": {
+                "title": "Every row opens the original",
+                "description": "Click any row and it opens that item on vrcc.cc in your browser. This app is a reader for the list, not a replacement for the site — replying, accepting and the rest still happen there."
+            },
+            "mutuals": {
+                "title": "People who connected back",
+                "description": "Both sides connected, newest first. A green \"online\" means the person is in VRChat right now; otherwise you get a hint about whether they are already a friend. The button on the right opens them in this app, not on the site."
+            },
+            "community": {
+                "title": "The community group",
+                "description": "Join the group behind the site, or open its page. Whether this block appears at all depends on what the server decides for your account."
+            },
+            "crossings": {
+                "title": "Crossings",
+                "description": "People you happened to be in the same instance with. Each row says how it stands: already connected both ways, only you connected, or neither — so you know whether writing to them is possible. Only a one-way connection counts as new; if you are already connected both ways it will not be flagged, so this list does not ping you about friends you already have."
+            },
+            "usage": {
+                "title": "How much is left today",
+                "description": "Daily read counts, taken straight from the server response headers. They reset at midnight Beijing time — not your local midnight — so the reset countdown here is the server’s, not the clock on your desk."
+            }
         }
     },
     "nav_menu": {

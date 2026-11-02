@@ -123,7 +123,10 @@ export function VrccRatingEditor({
     }
 
     return (
-        <div className="bg-muted/40 flex min-w-0 flex-col gap-2 rounded-md border px-2 py-2">
+        <div
+            data-tour="world-vrcc-rating"
+            className="bg-muted/40 flex min-w-0 flex-col gap-2 rounded-md border px-2 py-2"
+        >
             <div className="flex min-w-0 items-center gap-2">
                 <span className="text-muted-foreground shrink-0 text-[11px]">
                     {t('dialog.world.vrcc.my_rating')}

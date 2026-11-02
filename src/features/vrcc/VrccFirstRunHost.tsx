@@ -1,22 +1,40 @@
 import { useEffect } from 'react';
 
+import i18n from '@/services/i18nService';
 import { openVrccTab } from '@/shared/utils/vrccNavigation';
 import { useRuntimeStore } from '@/state/runtimeStore';
 import { useVrccFirstRunStore } from '@/state/vrccFirstRunStore';
 import { useVrccForceAnnouncementStore } from '@/state/vrccForceAnnouncementStore';
 
-import { VrccFirstRunCard } from './components/VrccFirstRunCard';
+import { retranslateTour, startTour, stopTour } from './tour/vrccTour';
+import { buildVrccConnectOnlyTour, buildVrccTour } from './tour/vrccTourSteps';
 import { vrccApi } from './vrccApi';
 import { shouldAutoOpenFirstRun } from './vrccFirstRun';
 
 /**
  * 首连引导宿主。
  *
- * 只做两件事：把「这个账号连没连过 / 表过态没有」读回来，以及按优先级决定
- * 要不要自动弹。**它不负责连**——「现在连接」只把玩家送到「我的」页，
- * 设备授权那一步必须由玩家自己点（我们不能替他打开浏览器完成授权）。
+ * 干三件事：
+ * 1. 按账号读回「连过没有」和「引导讲到哪一步」；
+ * 2. 该讲的时候起一轮**操作导览**——压暗界面、在真实控件上挖洞高亮、跨页翻；
+ * 3. 把玩家的表态落盘，让「稍后」真的延后。
  *
- * 判定条件集中在 [`shouldAutoOpenFirstRun`]，那里有每条理由的注释。
+ * ## 为什么是导览而不是一张说明卡
+ *
+ * 这个集成的能力分散在四个页签、一个侧栏入口和世界详情对话框里。把六件事写进
+ * 一张卡片，玩家读完仍然不知道去哪点；而压暗界面逐个高亮，玩家看到的是自己的
+ * 界面，关掉导览就能照着做。
+ *
+ * ## 两种形态
+ *
+ * - 从没连过：完整导览（入口 → 连接 → 页签 → 所在地图 → 榜单 → 排序 → 详情 → 评分 → 提醒）
+ * - 已连上但从没看过：只走「入口 → 连接」三步。后面讲的都是他已经看得见的
+ *   东西，再走一遍只是拖时间。
+ *
+ * ## 不做什么
+ *
+ * 导览**不替玩家点任何按钮**。它只指出位置；连接、打分这些动作必须由玩家
+ * 自己完成——打分在官方要求里就是「每次由玩家本人主动点击触发」，替点即违规。
  */
 export function VrccFirstRunHost() {
     const currentUserId = useRuntimeStore((state) => state.auth.currentUserId);
@@ -59,22 +77,7 @@ export function VrccFirstRunHost() {
     const credential = useVrccFirstRunStore((state) => state.credential);
     const guidance = useVrccFirstRunStore((state) => state.guidance);
 
-    const autoOpen = shouldAutoOpenFirstRun({
-        credential,
-        guidance,
-        forceAnnouncementsLoaded: forceLoaded,
-        forceAnnouncementsPending: forcePending
-    });
-
-    /**
-     * 记下表态。
-     *
-     * 只在**还没表过态**时写：从「我的」页主动打开再关掉，不该把早先的
-     * `seen` 降级成 `postponed`——那只表示「我知道这个功能」，和「现在不连」
-     * 是两件事。
-     *
-     * 写失败只记日志：卡已经关了，下次最多再问一遍，比弹一半卡在屏幕上好。
-     */
+    /** 记下表态。只在还没表过态时写，避免把 `seen` 降级成 `postponed`。 */
     const record = (state: 'seen' | 'postponed') => {
         if (useVrccFirstRunStore.getState().guidance !== 'unseen') return;
         useVrccFirstRunStore.getState().setGuidance(state);
@@ -83,21 +86,56 @@ export function VrccFirstRunHost() {
         });
     };
 
-    return (
-        <VrccFirstRunCard
-            open={manualOpen || autoOpen}
-            onStart={() => {
-                // 「现在连接」= 知道有这回事了，同时把人送到连接卡片前。
-                record('seen');
-                useVrccFirstRunStore.getState().closeManual();
-                openVrccTab('me');
-            }}
-            onDismiss={() => {
-                // 「稍后」和关窗是一回事：现在不连。记 `postponed` 而不是
-                // `seen`——他并没有看过连接流程，只是不想现在处理。
-                record('postponed');
-                useVrccFirstRunStore.getState().closeManual();
-            }}
-        />
-    );
+    const runTour = () => {
+        const state = useVrccFirstRunStore.getState();
+        // 已经连上的人不需要再被带着找连接入口之后的内容——那些他已经能看见。
+        const steps =
+            state.credential === 'never'
+                ? buildVrccTour()
+                : buildVrccConnectOnlyTour();
+        startTour(steps, () => {
+            // 走完或中途关掉都记 `seen`：玩家已经知道这件事存在了。
+            record('seen');
+            state.closeManual();
+        });
+    };
+
+    const autoOpen = shouldAutoOpenFirstRun({
+        credential,
+        guidance,
+        forceAnnouncementsLoaded: forceLoaded,
+        forceAnnouncementsPending: forcePending
+    });
+
+    // 自动开：等两个前提都满足再起，避免在公告还没回来时抢弹。
+    useEffect(() => {
+        if (!autoOpen) return;
+        // 稍等一下让页面先落好：首次进入时路由还在挂载中，锚点还没进 DOM。
+        // driver 自己也会 `waitForElement`，但先让出一帧能少一次轮询。
+        const timer = window.setTimeout(runTour, 600);
+        return () => window.clearTimeout(timer);
+        // `runTour` 每次渲染都是新引用，故意只依赖 `autoOpen`：
+        // 这条 effect 的意思是「刚刚满足条件了，起一轮」。
+    }, [autoOpen]);
+
+    // 手动入口：不管之前表过什么态都能重看。
+    useEffect(() => {
+        if (!manualOpen) return;
+        // 先落到星遇同频页，否则第一步的锚点根本不在界面上。
+        openVrccTab('maps');
+        const timer = window.setTimeout(runTour, 600);
+        return () => window.clearTimeout(timer);
+    }, [manualOpen]);
+
+    // 语言切换：导览文本是构建时求值的，正在跑的话要跟着换。
+    useEffect(() => {
+        const onChange = () => retranslateTour();
+        i18n.on('languageChanged', onChange);
+        return () => i18n.off('languageChanged', onChange);
+    }, []);
+
+    // 卸载时收掉还没走完的导览，别把遮罩留在别人的页面上。
+    useEffect(() => () => stopTour(), []);
+
+    return null;
 }

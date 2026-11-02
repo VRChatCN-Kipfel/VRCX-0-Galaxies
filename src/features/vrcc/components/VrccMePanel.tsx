@@ -68,7 +68,10 @@ export function VrccMePanel({
     return (
         <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
             {/* 连接状态 */}
-            <section className="rounded-xl border p-3">
+            <section
+                data-tour="vrcc-me-connect"
+                className="rounded-xl border p-3"
+            >
                 <div className="mb-2 flex items-center gap-2">
                     <ShieldCheck className="text-muted-foreground size-4" />
                     <h3 className="text-sm font-semibold">
@@ -233,7 +236,10 @@ export function VrccMePanel({
 
             {/* 今日用量：全部来自服务端响应头 */}
             {usage && (
-                <section className="rounded-xl border p-3">
+                <section
+                    data-tour="vrcc-me-usage"
+                    className="rounded-xl border p-3"
+                >
                     <div className="mb-2 flex items-baseline gap-2">
                         <h3 className="text-sm font-semibold">
                             {t('vrcc.me.usage')}
@@ -279,7 +285,7 @@ export function VrccMePanel({
                     }
                     className="hover:text-primary mr-2 inline-flex items-center gap-0.5 hover:underline"
                 >
-                    {t('vrcc.first_run.reopen')}
+                    {t('vrcc.tour.reopen')}
                 </button>
                 {t('vrcc.me.disclaimer')}{' '}
                 <button
