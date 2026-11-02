@@ -2,6 +2,7 @@ import { ExternalLink, ShieldCheck, Unplug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { openExternalLink } from '@/services/shellIntegrationService';
+import { useVrccFirstRunStore } from '@/state/vrccFirstRunStore';
 import { Badge } from '@/ui/shadcn/badge';
 import { Button } from '@/ui/shadcn/button';
 import { Progress } from '@/ui/shadcn/progress';
@@ -145,6 +146,20 @@ export function VrccMePanel({
                                 {t('vrcc.me.expired')}
                             </p>
                         )}
+                        {/* 授权和当前构建对不上，两种结局的话不一样：
+                            - `grantMismatch`：令牌整个作废，得重新授权
+                            - `scopeMismatch`：令牌还能用，只是权限少了几项
+                            混成一句会让后者的玩家以为连接坏了。 */}
+                        {connection?.credential === 'grantMismatch' && (
+                            <p className="text-xs leading-relaxed">
+                                {t('vrcc.me.grant_mismatch')}
+                            </p>
+                        )}
+                        {connection?.credential === 'scopeMismatch' && (
+                            <p className="text-xs leading-relaxed">
+                                {t('vrcc.me.scope_mismatch')}
+                            </p>
+                        )}
                         <p className="text-muted-foreground text-xs leading-relaxed">
                             {t('vrcc.me.connect_hint')}
                         </p>
@@ -256,6 +271,16 @@ export function VrccMePanel({
             )}
 
             <div className="text-muted-foreground text-center text-[10px] leading-relaxed">
+                {/* 常驻入口：自动弹只弹一次，想看的时候要能自己找回来。 */}
+                <button
+                    type="button"
+                    onClick={() =>
+                        useVrccFirstRunStore.getState().openManually()
+                    }
+                    className="hover:text-primary mr-2 inline-flex items-center gap-0.5 hover:underline"
+                >
+                    {t('vrcc.first_run.reopen')}
+                </button>
                 {t('vrcc.me.disclaimer')}{' '}
                 <button
                     type="button"

@@ -1,16 +1,6 @@
 import { tauriClient } from '@/platform/tauri/client';
-import { publishNavNavigateRequested } from '@/shared/events/navLayoutEvents';
+import { openVrccTab } from '@/shared/utils/vrccNavigation';
 import { useVrcNotificationStore } from '@/state/vrcNotificationStore';
-
-/**
- * 星遇同频页签的路由与页签名。
- *
- * 与 `navMenuModel.ts` 的 `routePathByName.vrcc`、`useVrccController` 的
- * `VrccTab` 是同一组值。这里不 import 那两个模块：它是后台动作，
- * 不该为了拼一个地址去依赖布局组件和页面控制器。
- */
-const VRCC_ROUTE = '/vrcc';
-const VRCC_NOTIFICATIONS_TAB = 'notifications';
 
 /**
  * 后端把提醒写进通知中心后发出的信号。
@@ -31,7 +21,7 @@ const VRCC_NOTICES_CHANGED_EVENT = 'vrccNoticesChanged';
  */
 export function openVrccNotificationCenter(): void {
     useVrcNotificationStore.getState().setCenterOpen(false);
-    publishNavNavigateRequested(`${VRCC_ROUTE}?tab=${VRCC_NOTIFICATIONS_TAB}`);
+    openVrccTab('notifications');
 }
 
 /**

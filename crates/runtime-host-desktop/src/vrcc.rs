@@ -7,9 +7,9 @@ use serde_json::json;
 use vrcx_0_application::vrcc::{StoredCredential, VrccFailure, VrccService, VrccTokenStore};
 use vrcx_0_contracts::vrcc::{
     scope_grants, VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot,
-    VrccCredentialState, VrccMapPage, VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage,
-    VrccNotes, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers,
-    VrccToday, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
+    VrccCredentialState, VrccGuidanceState, VrccMapPage, VrccMyBoard, VrccMyBoardSort, VrccMyMap,
+    VrccMyMapPage, VrccNotes, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus,
+    VrccStickers, VrccToday, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
     VrccWristSummary,
 };
 use vrcx_0_integrations::vrcc::{resolve_client_id, VrccError};
@@ -56,6 +56,14 @@ impl VrccTokenStore for TokenStoreAdapter {
 
     fn save_state(&self, state: VrccCredentialState) -> vrcx_0_application_core::Result<()> {
         self.inner.save_outcome(state)
+    }
+
+    fn load_guidance(&self) -> vrcx_0_application_core::Result<VrccGuidanceState> {
+        self.inner.load_guidance()
+    }
+
+    fn save_guidance(&self, state: VrccGuidanceState) -> vrcx_0_application_core::Result<()> {
+        self.inner.save_guidance(state)
     }
 }
 
@@ -158,6 +166,22 @@ impl DesktopVrccRuntime {
 
     pub fn client_id(&self) -> String {
         self.service.client_id()
+    }
+
+    /// 首连引导讲到哪一步。
+    pub fn guidance(&self) -> VrccGuidanceState {
+        self.service.guidance_state()
+    }
+
+    /// 记下玩家对首连引导的表态。
+    ///
+    /// 失败往上抛而不是吞掉：玩家点了「稍后」却被静默丢弃，等于下次启动又问
+    /// 一遍，而界面上当初反馈的是「已记下」。
+    pub fn set_guidance(
+        &self,
+        state: VrccGuidanceState,
+    ) -> Result<(), vrcx_0_application_core::Error> {
+        self.service.set_guidance_state(state)
     }
 
     /// 地图榜：开放数据，不需要连接。

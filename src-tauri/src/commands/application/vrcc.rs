@@ -11,10 +11,10 @@
 use tauri::State;
 use vrcx_0_application::vrcc::{VrccDeviceAuthPrompt, VrccDeviceAuthStep, VrccFailure};
 use vrcx_0_contracts::vrcc::{
-    VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccMapPage, VrccMyBoard,
-    VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccRatedMaps, VrccRatingText,
-    VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccUnread, VrccUsageSnapshot,
-    VrccVote, VrccVoteKind, VrccVoteResult,
+    VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccGuidanceState,
+    VrccMapPage, VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccRatedMaps,
+    VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccUnread,
+    VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
 };
 
 use crate::{error::AppError, state::AppState};
@@ -83,6 +83,34 @@ impl From<VrccDeviceAuthStep> for VrccDeviceAuthStepOutput {
 #[specta::specta]
 pub fn app__vrcc_connection(state: State<'_, AppState>) -> VrccConnectionSnapshot {
     state.runtime_host().vrcc().connection()
+}
+
+// -- 首连引导 ---------------------------------------------------------------
+
+/// 玩家对首连引导表态到哪一步。
+///
+/// 和连接状态分开问：一个说「连没连上」，一个说「讲过了没有」。
+#[tauri::command(async)]
+#[specta::specta]
+pub fn app__vrcc_guidance(state: State<'_, AppState>) -> VrccGuidanceState {
+    state.runtime_host().vrcc().guidance()
+}
+
+/// 记下玩家对首连引导的表态（看过 / 稍后）。
+///
+/// 写不进去就报错，不静默丢弃：玩家点过「稍后」却下次启动又问一遍，比直接
+/// 告诉他没记住更糟。
+#[tauri::command(async)]
+#[specta::specta]
+pub fn app__vrcc_set_guidance(
+    state: State<'_, AppState>,
+    guidance: VrccGuidanceState,
+) -> Result<(), AppError> {
+    state
+        .runtime_host()
+        .vrcc()
+        .set_guidance(guidance)
+        .map_err(AppError::from)
 }
 
 /// 今日用量。口径是「今日已用 N/上限」，不是「剩余」，且全部来自服务端的

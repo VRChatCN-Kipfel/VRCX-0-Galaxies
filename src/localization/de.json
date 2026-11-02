@@ -863,7 +863,9 @@
             "usage_unknown": "noch unbekannt",
             "usage_reset_in": "Zurücksetzung in {time}",
             "unread_used": "Unread counts",
-            "expired": "The previous connection is no longer valid: it was disconnected on vrcc.cc, authorized again elsewhere, or unused for 90 days. Please connect again."
+            "expired": "The previous connection is no longer valid: it was disconnected on vrcc.cc, authorized again elsewhere, or unused for 90 days. Please connect again.",
+            "grant_mismatch": "This connection was authorized for a different build of the app, so it cannot be used. Connect once more to fix it.",
+            "scope_mismatch": "This connection works, but it was granted fewer permissions than this build asks for; some tabs will be unavailable. Connect once more and ask for the extra permission."
         },
         "error": {
             "unknown": "The action failed. Please try again.",
@@ -946,6 +948,15 @@
                 "friend": "Füge den VRCC-Assistenten als VRChat-Freund hinzu, um Kreuzungen zu nutzen.",
                 "unknown": "Kreuzungen sind vorübergehend nicht verfügbar."
             }
+        },
+        "first_run": {
+            "title": "What is Xingyu Tongpin?",
+            "what": "Xingyu Tongpin (vrcc.cc) is a community site for VRChat players in Chinese-speaking spheres: map rankings, star cards, and alerts about people you have come across.",
+            "why": "This app shows that data natively. Most of it needs one authorization first: recent alerts, map pages and your own star card all hang off the token you get after approving.",
+            "consent": "Approving happens on vrcc.cc in your browser: the site lists exactly which permissions it asks for, and the terms you agree to there are the site’s own. The token stays on this machine and is only ever sent to vrcc.cc.",
+            "start": "Connect now",
+            "later": "Later",
+            "reopen": "How it works"
         }
     },
     "nav_menu": {

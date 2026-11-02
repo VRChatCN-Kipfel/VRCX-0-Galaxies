@@ -12,11 +12,11 @@ use vrcx_0_application_core::Result;
 use vrcx_0_contracts::vrcc::{
     device_auth_scope, is_dev_client, missing_scopes, ErrorDetail, ErrorLayer, TransportKind,
     VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCredentialState,
-    VrccCrossingCards, VrccCrossings, VrccDeviceCode, VrccError, VrccMapPage, VrccMutuals,
-    VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes, VrccNotifications,
-    VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday,
-    VrccTokenResponse, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
-    VrccWristSummary,
+    VrccCrossingCards, VrccCrossings, VrccDeviceCode, VrccError, VrccGuidanceState, VrccMapPage,
+    VrccMutuals, VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes,
+    VrccNotifications, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus,
+    VrccStickers, VrccToday, VrccTokenResponse, VrccUnread, VrccUsageSnapshot, VrccVote,
+    VrccVoteKind, VrccVoteResult, VrccWristSummary,
 };
 
 /// 服务器回答 `me/unread` 是 `404 not_found`（还没更新到 1.13.0）之后，
@@ -50,6 +50,15 @@ pub trait VrccTokenStore: Send + Sync {
     /// 「连过又断开」的账号重启后会退化成「从没连过」。`Active` / `Never`
     /// 落盘时等于清掉记录。
     fn save_state(&self, state: VrccCredentialState) -> Result<()>;
+
+    /// 读「首连引导讲到哪一步」。
+    ///
+    /// 和凭据状态同一个账号命名空间，但**互不影响**：断开连接不该让玩家
+    /// 重新看一遍引导，换账号也不该继承别人的「已看过」。
+    fn load_guidance(&self) -> Result<VrccGuidanceState>;
+
+    /// 记下「首连引导讲到哪一步」。
+    fn save_guidance(&self, state: VrccGuidanceState) -> Result<()>;
 }
 
 /// 一次异步调用的结果。前端/上层都按 [`VrccError`] 分类，所以这里固定用它的
@@ -374,6 +383,11 @@ pub struct VrccService {
     /// 不从 `remote.connection()` 取：那是网络侧会话的即时状态，重启就没了。
     /// 这一项在构造时从仓库读一次，之后由「连上 / 断开 / 被判失效」三个动作更新。
     credential: Arc<RwLock<VrccCredentialState>>,
+    /// 首连引导讲到哪一步（跨重启，按账号）。
+    ///
+    /// 和 `credential` 分开：一个说「连没连上」，一个说「讲过了没有」。
+    /// 连上过的人可能从没看过引导（引导是后加的功能），反过来也一样。
+    guidance: Arc<RwLock<VrccGuidanceState>>,
     /// 腕表摘要的缓存。
     ///
     /// 腕表每帧都会读它，所以这里必须是纯内存读取——不能在这里发请求。
@@ -479,10 +493,14 @@ impl VrccService {
     /// 从仓库恢复会话：有令牌就直接进入已连接状态。
     pub fn new(store: Arc<dyn VrccTokenStore>, remote: Arc<dyn VrccRemote>) -> Self {
         let credential_state = restore_credential(&store, &remote);
+        // 读不到就当「没弹过」：最坏是给老玩家多讲一遍入门，而不会把该讲的
+        // 人永久跳过。
+        let guidance_state = store.load_guidance().unwrap_or_default();
         Self {
             store,
             remote,
             credential: Arc::new(RwLock::new(credential_state)),
+            guidance: Arc::new(RwLock::new(guidance_state)),
             wrist: Arc::new(RwLock::new(None)),
             boards: Arc::new(RwLock::new(HashMap::new())),
             unread: Arc::new(RwLock::new(UnreadCache::default())),
@@ -648,6 +666,29 @@ impl VrccService {
         if let Err(error) = self.store.save_state(state) {
             tracing::warn!(%error, ?state, "vrcc: failed to record the credential outcome");
         }
+    }
+
+    /// 首连引导讲到哪一步。
+    ///
+    /// 纯内存读取；初值来自构造时那一次仓库读取（[`Self::new`]）。
+    pub fn guidance_state(&self) -> VrccGuidanceState {
+        self.guidance.read().map(|state| *state).unwrap_or_default()
+    }
+
+    /// 记下玩家对引导的表态。
+    ///
+    /// 落盘失败只记日志：内存里的结论仍然成立，最坏情况是下次启动再问一遍，
+    /// 比整块功能因为一次写失败而不可用要好。
+    pub fn set_guidance_state(&self, state: VrccGuidanceState) -> Result<()> {
+        {
+            let Ok(mut guard) = self.guidance.write() else {
+                return Err(vrcx_0_application_core::Error::Custom(
+                    "vrcc: guidance state lock poisoned".into(),
+                ));
+            };
+            *guard = state;
+        }
+        self.store.save_guidance(state)
     }
 
     pub fn snapshot(&self) -> VrccConnectionSnapshot {

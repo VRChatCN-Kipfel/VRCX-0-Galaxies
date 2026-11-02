@@ -16,6 +16,7 @@ import { PrivacyLockDialogHost } from '@/features/privacy-lock/PrivacyLockDialog
 import { PrivacyLockOverlay } from '@/features/privacy-lock/PrivacyLockOverlay';
 import { CommunityThemeUpdateToastHost } from '@/features/themes/CommunityThemeUpdateToastHost';
 import { VrccAnnouncementHost } from '@/features/vrcc/VrccAnnouncementHost';
+import { VrccFirstRunHost } from '@/features/vrcc/VrccFirstRunHost';
 
 export function GlobalHosts() {
     return (
@@ -30,6 +31,7 @@ export function GlobalHosts() {
             <FriendProfileLoadHost />
             <VrcNotificationCenterHost />
             <VrccAnnouncementHost />
+            <VrccFirstRunHost />
             <PostUpdateChangelogToastHost />
             <LaunchDialogHost />
             <PreviousInstancesDialogHost />

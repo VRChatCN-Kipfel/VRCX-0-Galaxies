@@ -146,9 +146,19 @@ export function VrccPage() {
     const crossingsHiddenRef = useRef(crossingsHidden);
     crossingsHiddenRef.current = crossingsHidden;
     useEffect(() => {
-        // 等连接就绪再应用：`setTab` 在未连接时会直接返回，那时「提醒」页
-        // 该做的已读同步也一并跳过了，页签会落过去而同步没发生。
-        if (!connected || !isVrccTab(requestedTab)) {
+        if (!isVrccTab(requestedTab)) {
+            return;
+        }
+        // **不需要连接就能看的页签要立刻落过去**：地图榜是开放数据，「我的」
+        // 页正是连接入口本身。首连引导的「现在连接」就靠 `?tab=me` 把玩家
+        //送到连接卡片前面——早先这里对未连接一律 return，引导点下去会停在
+        // 默认页签、参数还留在地址栏里，等哪天连上了才突然跳走。
+        //
+        // 其余页签仍然等连接就绪：`setTab` 在未连接时会跳过「提醒」页的已读
+        // 同步，先落过去就是落过去了而同步没发生。
+        const reachableNow =
+            connected || requestedTab === 'maps' || requestedTab === 'me';
+        if (!reachableNow) {
             return;
         }
         // 「星轨相交」被服务端要求隐藏时不能落过去：那个页签根本不存在，

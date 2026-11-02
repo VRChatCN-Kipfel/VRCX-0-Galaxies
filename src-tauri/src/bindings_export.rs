@@ -201,6 +201,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             commands::application::vrc_status::app__vrc_status_get,
             commands::application::vrc_status::app__vrc_status_refresh,
             commands::application::vrcc::app__vrcc_connection,
+            commands::application::vrcc::app__vrcc_guidance,
+            commands::application::vrcc::app__vrcc_set_guidance,
             commands::application::vrcc::app__vrcc_usage,
             commands::application::vrcc::app__vrcc_boards,
             commands::application::vrcc::app__vrcc_maps,
