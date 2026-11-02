@@ -252,6 +252,14 @@ export function VrccCrossingsPanel({
                                   style: 'short'
                               })
                             : '';
+                        // 卡片还在路上：列表可能已经渲染出来了，而「在哪遇见」
+                        // 要等卡片回来才知道。这段时间先占住这一行的高度，
+                        // 否则卡片一到，整列会被往下顶一截。
+                        //
+                        // 只在 `loading` 为真时占位。请求结束仍没有卡片
+                        // （旧服务器、权限不足、这次失败）就不再占——
+                        // 那会变成一条永远转圈的空行。
+                        const metPending = loading && !metWorld;
                         return (
                             <li
                                 key={key}
@@ -309,8 +317,11 @@ export function VrccCrossingsPanel({
                                     {/* 在哪遇见。世界名是**原文**：有些世界名
                                         自带「｜社群名」，有些没有，绝不按分隔符拆。
                                         时间只有日期粒度（同一天的多张卡是同一个
-                                        值），所以这里只当「大约什么时候」。 */}
-                                    {metWorld && (
+                                        值），所以这里只当「大约什么时候」。
+                                        还没拿到卡片时**占住这一行**的高度：先出来
+                                        的列表如果少一行，等卡片回来时整列会被往下
+                                        顶一截，看着像在跳。 */}
+                                    {metWorld ? (
                                         <div
                                             className="text-muted-foreground mt-0.5 truncate text-[11px]"
                                             title={metWorld}
@@ -320,6 +331,18 @@ export function VrccCrossingsPanel({
                                             })}
                                             {metWhen && ` · ${metWhen}`}
                                         </div>
+                                    ) : (
+                                        metPending && (
+                                            <div
+                                                className="mt-0.5 flex h-4 items-center"
+                                                role="status"
+                                                aria-label={t(
+                                                    'vrcc.crossings.loading'
+                                                )}
+                                            >
+                                                <Spinner className="text-muted-foreground size-3" />
+                                            </div>
+                                        )
                                     )}
                                 </div>
                                 {/* 网页上「星轨相交」那一页：可以看完整星卡，

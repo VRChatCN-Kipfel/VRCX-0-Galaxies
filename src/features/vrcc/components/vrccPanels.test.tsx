@@ -157,6 +157,24 @@ describe('VrccCrossingsPanel', () => {
         expect(text).not.toContain('vrcc.crossings.met_world');
     });
 
+    it('卡片还在路上时先占住那一行，别让列表等会儿被顶下去', () => {
+        // 列表和卡片是两个请求：列表先回来时整行已经渲染，「在哪遇见」还
+        // 没有。这段空档如果不占高度，卡片一到整列会往下一跳。
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            { loading: true }
+        );
+        expect(container.querySelector('[role="status"]')).toBeTruthy();
+    });
+
+    it('请求结束后仍没有卡片就不占位，别留一条永远转圈的空行', () => {
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            { loading: false }
+        );
+        expect(container.querySelector('[role="status"]')).toBeNull();
+    });
+
     it('服务器给没见过的 why 时退回 unknown，不拼键名', () => {
         // 原来的写法是 `t(`vrcc.crossings.why.${why}`)`——`why` 是服务器给的
         // 字符串，拼出来可能是 `constructor` / `__proto__` 这种本来就存在的
