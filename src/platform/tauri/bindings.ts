@@ -8412,11 +8412,15 @@ export type VrccScoreBand = {
 /**
  * 一张星卡：`/me/today`、`/me/inbox` 里的条目。
  *
- * 字段照官方 `StarCard` schema。`additionalProperties: true`，所以还有文档
- * 没列出的字段存在，这里只取我们用得到的那些；多出来的字段解析时被忽略。
+ * 字段照官方 `StarCard` schema。`additionalProperties: true`，线上字段比文档
+ * 列的多，这里只取我们用得到的那些；多出来的字段解析时被忽略。
  *
- * 注意：这张卡**没有** `at` 时间字段（官方 `StarCard` 不提供），时间由
- * 外层结构给。
+ * 下面三个字段在官方字段表里没有、只在示例里出现，属于上面那种「多出来」的：
+ * - `at`：最近一次擦肩 / 路过的时间，只出现在「路过」类清单里；
+ * - `linked_me`：TA 已经连向我，和 `linked`（我连向 TA）、`mutual`（双向）互补；
+ * - `why`：这张卡为什么出现在这里（`me/today` 给 `cross` 之类）。
+ *
+ * 别的星卡上没有这三个键，所以都是 `Option`。
  */
 export type VrccStarCard = {
     /**
@@ -8451,6 +8455,13 @@ export type VrccStarCard = {
      */
     mutual?: boolean | null;
     /**
+     * TA 已经连向我（`linkedMe`）。
+     *
+     * 和 [`Self::linked`]（我连向 TA）、[`Self::mutual`]（双向）是三个互补的
+     * 状态。只在「路过」类清单里给，别的星卡上是 `None`。
+     */
+    linkedMe?: boolean | null;
+    /**
      * 对方的 VRChat 名字，**只在互相连上时才有**。
      */
     vrc?: string | null;
@@ -8462,6 +8473,19 @@ export type VrccStarCard = {
      * 共同的星友数（对方不公开时为 `null`）。
      */
     friends?: number | null;
+    /**
+     * 最近一次擦肩 / 路过的时间（毫秒时间戳）。
+     *
+     * 只出现在「路过」类清单：`/me/crossings/cards` 的 `at` 是最近一次擦肩，
+     * `me/today` 的卡上是这一轮路过的时刻。其余星卡没有这个键。
+     */
+    at?: number | null;
+    /**
+     * 这张卡为什么出现在这个清单里（`me/today` 给 `cross` 这种）。
+     *
+     * 保留服务器原样的代号：不认识的也照样收下，界面不认识就不显示。
+     */
+    why?: string | null;
 };
 /**
  * `GET /status`：不需要 client 标识的探活接口。

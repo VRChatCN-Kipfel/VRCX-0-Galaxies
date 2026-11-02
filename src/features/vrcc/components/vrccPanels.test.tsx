@@ -101,6 +101,19 @@ describe('VrccCrossingsPanel', () => {
         expect(screen.getByText('vrcc.crossings.why.verify')).toBeTruthy();
     });
 
+    it('有旧记录时也要说原因，不能只在列表为空时才提', () => {
+        // `queued` / `sent` / `gone` / `friend` 这几种前置没满足时，历史记录
+        // 照样留在 `stars` 里，服务端只是不再产生新的。只在空列表时提示，
+        // 等于让玩家看着一屏旧记录以为一切照常。
+        renderCrossings({
+            why: 'friend',
+            hidden: false,
+            stars: [{ n: 9, name: '旧记录' }]
+        });
+        expect(screen.getByText('vrcc.crossings.why.friend')).toBeTruthy();
+        expect(screen.getByText('旧记录')).toBeTruthy();
+    });
+
     it('服务器给没见过的 why 时退回 unknown，不拼键名', () => {
         // 原来的写法是 `t(`vrcc.crossings.why.${why}`)`——`why` 是服务器给的
         // 字符串，拼出来可能是 `constructor` / `__proto__` 这种本来就存在的

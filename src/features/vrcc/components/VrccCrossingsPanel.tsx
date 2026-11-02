@@ -1,4 +1,4 @@
-import { ExternalLink, Radar, Sparkles } from 'lucide-react';
+import { ExternalLink, Radar, Sparkles, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { formatRelativeTime } from '@/lib/dateTime';
@@ -105,17 +105,25 @@ export function VrccCrossingsPanel({
     const left = cards?.left;
     const max = cards?.max;
 
-    // 有 why：功能在，但暂时用不了，要说明下一步做什么。
-    if (why && stars.length === 0) {
-        const key = whyKey(why);
+    // `why` 非 null 就是「功能在，但暂时用不了」，官方要求把原因告诉玩家。
+    //
+    // 这是**独立于列表**的状态，不能绑在「列表为空」上：`queued` / `sent` /
+    // `gone` / `friend` 这几种前置没满足时，历史记录照样留在 `stars` 里，
+    // 服务端只是不再产生新的。只在空列表时提示，玩家会看着一屏旧记录以为
+    // 一切照常，其实早就没有新擦肩了。
+    const reasonKey = why ? whyKey(why) : null;
+    const whyText = why
+        ? reasonKey
+            ? t(`vrcc.crossings.why.${reasonKey}`)
+            : t('vrcc.crossings.why.unknown')
+        : null;
+
+    // 没有记录可显示时，原因就是这一页唯一的正文。
+    if (whyText && stars.length === 0) {
         return (
             <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
                 <Radar className="size-6" />
-                <div className="leading-relaxed">
-                    {key
-                        ? t(`vrcc.crossings.why.${key}`)
-                        : t('vrcc.crossings.why.unknown')}
-                </div>
+                <div className="leading-relaxed">{whyText}</div>
             </div>
         );
     }
@@ -192,6 +200,16 @@ export function VrccCrossingsPanel({
                     {t('vrcc.crossings.refresh')}
                 </Button>
             </div>
+
+            {/* 有记录也有原因：原因照样要说，而且排在「这次刷新失败」前面——
+                「为什么不再有新擦肩」比「这次没刷新成功」更要紧，顺序反了会
+                让人以为是网络问题。 */}
+            {whyText && (
+                <div className="flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-xs leading-relaxed">
+                    <TriangleAlert className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+                    <span>{whyText}</span>
+                </div>
+            )}
 
             {/* 有旧数据、这次刷新失败：**留着列表**，只在上面加一条提示。
                 把已经看到过的记录清掉，比显示一条过时数据更糟。 */}

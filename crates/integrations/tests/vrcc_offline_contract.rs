@@ -349,3 +349,41 @@ fn crossings_parse_and_the_why_reasons_classify_correctly() {
     assert!(empty.me.is_none());
     assert!(!empty.hidden);
 }
+
+/// `/me/crossings/cards` 的星卡：`linkedMe` / `at` / `why` 这三个字段不在官方
+/// `StarCard` 的字段表里，只在示例里出现（`additionalProperties: true` 的那种）。
+///
+/// 三个都关系到界面上能说清什么：`at` 是「最近一次擦肩是什么时候」，`linkedMe`
+/// 是「TA 是不是已经连向我」，`why` 是「这张卡为什么出现在这一页」。少一个，
+/// 界面就只能说出「有这个人」，其余全靠猜。
+#[test]
+fn crossing_cards_keep_the_fields_the_star_card_table_never_lists() {
+    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+
+    let cards: VrccCrossingCards = parse(
+        r#"{"cards":[
+            {"n":3,"name":"彩蛋猎人","group":"G","why":"cross","linked":false,
+             "mutual":false,"linkedMe":true,"at":1792830000000},
+            {"n":4,"name":"夜航"}
+        ],"seen":0,"left":5,"max":5}"#,
+    );
+
+    assert_eq!(cards.cards.len(), 2);
+    let first = &cards.cards[0];
+    assert_eq!(first.linked_me, Some(true));
+    assert_eq!(first.at, Some(1_792_830_000_000));
+    assert_eq!(first.why.as_deref(), Some("cross"));
+    // 和 `linked` 是两条独立的边：TA 连向我，不代表我连了 TA。
+    assert_eq!(first.linked, Some(false));
+    assert_eq!(first.mutual, Some(false));
+
+    // 没有这三个键的星卡照旧能读——它们不是必填。
+    let second = &cards.cards[1];
+    assert_eq!(second.linked_me, None);
+    assert_eq!(second.at, None);
+    assert_eq!(second.why, None);
+
+    assert_eq!(cards.seen, Some(0));
+    assert_eq!(cards.left, Some(5));
+    assert_eq!(cards.max, Some(5));
+}
