@@ -984,8 +984,8 @@
                 "description": "Switch between the overall board, this week and newly listed. If the server is on an older version it does not support these, and the switch stays hidden rather than pretending to work."
             },
             "detail": {
-                "title": "The map page",
-                "description": "Opening a map shows what the board cannot fit: the score breakdown, how many people have been there, and what the site thought of it."
+                "title": "The world page",
+                "description": "A world page holds what the board cannot: the score spread and how many people have been there. When the server sends hardware figures for the world, the small label next to the setup tier becomes a button — press it and the panel expands with VRAM, memory, load time and size. Without those figures it stays a plain label, so there is nothing here that looks pressable but is not."
             },
             "rating": {
                 "title": "Rate it and leave a note",
