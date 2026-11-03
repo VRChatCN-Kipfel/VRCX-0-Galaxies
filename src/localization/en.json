@@ -975,13 +975,9 @@
                 "title": "Four tabs",
                 "description": "Rankings are public, so this tab works without connecting. Alerts and the rest need the token. Tabs you do not have permission for simply will not appear."
             },
-            "current_map": {
-                "title": "The map you are in",
-                "description": "When the world you are currently in is on the board, its score, rank and number of raters show up here. Nothing shows up when it is not on the board."
-            },
             "board": {
                 "title": "The board itself",
-                "description": "One row per map: rank, name, average score and how many people rated it. Click any row to open that map in this app’s own world dialog."
+                "description": "One row per world: rank, name, average score, and how many rated it. If the world you are in happens to be on the board, it gets its own card just above the list, so you can see your map’s standing without hunting for it. Click a row to open it in this app’s own world page."
             },
             "sorts": {
                 "title": "Sort the board",
@@ -1005,8 +1001,8 @@
                 "description": "Recent lists what the site pushed to you lately, newest first. Notes is the notification list from the site itself, read-only — switching between them does not mark anything as read."
             },
             "unread": {
-                "title": "Four counters",
-                "description": "These are the red-dot numbers from the site: new connections towards you, crossings, private messages, and notes. Each one is clickable and opens the matching page on vrcc.cc, where you can actually reply. The count from the crossings one is not on the site and does not appear here."
+                "title": "The red counts up here",
+                "description": "Each number is a badge from vrcc.cc: inbox, crossings, chats, notices. Click one and that page opens in your browser — replies happen there. Crossings has no count of its own on the site, so it disappears here when the server turns it off."
             },
             "notif_open": {
                 "title": "Every row opens the original",
@@ -1027,6 +1023,10 @@
             "usage": {
                 "title": "How much is left today",
                 "description": "Daily read counts, taken straight from the server response headers. They reset at midnight Beijing time — not your local midnight — so the reset countdown here is the server’s, not the clock on your desk."
+            },
+            "first_row": {
+                "title": "Say, this row",
+                "description": "Open it and we will carry on inside together — or press Next and I will open it for you. Either way you can always come back and open any row yourself later."
             }
         }
     },

@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
     getActiveIndex: vi.fn(),
     getState: vi.fn(),
     moveNext: vi.fn(),
+    movePrevious: vi.fn(),
+    refresh: vi.fn(),
+    getActiveElement: vi.fn(),
     drive: vi.fn(),
     destroy: vi.fn()
 }));
@@ -39,10 +42,16 @@ describe('导览的交互边界', () => {
             getActiveIndex: mocks.getActiveIndex,
             getState: mocks.getState,
             moveNext: mocks.moveNext,
+            movePrevious: mocks.movePrevious,
+            refresh: mocks.refresh,
+            getActiveElement: mocks.getActiveElement,
             drive: mocks.drive,
             destroy: mocks.destroy
         });
         mocks.isActive.mockReturnValue(true);
+        // `advanceOnce` 用当前步号去重，所以默认给 0——不设的话是 `undefined`，
+        // 去重逻辑会直接返回、什么都不推进。
+        mocks.getActiveIndex.mockReturnValue(0);
         document.body.innerHTML = '';
     });
 
@@ -94,36 +103,244 @@ describe('导览的交互边界', () => {
         }
     });
 
-    it('跨页准备发生在「求值锚点」时，而不是进入这一步之后', async () => {
+    it('锚点求值不做副作用，prepareNext 由前一步触发', async () => {
         const { startTour, resetTourForTests } = await load();
         resetTourForTests();
 
         const prepare = vi.fn();
+        const prepareNext = vi.fn();
         startTour([
             { titleKey: 'a', descriptionKey: 'b' },
             {
                 titleKey: 'c',
                 descriptionKey: 'd',
                 element: '[data-x]',
-                prepare
+                prepare,
+                prepareNext
             }
         ]);
 
         const step = firstConfig().steps[1];
 
-        // 关键：锚点必须是**函数**。driver 求值 element 的时刻早于
-        // `onHighlightStarted`，也只有那一刻才赶得上「先切页、再找元素」。
-        expect(typeof step.element).toBe('function');
-
-        // 准备动作在求值时就跑，且此时还没进到高亮阶段。
-        const found = (step.element as () => Element | null)();
-        expect(prepare).toHaveBeenCalledTimes(1);
-        expect(found).toBeNull(); // 页面里确实没有这个元素
+        // **求值锚点不能有副作用**。
+        // driver 会为了「判断后面还有没有步骤」扫描后续步骤并调用求值函数，
+        // 副作用会在玩家还没走到时就被触发——正是「我没点，详情却自己打开了」
+        // 那个 bug。
+        (step.element as () => Element | null)();
+        expect(prepare).not.toHaveBeenCalled();
+        expect(prepareNext).not.toHaveBeenCalled();
     });
 
-    it('准备动作会被重复求值，因此必须幂等', async () => {
+    it('进入这一步时不准备下一步（否则界面会在讲这一步时被切走）', async () => {
         const { startTour, resetTourForTests } = await load();
         resetTourForTests();
+
+        const nextPrepareNext = vi.fn();
+        startTour([
+            { titleKey: 'a', descriptionKey: 'b' },
+            {
+                titleKey: 'c',
+                descriptionKey: 'd',
+                element: '[data-x]',
+                prepareNext: nextPrepareNext
+            }
+        ]);
+
+        const steps = firstConfig().steps;
+        steps[0].onHighlightStarted!(undefined, steps[0], {} as never);
+
+        // **不该在这里准备下一步**。早先这么做过，结果第 3 步「先连接一次」
+        // 的气泡停着、界面已经跳到地图榜——第 N 步刚开始就去准备第 N+1 步，
+        // 第 N 步的气泡还指着旧锚点。
+        expect(nextPrepareNext).not.toHaveBeenCalled();
+    });
+
+    it('点「下一步」时才准备下一步，并且自己推进', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        const nextPrepareNext = vi.fn();
+        startTour([
+            { titleKey: 'a', descriptionKey: 'b' },
+            {
+                titleKey: 'c',
+                descriptionKey: 'd',
+                element: '[data-x]',
+                prepareNext: nextPrepareNext
+            }
+        ]);
+
+        const step = firstConfig().steps[0];
+        mocks.moveNext.mockClear();
+        step.popover?.onNextClick?.(undefined, step, {} as never);
+
+        // 先准备，再推进。
+        expect(nextPrepareNext).toHaveBeenCalledTimes(1);
+        // **必须自己推进**：driver 里 `popover.onNextClick ?? 默认推进` 是二选一，
+        // 我提供了回调它就不要再执行内置的 moveNext——只做准备不推进的话，
+        // 按钮点了没反应。
+        expect(mocks.moveNext).toHaveBeenCalled();
+    });
+
+    it('预告步骤会自己往前走，不要求玩家点', async () => {
+        vi.useFakeTimers();
+        try {
+            const { startTour, resetTourForTests } = await load();
+            resetTourForTests();
+
+            startTour([
+                {
+                    titleKey: 'a',
+                    descriptionKey: 'b',
+                    element: '[data-x]',
+                    autoAdvanceMs: 1000
+                },
+                { titleKey: 'c', descriptionKey: 'd', element: '[data-y]' }
+            ]);
+
+            const step = firstConfig().steps[0];
+            mocks.moveNext.mockClear();
+            step.onHighlightStarted!(undefined, step, {} as never);
+
+            // 还没到时间：不该动。
+            await vi.advanceTimersByTimeAsync(500);
+            expect(mocks.moveNext).not.toHaveBeenCalled();
+
+            // 到点了：自己前进。这是兜底路径——玩家既没点、也没按按钮时，
+            // 教学流程不能停在这儿。
+            await vi.advanceTimersByTimeAsync(600);
+            expect(mocks.moveNext).toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('玩家自己点开目标时也会前进（和「下一步」双管齐下）', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        const target = document.createElement('div');
+        target.setAttribute('data-opened', '');
+
+        startTour([
+            {
+                titleKey: 'a',
+                descriptionKey: 'b',
+                element: '[data-x]',
+                advanceWhen: '[data-opened]'
+            },
+            { titleKey: 'c', descriptionKey: 'd', element: '[data-y]' }
+        ]);
+
+        mocks.moveNext.mockClear();
+        const step = firstConfig().steps[0];
+
+        // 目标还不存在：观察者等着。
+        step.onHighlightStarted!(undefined, step, {} as never);
+        expect(mocks.moveNext).not.toHaveBeenCalled();
+
+        // 玩家点了高亮区里的真实控件，详情被渲染出来。
+        document.body.appendChild(target);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        // 立刻前进——不必等定时器，也不必他去按按钮。
+        expect(mocks.moveNext).toHaveBeenCalled();
+        document.body.removeChild(target);
+    });
+
+    it('两条路都通时只前进一次，不会跳两步', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        startTour([
+            {
+                titleKey: 'a',
+                descriptionKey: 'b',
+                element: '[data-x]',
+                autoAdvanceMs: 3000
+            },
+            { titleKey: 'c', descriptionKey: 'd', element: '[data-y]' }
+        ]);
+
+        const step = firstConfig().steps[0];
+        mocks.moveNext.mockClear();
+        step.onHighlightStarted!(undefined, step, {} as never);
+
+        // 玩家先按了「下一步」。
+        step.popover?.onNextClick?.(undefined, step, {} as never);
+        expect(mocks.moveNext).toHaveBeenCalledTimes(1);
+
+        // 随后自动前进的计时器到点——**不该再推一次**，
+        // 否则一次操作会跳两步，玩家会莫名少看一屏。
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(mocks.moveNext).toHaveBeenCalledTimes(1);
+    });
+
+    it('玩家自己点「下一步」会取消待执行的自动前进', async () => {
+        vi.useFakeTimers();
+        try {
+            const { startTour, resetTourForTests } = await load();
+            resetTourForTests();
+
+            startTour([
+                {
+                    titleKey: 'a',
+                    descriptionKey: 'b',
+                    element: '[data-x]',
+                    autoAdvanceMs: 1000
+                },
+                { titleKey: 'c', descriptionKey: 'd', element: '[data-y]' }
+            ]);
+
+            const step = firstConfig().steps[0];
+            step.onHighlightStarted!(undefined, step, {} as never);
+
+            // 玩家先自己点了。
+            mocks.moveNext.mockClear();
+            step.popover?.onNextClick?.(undefined, step, {} as never);
+            expect(mocks.moveNext).toHaveBeenCalledTimes(1);
+
+            // 计时器到点后**不该再推一次**。
+            await vi.advanceTimersByTimeAsync(1500);
+            expect(mocks.moveNext).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('点「上一步」时先准备目标步骤，再回退', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        const prevPrepareNext = vi.fn();
+        startTour([
+            { titleKey: 'a', descriptionKey: 'b' },
+            {
+                titleKey: 'c',
+                descriptionKey: 'd',
+                prepareNext: prevPrepareNext
+            },
+            { titleKey: 'e', descriptionKey: 'f', element: '[data-x]' }
+        ]);
+
+        const step = firstConfig().steps[2];
+        // `startTour` 会替首步跑一次 `prepareNext`，先清掉计数。
+        prevPrepareNext.mockClear();
+        mocks.movePrevious.mockClear();
+        step.popover?.onPrevClick?.(undefined, step, {} as never);
+
+        // 从详情往后退时，目标步骤的锚点被对话框盖着——先准备才能正确高亮。
+        expect(prevPrepareNext).toHaveBeenCalledTimes(1);
+        expect(mocks.movePrevious).toHaveBeenCalled();
+    });
+
+    it('锚点求值可以被反复调用，因为 driver 会为了别的原因也调它', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        const target = document.createElement('div');
+        target.setAttribute('data-x', '');
+        document.body.appendChild(target);
 
         const prepare = vi.fn();
         startTour([
@@ -138,12 +355,14 @@ describe('导览的交互边界', () => {
         const step = firstConfig().steps[0];
         const resolve = step.element as () => Element | null;
 
-        // 等待期间每次 DOM 变动都会重新求值——这正是「元素一出现就立刻进入」
-        // 的机制，也意味着同一个准备动作会被调很多次。
+        // driver 的跳过判断会扫描后续步骤并调用求值函数（`R` → `L` → `f`），
+        // 所以求值被调用很多次是**正常现象**。
         resolve();
         resolve();
         resolve();
-        expect(prepare).toHaveBeenCalledTimes(3);
+
+        // 关键：无论调多少次，都不能有副作用。
+        expect(prepare).not.toHaveBeenCalled();
     });
 
     it('元素已经存在时，求值一次就拿到它，不必等', async () => {
@@ -370,6 +589,41 @@ describe('导览的交互边界', () => {
         // 这个坑的表现正是「点了『开始连接』完全没反应」。
         expect(card.hasAttribute('data-tour-hit')).toBe(true);
         expect(auth.hasAttribute('data-tour-hit')).toBe(true);
+    });
+
+    it('高亮画好后会跟随元素位移，否则框会停在原处', async () => {
+        const { startTour, resetTourForTests } = await load();
+        resetTourForTests();
+
+        const target = document.createElement('div');
+        target.setAttribute('data-x', '');
+        document.body.appendChild(target);
+
+        let top = 100;
+        target.getBoundingClientRect = () =>
+            ({ top, left: 0, width: 50, height: 20 }) as DOMRect;
+
+        startTour([
+            { titleKey: 'a', descriptionKey: 'b', element: '[data-x]' }
+        ]);
+
+        // 模拟 driver 画完高亮：它会调 onHighlighted，并从 activeElement
+        // 取当前锚点。
+        mocks.getActiveElement.mockReturnValue(target);
+        const step = firstConfig().steps[0];
+        step.onHighlighted!(target, step, {} as never);
+        mocks.refresh.mockClear();
+
+        // 元素被上面的列表推下去了（尺寸没变，纯位移）。
+        top = 300;
+        document.body.appendChild(document.createElement('div'));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        // 必须让 driver 重新测量——否则实测就是「第 14 步社区群的高亮框
+        // 停在卡片原来的位置，卡片已经被推到下面去了，看起来像没有高亮」。
+        expect(mocks.refresh).toHaveBeenCalled();
+
+        document.body.removeChild(target);
     });
 
     it('切到单元素步骤时清掉旧框和可点标记', async () => {

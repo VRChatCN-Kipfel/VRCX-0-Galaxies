@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { formatRelativeTime } from '@/lib/dateTime';
 import { openExternalLink } from '@/services/shellIntegrationService';
+import {
+    useVrccTourDemoStore,
+    VRCC_TOUR_DEMO_UNREAD
+} from '@/state/vrccTourDemoStore';
 import { Button } from '@/ui/shadcn/button';
 import {
     ToggleGroup,
@@ -83,6 +87,20 @@ export function VrccNotificationsPanel({
 }) {
     const { t } = useTranslation();
 
+    /**
+     * 导览期间给一份演示用红点。
+     *
+     * 首次引导只对**从没连过**的玩家自动弹，他们没有真实数据：红点区因为
+     * `unread` 为 null 整块不渲染，于是「四处红点」那一步高亮的是空白。
+     * 与其把这一步藏掉，不如让它看起来像真的——数字是编的，但结构、位置、
+     * 点开会去哪全是真的。
+     *
+     * 真实数据存在时优先真实数据：已经连上的玩家看到的是自己的红点。
+     */
+    const tourDemoActive = useVrccTourDemoStore((state) => state.active);
+    const unreadForDisplay =
+        unread ?? (tourDemoActive ? VRCC_TOUR_DEMO_UNREAD : null);
+
     if (!connected) {
         return (
             <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-3 text-sm">
@@ -138,9 +156,9 @@ export function VrccNotificationsPanel({
                             )}
                         </ToggleGroup>
                     )}
-                    {unread && (
+                    {unreadForDisplay && (
                         <UnreadCounts
-                            unread={unread}
+                            unread={unreadForDisplay}
                             crossingsHidden={crossingsHidden}
                             onOpenNotes={
                                 showSwitch
@@ -203,8 +221,25 @@ function UnreadCounts({
         { key: 'notes' }
     ];
 
+    // 一个计数都没有时整块不渲染。
+    //
+    // 否则会剩下一个空 div：导览高亮的是一块**什么都没有的地方**，而文案
+    // 在讲「这四个数字」——玩家看到的是空白，被要求理解不存在的东西。
+    // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
+    if (items.every(({ key }) => unread[key] == null)) return null;
+
+    // 一个计数都没有时整块不渲染。
+    //
+    // 否则会剩下一个空 div：导览高亮的是一块**什么都没有的地方**，而文案
+    // 在讲「这四个数字」——玩家看到的是空白，被要求理解不存在的东西。
+    // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
+    if (items.every(({ key }) => unread[key] == null)) return null;
+
     return (
-        <div className="ml-auto flex items-center gap-3 text-xs">
+        <div
+            data-tour="vrcc-unread-counts"
+            className="ml-auto flex items-center gap-3 text-xs"
+        >
             {items.map(({ key, href }) => {
                 const count = unread[key];
                 if (count == null) return null;

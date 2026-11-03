@@ -1,6 +1,7 @@
 import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
 
 import i18n from '@/services/i18nService';
+import { useVrccTourDemoStore } from '@/state/vrccTourDemoStore';
 
 /**
  * 星遇同频的导览引擎。
@@ -64,8 +65,26 @@ export type TourStep = {
      *
      * **可以且会被多次调用**（等待期间每次 DOM 变动都会重新求值），
      * 所以必须幂等——重复切到同一个页签没问题，重复开对话框就不行。
+     *
+     * ⚠️ 只在**已经进入这一步**时执行（`onHighlightStarted`），所以它不能用来
+     * 「让锚点出现」——那时元素早就解析完了。要变出锚点请用 `prepareNext`。
      */
     prepare?: () => void;
+    /**
+     * 在**上一步**就把这一步需要的界面准备好。
+     *
+     * 这是「切页签 / 开对话框」的正确落点：`prepare` 跑的时候 driver 已经找过
+     * 元素了，此时才切页就晚了——它会在旧页面上找新页面的锚点，等着超时，
+     * 最后退化成居中的 dummy 气泡。
+     *
+     * 为什么不能塞进 element 的求值函数（我试过）：driver 会为了「判断后面还有
+     * 没有步骤」而**扫描**后续步骤并调用求值函数，于是这些动作在玩家还没走到时
+     * 就被提前触发了——表现是「我没点，详情却自己打开了」。
+     *
+     * `prepareNext` 只在真正进入**前一步**时调一次，既有足够的提前量，又不会被
+     * 无关的扫描触发。
+     */
+    prepareNext?: () => void;
     /** 标题与正文的本地化键。 */
     titleKey: string;
     descriptionKey: string;
@@ -86,6 +105,44 @@ export type TourStep = {
     /** 点高亮元素本身前进（只用于「这里没什么可操作」的讲解步）。 */
     advanceOnClick?: boolean;
     /**
+     * 关掉高亮区域的可点性，让这一步只能「看」。
+     *
+     * 对应 driver 的 `disableActiveInteraction`（给锚点加
+     * `driver-no-interaction`，CSS 是 `pointer-events: none !important`）。
+     *
+     * 用在两种地方：
+     * - 高亮范围很大、又不是要玩家点的（例如整个榜单）——玩家随手一点就会
+     *   打开详情，而后续步骤是按「还没打开」编排的，顺序立刻乱掉；
+     * - 纯粹是「预告」的一步（指认接下来要打开的那一行），点了会和下一步重复。
+     *
+     * 反过来说，**要玩家真的去点的步骤绝不能开**——那会让他点不动，看起来
+     * 就是「按钮坏了」。
+     */
+    blockInteraction?: boolean;
+    /**
+     * 停多久之后**自动进入下一步**（毫秒）。省略表示不自动前进。
+     *
+     * 给「纯预告」的步骤用：它没有操作可做，也不该让玩家自己点——例如
+     * 「下一屏会打开这一行」，指完就该自动过去。留着让玩家点「下一步」，
+     * 他多半会先试着点高亮区（而那里被 `blockInteraction` 关掉了），
+     * 感觉像「点了没反应」。
+     */
+    autoAdvanceMs?: number;
+    /**
+     * 这个元素一出现，就**立刻进入下一步**。
+     *
+     * 用在「玩家可能自己动手」的步骤上，和「点下一步」**双管齐下**：
+     * - 玩家点了高亮区里的真实控件 → 目标元素出现 → 自动前进；
+     * - 玩家没点、直接按「下一步」→ `prepareNext` 把那东西打开 → 也是前进。
+     *
+     * 两条路都通向同一步，谁先到算谁，靠一个「已经推进过」的标记去重，
+     * 所以不会因为打开了一次就跳两步。
+     *
+     * 例：第 7 步高亮榜单第一行，玩家点开详情就进第 8 步；不点就按「下一步」，
+     * 同样打开详情并进第 8 步。
+     */
+    advanceWhen?: string;
+    /**
      * 元素不存在时跳过这一步，而不是停下来。
      *
      * 给**有条件出现**的功能用：星轨相交在 16–17 岁星池、或玩家关掉它时整个
@@ -96,6 +153,13 @@ export type TourStep = {
      * 真出问题，应该看得出来。
      */
     skipIfMissing?: boolean;
+    /**
+     * 等锚点多长时间（毫秒）。省略按默认：可跳过的步骤 1200、核心步骤 2500。
+     *
+     * 给「导览自己保证会出现、但渲染可能要久一点」的步骤用——例如地图详情，
+     * 它由上一步的 `prepareNext` 打开，慢一拍的渲染不该被当成「不存在」。
+     */
+    waitForElement?: number;
 };
 
 let instance: Driver | null = null;
@@ -116,6 +180,101 @@ let anchorSelectors: readonly string[] = [];
 let anchorObserver: MutationObserver | null = null;
 /** 合并同一帧内的多次 mutation。 */
 let anchorQueued: number | null = null;
+/** 高亮框位移跟随的清理函数。 */
+let stopFollow: (() => void) | null = null;
+
+/**
+ * 让高亮框跟着元素走。
+ *
+ * ## 为什么需要
+ *
+ * driver 在**画高亮的那一刻**量一次元素位置，之后不再量。页面一旦重排——
+ * 上面的列表加载完了、图片撑开了、内容被挤了——元素就移位了，而高亮框还留在
+ * 原处。实测：第 14 步「社区群」的高亮框停在卡片原来的位置，卡片已经被上面的
+ * 互关列表推到下面去了，看起来就是「这一步没有高亮」。
+ *
+ * ## 做法
+ *
+ * 记下量到的几何，之后每次变化都跟原值比；真的偏了才 `refresh()`
+ * （它会重画高亮洞与气泡，位置重新量）。两种触发源：
+ * - `ResizeObserver`：元素自身尺寸变了（内容加载、图片撑开）；
+ * - DOM 变动：元素尺寸没变、但被上面的东西推下去了。
+ *
+ * 只在偏移 >1px 时刷新，否则每次细微抖动都重画，反而闪。
+ */
+function followAnchor(element: Element, refresh: () => void): void {
+    stopAnchorFollow();
+
+    let last = toRect(element);
+    let frame: number | null = null;
+
+    const check = () => {
+        frame = null;
+        const next = toRect(element);
+        if (!next) return;
+        const moved =
+            Math.abs(next.top - last!.top) > 1 ||
+            Math.abs(next.left - last!.left) > 1 ||
+            Math.abs(next.width - last!.width) > 1 ||
+            Math.abs(next.height - last!.height) > 1;
+        if (!moved) return;
+        last = next;
+        refresh();
+    };
+
+    const schedule = () => {
+        if (frame !== null) return;
+        frame = window.requestAnimationFrame(check);
+    };
+
+    const layout = new MutationObserver(schedule);
+    layout.observe(document.body, { childList: true, subtree: true });
+
+    let resize: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+        resize = new ResizeObserver(schedule);
+        resize.observe(element);
+    }
+
+    stopFollow = () => {
+        layout.disconnect();
+        resize?.disconnect();
+        if (frame !== null) window.cancelAnimationFrame(frame);
+        frame = null;
+        stopFollow = null;
+    };
+}
+
+function toRect(element: Element) {
+    const r = element.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
+function stopAnchorFollow(): void {
+    stopFollow?.();
+    stopFollow = null;
+}
+
+/** 自动前进的计时器（`autoAdvanceMs`）。 */
+let autoAdvanceTimer: number | null = null;
+/** 监听「目标元素出现就前进」（`advanceWhen`）。 */
+let advanceWhenObserver: MutationObserver | null = null;
+/**
+ * 这一步是否已经推进过。
+ *
+ * 两条路（玩家自己点 / 按「下一步」）都会触发推进，必须去重，
+ * 否则一次打开详情会跳两步。每进入新的一步时重置。
+ */
+let advancedForStep: number | null = null;
+
+function clearAutoAdvance(): void {
+    if (autoAdvanceTimer !== null) {
+        window.clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+    advanceWhenObserver?.disconnect();
+    advanceWhenObserver = null;
+}
 
 function stopAnchorWatch(): void {
     anchorObserver?.disconnect();
@@ -273,10 +432,29 @@ function anchorFrameFor(newSelectors: readonly string[]): HTMLElement {
 /**
  * 把一个 `TourStep` 变成 driver 的 `DriveStep`。
  *
- * 锚点用**函数**形式而不是字符串，为的是把 `prepare` 塞进求值那一刻——
- * 见文件头「跨页」一节的第 1 点。
+ * ## `prepare` 为什么不能放在 element 求值里
+ *
+ * 早先我把 `prepare` 写在 element 的求值函数里，理由是「求值比进入晚不了多少」。
+ * 结果它被**提前执行**了，表现是：还没走到打开详情那一步，详情就自己弹出来了。
+ *
+ * 原因在 driver 的这个逻辑：
+ * ```js
+ * function L(e,t){ return !t.skipMissingElement || !t.element ? false : !f(t.element) }
+ * function R(e,t,n){ for (let i=t; ...; i+=n) if (!L(e,r[i])) return i }   // 找下一个可用步骤
+ * ```
+ * `R()` 每渲染一次气泡都会**扫描后续步骤**、对每一步调 `f(t.element)` 判断它
+ * 会不会被跳过。也就是说 element 的求值函数会被**为了别的问题**反复调用，
+ * 根本不代表「玩家进到这一步了」。
+ *
+ * `onHighlightStarted` 才是真正进入这一步时调一次（且只在此时）。所以准备动作
+ * 挂在那里，element 求值保持**纯粹**——只回答「元素在哪」。
  */
-function toDriveStep(step: TourStep, t: (key: string) => string): DriveStep {
+function toDriveStep(
+    step: TourStep,
+    t: (key: string) => string,
+    next?: TourStep,
+    previous?: TourStep
+): DriveStep {
     const selectors =
         step.element === undefined
             ? []
@@ -288,11 +466,7 @@ function toDriveStep(step: TourStep, t: (key: string) => string): DriveStep {
         ...(selectors.length > 0
             ? {
                   element: () => {
-                      // 先备好界面，再回答「元素在哪」。
-                      // driver 拿到结果后若仍是 null 会进入等待，
-                      // 而 React 在这之间已经渲染完了。
-                      step.prepare?.();
-
+                      // 只回答「元素在哪」，**不做任何副作用**。
                       const required = selectors[0];
                       const anchor = document.querySelector(required);
                       if (!anchor) return null as never;
@@ -313,11 +487,95 @@ function toDriveStep(step: TourStep, t: (key: string) => string): DriveStep {
                   // 有条件出现的步骤短一些——它不存在就是不适用，没必要让
                   // 玩家对着暗屏干等；核心步骤给足时间，因为那通常是慢一点
                   // 的渲染而不是缺失。
-                  waitForElement: step.skipIfMissing ? 1200 : 2500,
+                  waitForElement:
+                      step.waitForElement ?? (step.skipIfMissing ? 1200 : 2500),
                   skipMissingElement: step.skipIfMissing ?? false
               }
             : {}),
         advanceOnClick: step.advanceOnClick ?? false,
+        // 关掉高亮区可点性：driver 会给锚点加 `driver-no-interaction`，
+        // 对应 CSS 是 `pointer-events: none !important`。
+        disableActiveInteraction: step.blockInteraction ?? false,
+        /**
+         * 高亮**已经画好**之后调一次。
+         *
+         * 用它在此时机启动「位移跟随」：driver 刚量过位置、画完高亮洞，从这一刻
+         * 起盯着元素别跑偏。不能放在 `onHighlightStarted`——那时位置还没量。
+         */
+        onHighlighted: () => {
+            // driver 把当前锚点记在 `activeElement` 上；集中高亮时那是合成框，
+            // 跟着它也合理（它就是目标的包围盒）。
+            const anchor = instance?.getActiveElement();
+            if (!anchor) return;
+            followAnchor(anchor, () => instance?.refresh());
+        },
+        /**
+         * 真正**进入**这一步时调一次，只保当前这一步的界面。
+         *
+         * `prepare` 在这里跑，不是因为它「只能在这跑」，而是因为此刻气泡已经
+         * 挂上去、玩家看的确实是这一步。下一步的界面**不在这里准备**——早先
+         * 在这里调下一步的 `prepareNext`，等于「第 N 步刚开始就把界面切到第
+         * N+1 步该去的地方」，第 N 步的气泡还指着旧锚点。实测故障：第 3 步
+         * 「先连接一次」的气泡停着，界面已经跳到地图榜，高亮框落在地图列表上。
+         */
+        onHighlightStarted: () => {
+            step.prepare?.();
+            // 进入新的一步，先把上一步的位移跟随停掉。
+            stopAnchorFollow();
+
+            // 每进入新的一步，重置「已推进」标记——去重是按步算的。
+            clearAutoAdvance();
+            advancedForStep = null;
+
+            /**
+             * 统一的推进：两条路（玩家自己点 / 按「下一步」/ 定时）都走这里，
+             * 靠 `advancedForStep` 保证同一步只推一次。
+             */
+            const advanceOnce = () => {
+                const index = instance?.getActiveIndex();
+                if (index === undefined) return;
+                if (advancedForStep === index) return;
+                advancedForStep = index;
+                // **必须走和「下一步」一样的路**：先准备下一步的界面，再前进。
+                // 直接 `moveNext()` 会跳过 `prepareNext`，于是下一步永远等不到
+                // 锚点、被当成不存在跳过——「第 7 步过去直接跳到第 10 步」就是
+                // 这么来的。
+                next?.prepareNext?.();
+                instance?.moveNext();
+            };
+
+            // 纯预告的步骤：停一会儿自动前进。
+            if (step.autoAdvanceMs && step.autoAdvanceMs > 0) {
+                autoAdvanceTimer = window.setTimeout(() => {
+                    autoAdvanceTimer = null;
+                    if (!instance?.isActive()) return;
+                    advanceOnce();
+                }, step.autoAdvanceMs);
+            }
+
+            // 玩家自己动手也算数：目标元素一出现就前进。
+            // 和上面的定时器、和「下一步」按钮**双管齐下**，谁先到算谁。
+            if (step.advanceWhen) {
+                const selector = step.advanceWhen;
+                // 已经在了就直接走（玩家在上一步就点开了）。
+                if (document.querySelector(selector)) {
+                    advanceOnce();
+                } else {
+                    const observer = new MutationObserver(() => {
+                        if (!instance?.isActive()) return;
+                        if (!document.querySelector(selector)) return;
+                        observer.disconnect();
+                        advanceWhenObserver = null;
+                        advanceOnce();
+                    });
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                    advanceWhenObserver = observer;
+                }
+            }
+        },
         // 文案每次进入这一步都重算一次，所以「已连接 / 未连接」这种随玩家
         // 操作变化的前提能跟上。玩家在**这一步之内**改变状态（点了「开始
         // 连接」）的情况另外处理：见 `syncActiveCopy`。
@@ -325,7 +583,45 @@ function toDriveStep(step: TourStep, t: (key: string) => string): DriveStep {
             title: t(titleKeyFor(step)),
             description: t(descriptionKeyFor(step)),
             side: step.side ?? 'bottom',
-            align: step.align ?? 'center'
+            align: step.align ?? 'center',
+            /**
+             * **玩家点「下一步」的那一刻**准备下一步的界面。
+             *
+             * 这是 `prepareNext` 唯一该跑的时候：
+             * - 比 driver 解析下一步的锚点更早（点击 → 切页 → driver 查找），
+             *   所以元素一次命中，不必等 `waitForElement` 超时；
+             * - 又不会在**当前**这一步还没讲完时就把界面切走。
+             *
+             * 早先把它挂在 `onHighlightStarted` 上，等于「第 N 步刚开始就去
+             * 准备第 N+1 步的界面」——第 N 步的气泡还指着旧锚点，界面已经跑了。
+             *
+             * ⚠️ **必须自己推进**：driver 里 `popover.onNextClick ?? 默认推进`
+             * 是二选一（`m || n.onNextClick`），我提供了这个回调，它就**不会**
+             * 再执行内置的 `moveNext`。只做准备不推进的话，按钮点了没反应。
+             */
+            onNextClick: () => {
+                // 玩家自己点了：取消可能存在的自动前进，否则会连推两步。
+                clearAutoAdvance();
+                // 标记「本步已推进」，让还在路上的观察者/定时器不要重复推。
+                const index = instance?.getActiveIndex();
+                if (index !== undefined) advancedForStep = index;
+                next?.prepareNext?.();
+                instance?.moveNext();
+            },
+            /**
+             * 「上一步」同样要先准备目标步骤的界面，再回退。
+             *
+             * 不处理的话，从详情两步往后退时：详情还开着，而排序/榜单的锚点
+             * 在页面上被它盖着——玩家按「上一步」，回是回去了，却看到一片遮罩。
+             *
+             * 用 `previous` 的 `prepareNext`（那份动作是幂等的、会关对话框并
+             * 切页），再 `movePrevious()`。同样必须自己推进，理由同上。
+             */
+            onPrevClick: () => {
+                clearAutoAdvance();
+                previous?.prepareNext?.();
+                instance?.movePrevious();
+            }
         }
     };
 }
@@ -379,14 +675,31 @@ function descriptionKeyFor(step: TourStep): string {
 
 function buildConfig(steps: readonly TourStep[]): Config {
     const t = i18n.t.bind(i18n);
-    const driveSteps: DriveStep[] = steps.map((step) => toDriveStep(step, t));
+    const driveSteps: DriveStep[] = steps.map((step, index) =>
+        toDriveStep(step, t, steps[index + 1], steps[index - 1])
+    );
 
     return {
         steps: driveSteps,
         // 0.85 而不是 0.9：VRCX-0 的界面比 Clash Party 密，压太黑会看不见
         // 高亮洞周围的上下文，玩家反而不知道自己在哪。
         overlayOpacity: 0.85,
-        smoothScroll: true,
+        /**
+         * **关掉平滑滚动。**
+         *
+         * driver 的顺序是「先滚动、紧接着就画高亮与气泡」：
+         * ```js
+         * g(el, config.smoothScroll)      // 滚动
+         * !_ && step.popover && W(...)    // 立刻画
+         * ```
+         * 而平滑滚动是**异步动画**。开着它，画高亮的那一刻元素还在半路上，
+         * 框就落在错误的位置，要等动画结束、跟随机制重新测量后才归位——
+         * 表现就是「背景滑到底了，高亮卡一下才出现」。
+         *
+         * 关掉它之后滚动是瞬时的，画高亮时元素已经就位，一次就对。
+         * 代价是少了滚动动画；对导览来说「指哪亮哪」比「滑得好看」重要得多。
+         */
+        smoothScroll: false,
         // 高亮洞周围留一点空隙，别把按钮贴边的描边切掉。
         stagePadding: 6,
         stageRadius: 8,
@@ -424,6 +737,11 @@ function buildConfig(steps: readonly TourStep[]): Config {
         onDestroyed: () => {
             // 多元素高亮用的临时空框必须收掉，否则它会一直贴在页面上。
             removeAnchorFrame();
+            clearAutoAdvance();
+            // 位移跟随也要停，否则导览结束后还在后台测几何、调 refresh。
+            stopAnchorFollow();
+            // 导览期间的演示数据到此为止——真实界面不能留着编出来的红点。
+            useVrccTourDemoStore.getState().setActive(false);
             const finish = onFinished;
             onFinished = null;
             activeSteps = [];
@@ -457,9 +775,17 @@ export function startTour(
     activeSteps = [...steps];
     onFinished = onDone ?? null;
 
-    // **不要在这里调 `steps[0].prepare`**：它会由锚点求值函数触发，
-    // 那是 driver 进入第一步时的必经之路。两处都调等于首步的动作跑两遍
-    // ——「打开世界详情」那两步会连开两次对话框。
+    // 导览期间开启演示数据：首次引导的对象是「从没连过」的玩家，他们没有
+    // 任何真实红点，而「四处红点」那一步要讲的就是那四个数字。
+    useVrccTourDemoStore.getState().setActive(true);
+
+    // 第一步没有人替它「提前准备」——`prepareNext` 是靠**前一步**进入时触发的。
+    // 所以这里把首步自己的 `prepareNext` 放出去，否则第一屏若是「切到某页再
+    // 高亮」，页面永远等不到。
+    //
+    // 注意只调 `prepareNext`，不调 `prepare`：后者由 `onHighlightStarted` 负责，
+    // 两处都调等于首步动作跑两遍。
+    steps[0]?.prepareNext?.();
 
     if (instance) {
         instance.setConfig(buildConfig(activeSteps));
