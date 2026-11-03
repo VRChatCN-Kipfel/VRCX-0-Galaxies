@@ -303,6 +303,27 @@ export function buildVrccTour(): readonly TourStep[] {
 
         // ── 地图详情（导览在这里替玩家打开第一张图）──────────────────
         {
+            // **左栏的评分卡片，排在详情页签之前。**
+            //
+            // 顺序不是随便定的：这块卡片在**左栏**，不用切页签、也不用连接就能
+            // 看见，是玩家打开任何一张图时的第一眼；而下一步（「星遇同频」页签
+            // 里的概览）得先切过去才有。先讲「你一眼就看到的那个分数」，
+            // 再讲「点进去还有更多」，才对得上玩家的视线路径。
+            element: '[data-tour="world-vrcc-rating-card"]',
+            // 打开详情（上一步进入时提前做）。`reopenIfMissing` 在详情已开着时
+            // 只切页签，不会把玩家自己打开的那张关掉。
+            prepareNext: openFirstBoardWorld,
+            prepare: reopenIfMissing,
+            titleKey: 'vrcc.tour.rating_card.title',
+            descriptionKey: 'vrcc.tour.rating_card.description',
+            // 卡片在左栏底部，右侧是详情正文，`left` 正好有空间。
+            side: 'left',
+            align: 'center',
+            // 这块要拿到公开数据才渲染（接口没回来、或这张图查不到时会整个
+            // 不出现）。标注可跳过，免得锚点缺失时留下一个没有高亮的悬空气泡。
+            skipIfMissing: true
+        },
+        {
             element: '[data-tour="world-vrcc-overview"]',
             // 提前打开（上一步进入时），这样 driver 找锚点时详情已经在渲染了。
             prepareNext: openFirstBoardWorld,

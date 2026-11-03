@@ -162,6 +162,9 @@ describe('页面级步骤会先回到页面', () => {
         const order = [
             'vrcc-maps-list',
             'vrcc-maps-first-row',
+            // 左栏那张评分卡片排在详情页签**之前**：它不用切页签就能看到，
+            // 是玩家打开一张图时的第一眼。
+            'world-vrcc-rating-card',
             'world-vrcc-overview',
             'world-vrcc-rating',
             'vrcc-maps-sorts'
@@ -229,6 +232,7 @@ describe('页面级步骤会先回到页面', () => {
             'vrcc-maps-list': 'maps',
             'vrcc-maps-first-row': 'maps',
             'vrcc-maps-sorts': 'maps',
+            'world-vrcc-rating-card': null,
             'world-vrcc-overview': null,
             'world-vrcc-rating': null,
             'vrcc-notif-header': 'notifications',

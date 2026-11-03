@@ -849,6 +849,10 @@
             "first_row": {
                 "title": "Say, this row",
                 "description": "Open it and we will carry on inside together — or press Next and I will open it for you. Either way you can always come back and open any row yourself later."
+            },
+            "rating_card": {
+                "title": "The score, before you connect",
+                "description": "This block sits in the sidebar of every world page and needs no authorization — the score, the star rating and how many people rated. So you can look up how a world is regarded without signing in to anything. The full picture, including the score spread and written reviews, is one tab away."
             }
         }
     },
