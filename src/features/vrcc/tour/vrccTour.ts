@@ -3,6 +3,8 @@ import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
 import i18n from '@/services/i18nService';
 import { useVrccTourDemoStore } from '@/state/vrccTourDemoStore';
 
+import { renderTourMarkdown } from './TourMarkdown';
+
 /**
  * 星遇同频的导览引擎。
  *
@@ -587,8 +589,12 @@ function toDriveStep(
         // 操作变化的前提能跟上。玩家在**这一步之内**改变状态（点了「开始
         // 连接」）的情况另外处理：见 `syncActiveCopy`。
         popover: {
-            title: t(titleKeyFor(step)),
-            description: t(descriptionKeyFor(step)),
+            // driver 用 `innerHTML` 写入，所以这里给 HTML 字符串。
+            // `renderTourMarkdown` 是**同步**的（`renderToStaticMarkup`）——
+            // 这条链路必须同步：driver 写完 `innerHTML` 立刻定位气泡，
+            // 异步渲染会赶不上，气泡里就会露出 `**` 这样的原始标记。
+            title: renderTourMarkdown(t(titleKeyFor(step))),
+            description: renderTourMarkdown(t(descriptionKeyFor(step))),
             side: step.side ?? 'bottom',
             align: step.align ?? 'center',
             /**
@@ -658,10 +664,11 @@ function syncActiveCopy(): void {
     if (popover.wrapper.dataset.tourCopy === titleKey) return;
     popover.wrapper.dataset.tourCopy = titleKey;
 
-    popover.wrapper.querySelector('.driver-popover-title')!.textContent =
-        t(titleKey);
-    popover.wrapper.querySelector('.driver-popover-description')!.textContent =
-        t(descriptionKey);
+    // 重新渲染成 HTML。走和初始渲染同一个函数，避免两套逻辑迟早不一致。
+    popover.wrapper.querySelector('.driver-popover-title')!.innerHTML =
+        renderTourMarkdown(t(titleKey));
+    popover.wrapper.querySelector('.driver-popover-description')!.innerHTML =
+        renderTourMarkdown(t(descriptionKey));
 }
 
 /**

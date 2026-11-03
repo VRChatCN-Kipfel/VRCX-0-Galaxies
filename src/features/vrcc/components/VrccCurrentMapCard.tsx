@@ -31,10 +31,7 @@ export function VrccCurrentMapCard({
     const notRanked = !map.board && !map.pending;
 
     return (
-        <section
-            data-tour="vrcc-current-map"
-            className="mb-3 shrink-0 rounded-xl border p-3"
-        >
+        <section className="mb-3 shrink-0 rounded-xl border p-3">
             <div className="mb-1.5 flex items-center gap-2">
                 <MapPin className="text-muted-foreground size-3.5 shrink-0" />
                 <span className="text-muted-foreground text-xs">

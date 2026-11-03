@@ -953,8 +953,8 @@
             "prev": "Back",
             "done": "Got it",
             "intro": {
-                "title": "A short tour of Xingyu Tongpin",
-                "description": "This integration brings the community site vrcc.cc into this app: map rankings, alerts, and the people you have come across. The next steps point at the actual controls, one at a time. Not now? Press Esc to leave the tour; you can start it again from \"Xingyu Tongpin → me\", at the link at the bottom of that page."
+                "title": "Welcome to VRCX-0-Galaxies",
+                "description": "This is a **downstream branch of Map1en/VRCX-0**, focused on making one community platform a first-class part of the app rather than a browser tab you keep switching to. It follows its own upstream policy: upstream major releases are merged, commits are not tracked one by one.\n\nThe platform is **星遇同频 (vrcc.cc)** — a puzzle-flavoured open social platform run by the VRCC Chinese community. It is **not provided by VRChat**, and this app is **not an official client** of it. Signing in is your call; the token stays on this machine and is only sent to vrcc.cc.\n\nThe next few steps point at the real controls in order. Press `Esc` to leave at any time — you can reopen this from the bottom of the **星遇同频 → 我的** page."
             },
             "entry": {
                 "title": "Where it lives",

@@ -1540,6 +1540,43 @@ html[data-magicui-theme-vt='active']::view-transition-new(root) {
     color: var(--popover-foreground);
     border-radius: 0.75rem;
     box-shadow: 0 8px 30px oklch(0 0 0 / 0.25);
+    /* driver 默认把气泡卡在 250–300px 之间（`.driver-popover` 里的
+       `min-width` / `max-width`）。首屏要讲清「星遇同频是什么」和
+       「这不是官方」，300px 里塞不下，会挤成一堵墙。放宽到 22rem。 */
+    min-width: 17rem;
+    max-width: 22rem;
+}
+
+/* 气泡正文现在允许带一点标记（加粗、行内代码、列表），
+   见 `tourMarkdown.ts`。这里是那几种元素的排版。 */
+.driver-popover .driver-popover-description p {
+    margin: 0;
+}
+
+.driver-popover .driver-popover-description p + p {
+    margin-top: 0.5rem;
+}
+
+.driver-popover .driver-popover-description ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+.driver-popover .driver-popover-description li {
+    margin-top: 0.2rem;
+}
+
+.driver-popover .driver-popover-description strong {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.driver-popover .driver-popover-description code {
+    border-radius: 0.25rem;
+    background-color: var(--muted);
+    padding: 0.05rem 0.25rem;
+    font-size: 0.95em;
 }
 
 .driver-popover .driver-popover-title {

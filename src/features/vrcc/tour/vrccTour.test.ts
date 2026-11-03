@@ -549,15 +549,21 @@ describe('导览的交互边界', () => {
 
         const step = firstConfig().steps[0];
         // 未连接：教他连。
-        expect(step.popover?.title).toBe('tour.connect.title');
-        expect(step.popover?.description).toBe('tour.connect.description');
+        //
+        // `popover.title` 已经是**渲染好的 HTML**（driver 用 `innerHTML` 写入），
+        // 所以断言只看「文本在里面、且是 <p> 包裹」，不写死 className——
+        // 那是排版细节，改样式不该让测试失败。
+        const title = step.popover?.title ?? '';
+        expect(title).toContain('tour.connect.title');
+        expect(title.startsWith('<p')).toBe(true);
+        expect(step.popover?.description).toContain('tour.connect.description');
 
         // 连上之后重建配置，文案应当切换。
         connected = true;
         const { retranslateTour } = await load();
         retranslateTour();
         const updated = mocks.setConfig.mock.calls[0][0];
-        expect(updated.steps[0].popover.title).toBe(
+        expect(updated.steps[0].popover.title).toContain(
             'tour.connect.connected_title'
         );
     });
