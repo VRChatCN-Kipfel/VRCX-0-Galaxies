@@ -191,7 +191,10 @@ export function VrccMePanel({
 
             {/* 设备授权进行中 */}
             {deviceAuth && (
-                <section className="rounded-xl border p-3">
+                <section
+                    data-tour="vrcc-me-auth"
+                    className="rounded-xl border p-3"
+                >
                     <h3 className="mb-2 text-sm font-semibold">
                         {t('vrcc.me.auth_pending')}
                     </h3>

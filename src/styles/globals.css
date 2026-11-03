@@ -1600,3 +1600,39 @@ html[data-magicui-theme-vt='active']::view-transition-new(root) {
     outline: 2px solid var(--primary) !important;
     outline-offset: 3px;
 }
+
+/* 多元素高亮的合成框。
+   导览有时要一次点亮好几块（例如「连接卡片 + 授权码面板」合起来才讲得清
+   整条链路）。driver 只认单个元素，所以我们造一个正好包住它们包围盒的空框，
+   交给 driver 当锚点。
+
+   **它必须是 `pointer-events: none`，而且要 `!important`。**
+   框是个空 div，正压在真实控件上面。它若能接收点击，就会把点击**吞掉**，
+   下面的「开始连接」永远收不到——表现就是「点了没反应」。
+
+   这里必须 `!important`，是因为 driver 会给锚点元素加一条
+       .driver-active .driver-active-element { pointer-events: auto }
+   （特异性 0,2,0），比单属性选择器 `[data-tour-frame]`（0,1,0）更高。
+   不加就会被它反超，框又变成可点的了。
+
+   放行真实控件的那条规则在下面。 */
+[data-tour-frame] {
+    position: fixed;
+    pointer-events: none !important;
+    background: transparent;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    /* 不能用负 z-index：那会让它躲到内容层后面，driver 量的位置还在，
+       但点击会落到别处。用 0 让它待在自己那层。 */
+    z-index: 0;
+}
+
+/* 多元素高亮时，被框覆盖的**真实控件**要一起放行。
+   driver 的规则是「只有锚点及其子元素可点」，而真实控件在框外面，
+   于是被 `.driver-active *{pointer-events:none}` 一并禁掉了。
+   这条就是那个补丁，同样要 `!important` 才压得过。 */
+[data-tour-hit],
+[data-tour-hit] * {
+    pointer-events: auto !important;
+}
