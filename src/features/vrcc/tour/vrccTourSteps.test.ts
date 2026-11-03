@@ -191,4 +191,76 @@ describe('页面级步骤会先回到页面', () => {
             expect(typeof step.element === 'function').toBe(false);
         }
     });
+
+    it('只有一份导览，不按连接状态分叉', async () => {
+        const mod = await import('./vrccTourSteps');
+
+        // 早先这里还有个 `buildVrccConnectOnlyTour`，给「已经连上」的人只走
+        // 三步就结束。那个设计是错的：
+        // - 它把「连接做过了」当成「后面都不必看」，玩家在第三步就到终点，
+        //   看起来像导览坏了；
+        // - 连接状态本来只需要改变**那一步怎么说**——连接步骤自己有
+        //   `variant.when`，已连接时讲「这一步你已经做完了，点下一步继续」，
+        //   高亮照样落在连接卡片上。
+        expect(
+            (mod as Record<string, unknown>).buildVrccConnectOnlyTour
+        ).toBeUndefined();
+    });
+
+    it('已连接时连接步骤改说「你已经做完了」，而不是跳过它', async () => {
+        const { buildVrccTour } = await import('./vrccTourSteps');
+        const steps = buildVrccTour();
+
+        const connectStep = findStep(steps, '[data-tour="vrcc-me-connect"]');
+        expect(connectStep.variant).toBeTruthy();
+        // 文案键切成「已连接」那一组：行程不变、高亮不变。
+        expect(connectStep.variant?.titleKey).toBe(
+            'vrcc.tour.connect.connected_title'
+        );
+    });
+
+    it('每个页面级步骤都自己切页，不依赖上一步没被跳过', async () => {
+        const { buildVrccTour } = await import('./vrccTourSteps');
+        const steps = buildVrccTour();
+
+        // 锚点归属哪一页。`null` 表示不挑页（哪一页都在）。
+        const pageOf: Record<string, string | null> = {
+            'vrcc-tabs': 'maps',
+            'vrcc-maps-list': 'maps',
+            'vrcc-maps-first-row': 'maps',
+            'vrcc-maps-sorts': 'maps',
+            'world-vrcc-overview': null,
+            'world-vrcc-rating': null,
+            'vrcc-notif-header': 'notifications',
+            'vrcc-unread-counts': 'notifications',
+            'vrcc-notif-list': 'notifications',
+            'vrcc-mutuals-list': 'mutuals',
+            'vrcc-community': 'mutuals',
+            'vrcc-crossings-list': 'crossings',
+            'vrcc-me-usage': 'me'
+        };
+
+        for (const step of steps) {
+            const selectors =
+                typeof step.element === 'string'
+                    ? [step.element]
+                    : Array.isArray(step.element)
+                      ? [...step.element]
+                      : [];
+            const anchor = selectors[0];
+            if (!anchor) continue;
+            const key = anchor.replace(/^\[data-tour="|"\]$/g, '');
+            if (!(key in pageOf)) continue;
+            if (pageOf[key] === null) continue; // 不挑页的（详情内两步）
+
+            // driver 的跳过是递归的：一步没等到锚点就立刻试下一步。
+            // 所以「上一个同页步骤被跳过」不能把页面留在别处——每一步都必须
+            // 自报它需要哪一页。早先第 12 步（通知列表）和第 14 步（社区群）
+            // 就漏了这个，靠前一步切页；前一步一被跳过，它们也接连失败。
+            expect(step.prepare).toBeTruthy();
+            openVrccTab.mockClear();
+            step.prepare?.();
+            expect(openVrccTab).toHaveBeenCalledWith(pageOf[key]);
+        }
+    });
 });

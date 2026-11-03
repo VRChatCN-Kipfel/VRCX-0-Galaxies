@@ -174,6 +174,17 @@ function reopenIfMissing(): void {
     openVrccTabInDialog();
 }
 
+/**
+ * 导览只有**一份**。
+ *
+ * 早先还分了一个「只讲入口 → 连接」的三步精简版，给已经连上的人用。那个设计
+ * 是错的：它把「连接已经做过了」当成了「后面的内容都不必看」，于是连着的人在
+ * 第三步就被送到终点——看起来像导览坏了，而且玩家想重看也没有别的入口。
+ *
+ * 连接状态本来就不该改变**行程**，只该改变**那一步怎么说**：连接步骤自己用
+ * `variant` 判断已连接与否，已经连上时说的是「这一步你已经做完了，继续往下」。
+ * 剩下的步骤（榜单、详情、打分、提醒……）对谁都有意义。
+ */
 export function buildVrccTour(): readonly TourStep[] {
     return [
         // ── 认识它 ────────────────────────────────────────────────
@@ -235,8 +246,11 @@ export function buildVrccTour(): readonly TourStep[] {
         // 「榜单会标出你所在的那张图」这条信息并进了下面这一步的正文。
         {
             element: '[data-tour="vrcc-maps-list"]',
-            prepareNext: onPage(),
-            prepare: onPage(),
+            // 榜单在**地图榜**页。带参数不能省：driver 的跳过是递归的，
+            // 万一前面那步（页签）被跳过、或玩家自己切到了别的页，这里若不
+            // 自报页签就找不到锚点，于是这一步也被跳过、后面的接连失败。
+            prepareNext: onPage('maps'),
+            prepare: onPage('maps'),
             titleKey: 'vrcc.tour.board.title',
             descriptionKey: 'vrcc.tour.board.description',
             // 榜单几乎占满内容区宽度，左右两侧都没有放气泡的地方（`left`
@@ -258,8 +272,8 @@ export function buildVrccTour(): readonly TourStep[] {
             // 玩家刚看完榜单，突然多一个窗口，像受了惊吓，也不明白在讲哪张图。
             // 所以先高亮第一行、说明「这就是接下来要打开的那张」，再自动进入。
             element: '[data-tour="vrcc-maps-first-row"]',
-            prepareNext: onPage(),
-            prepare: onPage(),
+            prepareNext: onPage('maps'),
+            prepare: onPage('maps'),
             titleKey: 'vrcc.tour.first_row.title',
             descriptionKey: 'vrcc.tour.first_row.description',
             side: 'right',
@@ -328,9 +342,10 @@ export function buildVrccTour(): readonly TourStep[] {
         // ── 换个排法（讲完详情回到榜单页再讲）─────────────────────────
         {
             element: '[data-tour="vrcc-maps-sorts"]',
-            // 详情还开着，先关掉再讲排序——排序是**榜单页**上的控件。
-            prepareNext: onPage(),
-            prepare: onPage(),
+            // 排序是**榜单页**上的控件。既要关掉详情（玩家可能刚看完），
+            // 也要确保真的回到地图榜——所以带 `'maps'` 参数，不能只关对话框。
+            prepareNext: onPage('maps'),
+            prepare: onPage('maps'),
             titleKey: 'vrcc.tour.sorts.title',
             descriptionKey: 'vrcc.tour.sorts.description',
             side: 'bottom',
@@ -360,8 +375,10 @@ export function buildVrccTour(): readonly TourStep[] {
             // 同一块区域讲两遍，而且高亮框罩住的是「切换按钮 + 一片空白」，
             // 文案却在讲那四个数字——说的和指的完全不是一回事。
             element: '[data-tour="vrcc-unread-counts"]',
-            prepareNext: onPage(),
-            prepare: onPage(),
+            // 红点区在**提醒页**的表头右侧。带参数不能省：万一上一步被跳过、
+            // 或玩家自己切走了，这里不切页就找不到锚点，接下去会连锁失败。
+            prepareNext: onPage('notifications'),
+            prepare: onPage('notifications'),
             titleKey: 'vrcc.tour.unread.title',
             descriptionKey: 'vrcc.tour.unread.description',
             side: 'bottom',
@@ -372,6 +389,14 @@ export function buildVrccTour(): readonly TourStep[] {
         },
         {
             element: '[data-tour="vrcc-notif-list"]',
+            // **这一步必须自己也切页。**
+            //
+            // 早先它什么都没写，靠上一步（视图切换）切到提醒页。但只要上一步
+            // 被跳过（它也有 `skipIfMissing`），页面就停在别处，这一步必然
+            // 找不到锚点、也被跳过——而 driver 的跳过是**递归**的，于是连着
+            // 跳好几步，玩家看到的是「卡一下直接到结尾」。
+            prepareNext: onPage('notifications'),
+            prepare: onPage('notifications'),
             titleKey: 'vrcc.tour.notif_open.title',
             descriptionKey: 'vrcc.tour.notif_open.description',
             // 列表占满剩余高度、左右都占满，上方是视图切换与红点那一行。
@@ -397,6 +422,10 @@ export function buildVrccTour(): readonly TourStep[] {
         },
         {
             element: '[data-tour="vrcc-community"]',
+            // 和上面同理：卡片长在**互关页**最底部，所以这一步自己也切页，
+            // 不能指望上一步没被跳过。
+            prepareNext: onPage('mutuals'),
+            prepare: onPage('mutuals'),
             titleKey: 'vrcc.tour.community.title',
             descriptionKey: 'vrcc.tour.community.description',
             // 社区群卡片在页面最底部：`bottom` 会顶出窗口，`top` 会盖住列表尾部，
@@ -438,39 +467,6 @@ export function buildVrccTour(): readonly TourStep[] {
             descriptionKey: 'vrcc.tour.outro.description',
             side: 'bottom',
             align: 'center'
-        }
-    ];
-}
-
-/**
- * 只讲「入口 → 连接」的最短版本。
- *
- * 给已经连上、但重看引导的人：后面那些步骤讲的是他本来就看得到的东西，
- * 再走一遍只是拖时间。
- */
-export function buildVrccConnectOnlyTour(): readonly TourStep[] {
-    return [
-        {
-            titleKey: 'vrcc.tour.intro.title',
-            descriptionKey: 'vrcc.tour.intro.description',
-            side: 'bottom',
-            align: 'center'
-        },
-        {
-            element: '[data-tour="nav-vrcc"]',
-            titleKey: 'vrcc.tour.entry.title',
-            descriptionKey: 'vrcc.tour.entry.description',
-            side: 'right',
-            align: 'center'
-        },
-        {
-            element: '[data-tour="vrcc-me-connect"]',
-            prepareNext: onPage('me'),
-            prepare: onPage('me'),
-            titleKey: 'vrcc.tour.connect.title',
-            descriptionKey: 'vrcc.tour.connect.description',
-            side: 'right',
-            align: 'start'
         }
     ];
 }

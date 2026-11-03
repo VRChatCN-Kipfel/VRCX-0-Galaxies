@@ -484,11 +484,18 @@ function toDriveStep(
                       return anchorFrameFor(selectors) as never;
                   },
                   // 兜底：元素真的不出现时等多久放弃。
-                  // 有条件出现的步骤短一些——它不存在就是不适用，没必要让
-                  // 玩家对着暗屏干等；核心步骤给足时间，因为那通常是慢一点
-                  // 的渲染而不是缺失。
-                  waitForElement:
-                      step.waitForElement ?? (step.skipIfMissing ? 1200 : 2500),
+                  //
+                  // **不要给「可跳过」的步骤更短的等待。** 早先这里是
+                  // `skipIfMissing ? 1200 : 2500`，理由是「它不存在就是不适用，
+                  // 没必要让玩家干等」。但实测这个判断是错的：切页之后组件要
+                  // 重新挂载、列表还要抓数据，1.2 秒经常不够——于是那一步被
+                  // 判成「不存在」而跳过，而 driver 的跳过是**递归**的
+                  // （`r[e+dir] ? v(e+dir) : ...`，见 vendor 里的 `v()`），
+                  // 下一步也可能超时、也被跳过……一路连跳好几步，玩家看到的是
+                  // 「卡一下，然后直接到结尾」。
+                  //
+                  // 统一给 2500ms：等不到再跳过。多等一两秒远好过连跳六步。
+                  waitForElement: step.waitForElement ?? 2500,
                   skipMissingElement: step.skipIfMissing ?? false
               }
             : {}),

@@ -7,7 +7,7 @@ import { useVrccFirstRunStore } from '@/state/vrccFirstRunStore';
 import { useVrccForceAnnouncementStore } from '@/state/vrccForceAnnouncementStore';
 
 import { retranslateTour, startTour, stopTour } from './tour/vrccTour';
-import { buildVrccConnectOnlyTour, buildVrccTour } from './tour/vrccTourSteps';
+import { buildVrccTour } from './tour/vrccTourSteps';
 import { vrccApi } from './vrccApi';
 import { shouldAutoOpenFirstRun } from './vrccFirstRun';
 
@@ -86,14 +86,24 @@ export function VrccFirstRunHost() {
         });
     };
 
+    /**
+     * 起一轮导览。
+     *
+     * **只有一份导览**，不分「完整版 / 精简版」。
+     *
+     * 早先按凭据状态分叉过：已经连上的人只走三步（入口 → 连接）就结束。
+     * 那个设计两头都错：
+     * - 它把「连接做过了」当成「后面的都不必看」，玩家在第三步就被送到终点，
+     *   看起来像导览坏了；
+     * - 可连接状态本来就只需要改变**那一步怎么说**——连接步骤自己有
+     *   `variant.when`，已连接时讲的是「这一步你已经做完了，点下一步继续」，
+     *   高亮照样落在连接卡片上。跳过整段行程是多余的。
+     *
+     * 所以自动弹出和手动重看都走同一份；要不要跳过某一步，交给那一步自己判断。
+     */
     const runTour = () => {
         const state = useVrccFirstRunStore.getState();
-        // 已经连上的人不需要再被带着找连接入口之后的内容——那些他已经能看见。
-        const steps =
-            state.credential === 'never'
-                ? buildVrccTour()
-                : buildVrccConnectOnlyTour();
-        startTour(steps, () => {
+        startTour(buildVrccTour(), () => {
             // 走完或中途关掉都记 `seen`：玩家已经知道这件事存在了。
             record('seen');
             state.closeManual();
@@ -112,7 +122,7 @@ export function VrccFirstRunHost() {
         if (!autoOpen) return;
         // 稍等一下让页面先落好：首次进入时路由还在挂载中，锚点还没进 DOM。
         // driver 自己也会 `waitForElement`，但先让出一帧能少一次轮询。
-        const timer = window.setTimeout(runTour, 600);
+        const timer = window.setTimeout(() => runTour(), 600);
         return () => window.clearTimeout(timer);
         // `runTour` 每次渲染都是新引用，故意只依赖 `autoOpen`：
         // 这条 effect 的意思是「刚刚满足条件了，起一轮」。
@@ -123,7 +133,9 @@ export function VrccFirstRunHost() {
         if (!manualOpen) return;
         // 先落到星遇同频页，否则第一步的锚点根本不在界面上。
         openVrccTab('maps');
-        const timer = window.setTimeout(runTour, 600);
+        // **传 `true`：手动重看一律走完整版**。走精简版的话，连过的玩家
+        // （包括刚断开、状态是 `disconnected` 的）只会看到三步，像是坏了。
+        const timer = window.setTimeout(() => runTour(), 600);
         return () => window.clearTimeout(timer);
     }, [manualOpen]);
 

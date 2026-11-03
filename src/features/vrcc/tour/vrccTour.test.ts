@@ -397,10 +397,14 @@ describe('导览的交互边界', () => {
         const [core, conditional] = firstConfig().steps;
         expect(core.skipMissingElement).toBe(false);
         expect(conditional.skipMissingElement).toBe(true);
-        // 条件步骤不该等太久：不存在就是不适用，没必要让玩家干等。
-        expect(conditional.waitForElement).toBeLessThan(
-            core.waitForElement as number
-        );
+        // **两者等待时间一致**，可跳过的步骤不再更短。
+        //
+        // 早先给条件步骤 1200ms（理由是「不存在就是不适用，别让玩家干等」），
+        // 但切页后组件要重新挂载、列表还要抓数据，1.2 秒经常不够——那一步被
+        // 判成不存在而跳过，而 driver 的跳过是**递归**的（一步跳过就立刻去试
+        // 下一步），下一步也可能超时、也被跳过……一路连跳好几步。
+        // 实测：第 11 步卡了一会儿直接到结尾；退到 15 再按下一步，又退到 9。
+        expect(conditional.waitForElement).toBe(core.waitForElement);
     });
 
     it('没有锚点的步骤不做等待，直接居中显示', async () => {
