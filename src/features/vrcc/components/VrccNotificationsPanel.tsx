@@ -3,7 +3,6 @@ import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatRelativeTime } from '@/lib/dateTime';
-import { openExternalLink } from '@/services/shellIntegrationService';
 import {
     useVrccTourDemoStore,
     VRCC_TOUR_DEMO_UNREAD
@@ -15,6 +14,7 @@ import {
     ToggleGroupSeparator
 } from '@/ui/shadcn/toggle-group';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import type { VrccNotificationsView } from '../useVrccController';
 import type {
     VrccNotes,
@@ -202,6 +202,10 @@ function UnreadCounts({
     onOpenNotes?: () => void;
 }) {
     const { t } = useTranslation();
+    // 「点一下会去浏览器」这类动作以前没有即时反馈：成功时什么都不做，
+    // 玩家只能等浏览器自己跳出来。期间再点一次就会多开一个窗口——
+    // 这就是反馈里「触摸板抖一下弹了几个窗口」的来源。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     // 直接按条件构造，不用 `.filter`：过滤过的数组会丢掉 `key` 的字面量
     // 联合类型，调用方就得写类型断言。
     const items: Array<{
@@ -258,19 +262,9 @@ function UnreadCounts({
                         <button
                             key={key}
                             type="button"
+                            disabled={openLinkPending}
                             className={className}
-                            onClick={() => {
-                                // 走系统的 app__open_link：WebView 里
-                                // `target=_blank` 什么都不做。
-                                void openExternalLink(href).catch(
-                                    (error: unknown) => {
-                                        console.error(
-                                            'vrcc: failed to open notice link',
-                                            error
-                                        );
-                                    }
-                                );
-                            }}
+                            onClick={() => openLink(href)}
                         >
                             {content}
                         </button>
@@ -297,6 +291,8 @@ function UnreadCounts({
 
 function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
     const { t } = useTranslation();
+    // 同 `UnreadCounts`：点开原文要有即时反馈，否则玩家会重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     const items = recent?.items ?? [];
 
     if (items.length === 0) {
@@ -323,18 +319,8 @@ function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
                         <li key={item.id}>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    // 走系统的 app__open_link：WebView 里
-                                    // `target=_blank` 什么都不做。
-                                    void openExternalLink(href).catch(
-                                        (error: unknown) => {
-                                            console.error(
-                                                'vrcc: failed to open notice link',
-                                                error
-                                            );
-                                        }
-                                    );
-                                }}
+                                disabled={openLinkPending}
+                                onClick={() => openLink(href)}
                                 className="hover:bg-muted/40 block w-full px-3 py-2 text-left"
                             >
                                 <div className="flex items-baseline gap-2">

@@ -36,6 +36,7 @@ import { VrccMapsPanel } from './components/VrccMapsPanel';
 import { VrccMePanel } from './components/VrccMePanel';
 import { VrccMutualsPanel } from './components/VrccMutualsPanel';
 import { VrccNotificationsPanel } from './components/VrccNotificationsPanel';
+import { useOpenExternalLink } from './useOpenExternalLink';
 import { useVrccController, type VrccTab } from './useVrccController';
 import {
     markSeenIds,
@@ -244,18 +245,13 @@ export function VrccPage() {
         markSeenIds(ids);
         setSeenIds(readSeenIds());
     };
+    // 页面级的「打开链接」：走共享 hook，保证点击立刻有状态、成功有回执。
+    // 以前成功时静默，玩家只能等浏览器自己跳出来——期间会重复点。
+    const { open: openLinkExternally } = useOpenExternalLink();
     const openLink = (url: string) => {
         // 走系统的 `app__open_link`，不要用 `window.open`：Tauri 的 WebView
         // 会拦掉 `window.open` 且什么都不做，按钮点了没反应。
-        void openExternalLink(url).catch((error: unknown) => {
-            toast.add({
-                type: 'error',
-                title:
-                    error instanceof Error
-                        ? error.message
-                        : t('vrcc.error.unknown')
-            });
-        });
+        openLinkExternally(url);
     };
     // 只在这三种情况下才算「服务不可用」：没有状态对象、state 不是 ok、
     // 或后端明确报告了故障。
@@ -595,20 +591,22 @@ export function VrccExternalLink({
     /** 打开失败时的回调（一般是弹 toast）。不传就只记日志。 */
     onError?: (error: unknown) => void;
 }) {
+    // 走共享 hook：即时 pending 状态 + 成功/失败反馈。
+    // 以前成功时什么都不做——点了没反应，玩家就会重复点。
+    const { open: openLink, pending } = useOpenExternalLink();
     return (
         <button
             type="button"
+            disabled={pending}
             onClick={() => {
-                void openExternalLink(href).catch((error: unknown) => {
-                    if (onError) {
+                if (onError) {
+                    // 调用方自己管失败提示，这里只保证即时状态。
+                    void openExternalLink(href).catch((error: unknown) => {
                         onError(error);
-                    } else {
-                        console.error(
-                            'vrcc: failed to open external link',
-                            error
-                        );
-                    }
-                });
+                    });
+                    return;
+                }
+                openLink(href);
             }}
             className="text-primary inline-flex items-center gap-1 text-xs hover:underline"
         >

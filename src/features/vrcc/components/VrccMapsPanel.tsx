@@ -3,7 +3,6 @@ import { Fragment, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { VrccStars } from '@/components/vrcc/VrccStars';
-import { openExternalLink } from '@/services/shellIntegrationService';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 import {
@@ -12,6 +11,7 @@ import {
     ToggleGroupSeparator
 } from '@/ui/shadcn/toggle-group';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import { useVrccRowVisibility } from '../useVrccRowVisibility';
 import { useVrccWorldCovers } from '../useVrccWorldCovers';
 import type { VrccBoard, VrccBoardSort } from '../vrccApi';
@@ -52,6 +52,8 @@ export function VrccMapsPanel({
     onOpenWorld: (worldId: string) => void;
 }) {
     const { t } = useTranslation();
+    // 榜单每行右侧那个「去网页看」：点下去要有即时反馈，否则玩家会重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     const maps = boards?.maps ?? [];
     const min = boards?.min;
 
@@ -238,19 +240,13 @@ export function VrccMapsPanel({
                                     和「在 VRCX 里看」是两件事。 */}
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            // 走系统的 app__open_link：WebView 里
-                                            // `target=_blank` 什么都不做。
-                                            void openExternalLink(
+                                        disabled={openLinkPending}
+                                        onClick={() =>
+                                            openLink(
                                                 map.page ??
                                                     `${SITE}/maps/${map.world}`
-                                            ).catch((error: unknown) => {
-                                                console.error(
-                                                    'vrcc: failed to open map page',
-                                                    error
-                                                );
-                                            });
-                                        }}
+                                            )
+                                        }
                                         className="text-muted-foreground hover:text-primary shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                         aria-label={t('vrcc.maps.open')}
                                     >

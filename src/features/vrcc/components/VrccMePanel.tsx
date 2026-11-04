@@ -1,13 +1,13 @@
 import { ExternalLink, ShieldCheck, Unplug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { openExternalLink } from '@/services/shellIntegrationService';
 import { useVrccFirstRunStore } from '@/state/vrccFirstRunStore';
 import { Badge } from '@/ui/shadcn/badge';
 import { Button } from '@/ui/shadcn/button';
 import { Progress } from '@/ui/shadcn/progress';
 import { Spinner } from '@/ui/shadcn/spinner';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import type {
     VrccConnection,
     VrccDeviceAuthPrompt,
@@ -64,6 +64,9 @@ export function VrccMePanel({
 }) {
     const { t } = useTranslation();
     const connected = connection?.connected ?? false;
+    // 底部「第三方客户端，不是星遇同频官方」那句里的链接：点下去要有
+    // 即时反馈，否则玩家会以为没点上而重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
 
     return (
         <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
@@ -293,16 +296,8 @@ export function VrccMePanel({
                 {t('vrcc.me.disclaimer')}{' '}
                 <button
                     type="button"
-                    onClick={() => {
-                        // 走系统的 app__open_link：WebView 里 `target=_blank`
-                        // 什么都不做。
-                        void openExternalLink(SITE).catch((error: unknown) => {
-                            console.error(
-                                'vrcc: failed to open the site',
-                                error
-                            );
-                        });
-                    }}
+                    disabled={openLinkPending}
+                    onClick={() => openLink(SITE)}
                     className="hover:text-primary inline-flex items-center gap-0.5 hover:underline"
                 >
                     vrcc.cc
