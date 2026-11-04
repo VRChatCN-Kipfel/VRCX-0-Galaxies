@@ -123,6 +123,25 @@ export type TourStep = {
      */
     blockInteraction?: boolean;
     /**
+     * 高亮范围内**只读**的那些目标（按下标，对应 `element` 的第几项）。
+     *
+     * 用途：有些步骤要把一大块拉进高亮范围好让玩家看清上下文，但那一块里
+     * 只有一小部分该可点。例如「换个排法」同时点亮排序行和榜单——不点亮
+     * 榜单就看不到切换的效果，可点亮之后 driver 会把**整块**都放行，玩家
+     * 随手点一行就跳去详情了，而这个步骤不是在讲「怎么打开详情」。
+     *
+     * driver 没有「锚点里只放行部分子元素」的开关：
+     * - `.driver-active-element *` 会放行整块；
+     * - `disableActiveInteraction` 又会连该点的排序按钮一起禁掉。
+     *
+     * 所以用反向标记 `data-tour-readonly`（见 `globals.css`）：被标上的子树
+     * 整体关掉指针事件，其余部分照常可点。
+     *
+     * **按下标而不是选择器**：同一个元素在不同步骤里可能要可点、可能只读，
+     * 用下标只影响这一步。
+     */
+    readOnly?: readonly number[];
+    /**
      * 停多久之后**自动进入下一步**（毫秒）。省略表示不自动前进。
      *
      * 给「纯预告」的步骤用：它没有操作可做，也不该让玩家自己点——例如
@@ -293,7 +312,9 @@ function removeAnchorFrame(): void {
     anchorFrame?.remove();
     anchorFrame = null;
     anchorSelectors = [];
+    anchorReadOnly = [];
     clearHitMarks();
+    clearReadOnlyMarks();
 }
 
 /**
@@ -318,6 +339,29 @@ function clearHitMarks(): void {
     }
 }
 
+/**
+ * 给「只亮不点」的目标打标记。
+ *
+ * driver 会把锚点**整块**放行（`.driver-active-element *` 是 `auto`），所以
+ * 把榜单并进高亮范围之后，玩家点任意一行都会跳去详情——而「换个排法」这一步
+ * 讲的不是怎么打开详情。`data-tour-readonly` 让那棵子树整体关掉指针事件，
+ * 排序按钮仍在框外/框内可点。
+ *
+ * 每次重新同步都清掉旧的：目标集合会随步骤变化。
+ */
+function markReadOnly(targets: readonly Element[]): void {
+    clearReadOnlyMarks();
+    for (const element of targets) {
+        element.setAttribute('data-tour-readonly', '');
+    }
+}
+
+function clearReadOnlyMarks(): void {
+    for (const element of document.querySelectorAll('[data-tour-readonly]')) {
+        element.removeAttribute('data-tour-readonly');
+    }
+}
+
 /** 当前选择器命中的元素（第一个必需，缺了就算没就位）。 */
 function currentAnchorTargets(): Element[] | null {
     const [required, ...optional] = anchorSelectors;
@@ -335,12 +379,24 @@ function currentAnchorTargets(): Element[] | null {
  *
  * 返回是否发生了变化——没变就不必让 driver 重新测量，省掉一次重排。
  */
+/** 当前步骤里「只亮不点」的目标下标（对应 `element` 的项）。 */
+let anchorReadOnly: readonly number[] = [];
+
 function syncAnchorFrame(frame: HTMLElement): boolean {
     const targets = currentAnchorTargets();
     if (!targets || targets.length === 0) return false;
 
     // 目标集合每次同步都可能变（玩家点出了新面板），标记要跟着走。
     markHits(targets);
+
+    // 只读的那些目标：从可点集合里摘出来，单独标成只读。
+    // 两件事都要做——`markHits` 已经把整批设成可点了，`data-tour-readonly`
+    // 的 `!important` 才压得回它。
+    markReadOnly(
+        anchorReadOnly
+            .map((index) => targets[index])
+            .filter((element): element is Element => !!element)
+    );
 
     const rects = targets.map((element) => element.getBoundingClientRect());
     const top = Math.min(...rects.map((rect) => rect.top));
@@ -480,10 +536,14 @@ function toDriveStep(
                       // 一直挂在页面上，被标记过的元素也会一直保持「可点」。
                       if (selectors.length === 1) {
                           removeAnchorFrame();
+                          // 单目标步骤没有「只读列表」可言，清掉上一步的标记。
+                          anchorReadOnly = [];
+                          clearReadOnlyMarks();
                           return anchor as never;
                       }
 
                       // 多个目标：用可复用的空框，玩家点出新面板后它会长大。
+                      anchorReadOnly = step.readOnly ?? [];
                       return anchorFrameFor(selectors) as never;
                   },
                   // 兜底：元素真的不出现时等多久放弃。

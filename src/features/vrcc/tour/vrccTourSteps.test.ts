@@ -63,6 +63,22 @@ describe('页面级步骤会先回到页面', () => {
         expect(closeDialog).toHaveBeenCalled();
     });
 
+    it('排序那一步同时点亮榜单，让切换效果看得见', async () => {
+        // 反馈原话：「只高亮了这一小块（排序方式）但看不到下面的地图榜
+        // 具体变化」。只亮排序行的话，玩家读到「总榜、本周榜、新上榜之间
+        // 切换」时看不到榜单跟着变，只能相信这句话——而这一屏本来允许点击。
+        const { buildVrccTour } = await import('./vrccTourSteps');
+        const steps = buildVrccTour();
+        const sortStep = findStep(steps, '[data-tour="vrcc-maps-sorts"]');
+
+        const selectors =
+            typeof sortStep.element === 'string'
+                ? [sortStep.element]
+                : [...(sortStep.element ?? [])];
+
+        expect(selectors).toContain('[data-tour="vrcc-maps-list"]');
+    });
+
     it('提醒那一步会关掉对话框并切页', async () => {
         const { buildVrccTour } = await import('./vrccTourSteps');
         const steps = buildVrccTour();

@@ -980,8 +980,8 @@
                 "description": "One row per world: rank, name, average score, and how many rated it. If the world you are in happens to be on the board, it gets its own card just above the list, so you can see your map’s standing without hunting for it. Click a row to open it in this app’s own world page."
             },
             "sorts": {
-                "title": "Sort the board",
-                "description": "Switch between the overall board, this week and newly listed. If the server is on an older version it does not support these, and the switch stays hidden rather than pretending to work."
+                "title": "Change the ordering",
+                "description": "Top, this week, and newly listed. The board underneath reorders as you switch — press one and watch the rows move."
             },
             "detail": {
                 "title": "The world page",
@@ -1032,6 +1032,10 @@
                 "title": "The score, before you connect",
                 "description": "This block sits in the sidebar of every world page and needs no authorization — the score, the star rating and how many people rated. So you can look up how a world is regarded without signing in to anything. The full picture, including the score spread and written reviews, is one tab away."
             }
+        },
+        "open_link": {
+            "opened": "Opened in your browser",
+            "failed": "Could not open the browser. Please open the page yourself."
         }
     },
     "nav_menu": {

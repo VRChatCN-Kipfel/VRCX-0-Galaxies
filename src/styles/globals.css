@@ -1673,3 +1673,18 @@ html[data-magicui-theme-vt='active']::view-transition-new(root) {
 [data-tour-hit] * {
     pointer-events: auto !important;
 }
+
+/* 和高亮范围一起点亮、但**不该被点**的区域。
+
+   有些步骤要把一大块拉进高亮范围，好让玩家看清上下文（例如「换个排法」
+   同时点亮排序行和榜单，才能看到切换的效果），但那一大块里只有一小部分
+   该可点。driver 没有「锚点里只放行部分子元素」的开关：
+   - `.driver-active-element * { pointer-events: auto }` 会把整块都放行；
+   - `disableActiveInteraction` 又会把**整个锚点**禁掉，连该点的也一起废了。
+
+   所以用这个反向标记：被标上的子树整体关闭指针事件。它必须比
+   `.driver-active-element *`（0,2,0）更具体，`!important` 保证压过。 */
+[data-tour-readonly],
+[data-tour-readonly] * {
+    pointer-events: none !important;
+}
