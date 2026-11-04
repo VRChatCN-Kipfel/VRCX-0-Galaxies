@@ -86,21 +86,6 @@ export function VrccFirstRunHost() {
         });
     };
 
-    /**
-     * 起一轮导览。
-     *
-     * **只有一份导览**，不分「完整版 / 精简版」。
-     *
-     * 早先按凭据状态分叉过：已经连上的人只走三步（入口 → 连接）就结束。
-     * 那个设计两头都错：
-     * - 它把「连接做过了」当成「后面的都不必看」，玩家在第三步就被送到终点，
-     *   看起来像导览坏了；
-     * - 可连接状态本来就只需要改变**那一步怎么说**——连接步骤自己有
-     *   `variant.when`，已连接时讲的是「这一步你已经做完了，点下一步继续」，
-     *   高亮照样落在连接卡片上。跳过整段行程是多余的。
-     *
-     * 所以自动弹出和手动重看都走同一份；要不要跳过某一步，交给那一步自己判断。
-     */
     const runTour = () => {
         const state = useVrccFirstRunStore.getState();
         startTour(buildVrccTour(), () => {
@@ -133,8 +118,6 @@ export function VrccFirstRunHost() {
         if (!manualOpen) return;
         // 先落到星遇同频页，否则第一步的锚点根本不在界面上。
         openVrccTab('maps');
-        // **传 `true`：手动重看一律走完整版**。走精简版的话，连过的玩家
-        // （包括刚断开、状态是 `disconnected` 的）只会看到三步，像是坏了。
         const timer = window.setTimeout(() => runTour(), 600);
         return () => window.clearTimeout(timer);
     }, [manualOpen]);
