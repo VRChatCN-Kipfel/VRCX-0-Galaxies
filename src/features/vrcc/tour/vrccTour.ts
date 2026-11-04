@@ -828,9 +828,6 @@ function buildConfig(steps: readonly TourStep[]): Config {
 
     return {
         steps: driveSteps,
-        // 0.85 而不是 0.9：VRCX-0 的界面比 Clash Party 密，压太黑会看不见
-        // 高亮洞周围的上下文，玩家反而不知道自己在哪。
-        overlayOpacity: 0.85,
         /**
          * **关掉平滑滚动。**
          *
