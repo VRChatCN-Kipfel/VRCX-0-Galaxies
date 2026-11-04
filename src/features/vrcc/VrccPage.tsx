@@ -22,6 +22,7 @@ import { formatCompactDateTime } from '@/lib/dateTime';
 import { scopeGrants } from '@/lib/vrccScope';
 import { openExternalLink } from '@/services/shellIntegrationService';
 import { toast } from '@/services/toastService';
+import { useVrccTourActiveStore } from '@/state/vrccTourActiveStore';
 import { Badge } from '@/ui/shadcn/badge';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
@@ -208,9 +209,28 @@ export function VrccPage() {
             (post) => normalizeLevel(post.level) === 'bar'
         ) ?? null;
     // `pop` 进弹窗序列，可 `‹ 1/3 ›` 翻。
-    const popPosts = pageAnnouncements.filter(
+    const pendingPopPosts = pageAnnouncements.filter(
         (post) => normalizeLevel(post.level) === 'pop'
     );
+
+    /**
+     * **导览在跑时，`pop` 公告先挂起。**
+     *
+     * 优先级是一条队列，不是压栈：
+     * ```
+     * force 公告  →  挂起导览（见 shouldAutoOpenFirstRun）
+     * 导览        →  挂起 pop 公告（这里）
+     * ```
+     * 同一时刻只让一样东西对玩家说话。实测过的故障：导览走到第 4/18 步
+     * 「四个页签」时，页面挂载初期拉的 `pop` 公告盖了上来（「加群领见面礼」），
+     * 一边是遮罩里指着页签条，一边是另一个带分页的弹窗，玩家不知道该看哪个。
+     *
+     * **挂起不是丢弃**：`posts` 传空数组给弹窗，它自然不渲染；等导览结束、
+     * `active` 变回 false，下一帧照常弹。已读状态全程没动——挂起期间不记
+     * 已读，所以不会把玩家还没看过的公告吞掉。
+     */
+    const tourActive = useVrccTourActiveStore((state) => state.active);
+    const popPosts = tourActive ? [] : pendingPopPosts;
 
     const dismissBar = (id: number) => {
         writeBarCursor(id);

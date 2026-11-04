@@ -1,6 +1,7 @@
 import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
 
 import i18n from '@/services/i18nService';
+import { useVrccTourActiveStore } from '@/state/vrccTourActiveStore';
 import { useVrccTourDemoStore } from '@/state/vrccTourDemoStore';
 
 import { renderTourMarkdown } from './TourMarkdown';
@@ -756,6 +757,9 @@ function buildConfig(steps: readonly TourStep[]): Config {
             stopAnchorFollow();
             // 导览期间的演示数据到此为止——真实界面不能留着编出来的红点。
             useVrccTourDemoStore.getState().setActive(false);
+            // 导览结束：`pop` 公告从这一步起可以正常弹了（被挂起的那条不会丢，
+            // 已读状态也没被碰过）。
+            useVrccTourActiveStore.getState().setActive(false);
             const finish = onFinished;
             onFinished = null;
             activeSteps = [];
@@ -792,6 +796,12 @@ export function startTour(
     // 导览期间开启演示数据：首次引导的对象是「从没连过」的玩家，他们没有
     // 任何真实红点，而「四处红点」那一步要讲的就是那四个数字。
     useVrccTourDemoStore.getState().setActive(true);
+
+    // 告诉页面「导览开始了」。优先级链是一条队列：
+    //   force 公告 → 挂起导览（见 shouldAutoOpenFirstRun）
+    //   导览       → 挂起 pop 公告（见 VrccPage）
+    // 同一时刻只该有一样东西在对玩家说话。
+    useVrccTourActiveStore.getState().setActive(true);
 
     // 第一步没有人替它「提前准备」——`prepareNext` 是靠**前一步**进入时触发的。
     // 所以这里把首步自己的 `prepareNext` 放出去，否则第一屏若是「切到某页再
