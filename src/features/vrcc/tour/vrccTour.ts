@@ -288,6 +288,53 @@ let advanceWhenObserver: MutationObserver | null = null;
  * 否则一次打开详情会跳两步。每进入新的一步时重置。
  */
 let advancedForStep: number | null = null;
+/**
+ * 正在推进中（等待对话框退场那一小段时间）。
+ *
+ * 这段时间里气泡和按钮都还在，玩家可能又点一次。不挡的话，第二次点击会
+ * 再推进一步——表现就是「抖一下就跳过去两步」。
+ */
+let advancing = false;
+
+/**
+ * 等对话框的退场动画放完，再执行 `done`；没有对话框在退场就立刻执行。
+ *
+ * ## 为什么需要
+ *
+ * 第 9 步（打分）在**世界详情对话框里**，第 10 步（排序）在榜单页。按
+ * 「下一步」时准备动作会关掉详情，于是同一帧里发生了两件事：对话框消失、
+ * 高亮移动。反馈里那句「详情突然消失，显得很突兀」就是这两件事叠在一起。
+ *
+ * ## 为什么用轮询而不是写死一个毫秒数
+ *
+ * 对话框的退场是 base-ui 的动画（`data-closed` + `animate-out`，当前
+ * 100ms），元素会在动画期间保持挂载。写死「等 120ms」的话，以后有人调整
+ * 那个时长，这里就悄悄失准了。改成**等它真的从 DOM 里消失**，自适应。
+ *
+ * 匹配 `[data-closed]` 而不是只看元素在不在：准备动作也可能**打开**一个
+ * 对话框（例如第 7 步要打开详情），那种是 `data-open`，不该等。
+ *
+ * 上限 500ms 是保险：万一动画卡住或属性变了，不能让玩家点不动。
+ */
+function afterDialogsSettle(done: () => void): void {
+    const closing = () =>
+        document.querySelector('[data-slot="dialog-content"][data-closed]');
+
+    if (!closing()) {
+        done();
+        return;
+    }
+
+    const deadline = Date.now() + 500;
+    const tick = () => {
+        if (!closing() || Date.now() > deadline) {
+            done();
+            return;
+        }
+        window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+}
 
 function clearAutoAdvance(): void {
     if (autoAdvanceTimer !== null) {
@@ -596,6 +643,10 @@ function toDriveStep(
             // 每进入新的一步，重置「已推进」标记——去重是按步算的。
             clearAutoAdvance();
             advancedForStep = null;
+            // 进入新步骤说明上一次推进已经完成，这里兜底清掉防重入标记。
+            // 万一某次推进因为异常没有走到 `advancing = false`，不在这里
+            // 复位的话，后续所有按钮都会失灵。
+            advancing = false;
 
             /**
              * 统一的推进：两条路（玩家自己点 / 按「下一步」/ 定时）都走这里，
@@ -676,11 +727,24 @@ function toDriveStep(
             onNextClick: () => {
                 // 玩家自己点了：取消可能存在的自动前进，否则会连推两步。
                 clearAutoAdvance();
+                // **防重入**：推进可能因为「等对话框退场」而延后几十毫秒，
+                // 那段时间按钮还在，触摸板一抖就会再点一次、直接跳两步。
+                if (advancing) return;
+                advancing = true;
                 // 标记「本步已推进」，让还在路上的观察者/定时器不要重复推。
                 const index = instance?.getActiveIndex();
                 if (index !== undefined) advancedForStep = index;
                 next?.prepareNext?.();
-                instance?.moveNext();
+                // 准备动作可能关掉了一个对话框（第 9 步就在详情里，下一步要
+                // 回榜单）。等它退场动画放完再推进，否则「对话框消失」和
+                // 「高亮移动」挤在同一帧，看起来像整屏炸了一下——反馈说的
+                // 「详情突然消失，显得很突兀」就是这个。
+                //
+                // 没有对话框要退场时**立即推进**，不给正常步骤加延迟。
+                afterDialogsSettle(() => {
+                    advancing = false;
+                    instance?.moveNext();
+                });
             },
             /**
              * 「上一步」同样要先准备目标步骤的界面，再回退。
@@ -693,8 +757,16 @@ function toDriveStep(
              */
             onPrevClick: () => {
                 clearAutoAdvance();
+                // 同「下一步」：等待期间按钮还在，挡掉重复触发。
+                if (advancing) return;
+                advancing = true;
                 previous?.prepareNext?.();
-                instance?.movePrevious();
+                // 回退同样可能要关掉对话框（从详情回到榜单页），等它退场完
+                // 再移动高亮，理由和 `onNextClick` 一样。
+                afterDialogsSettle(() => {
+                    advancing = false;
+                    instance?.movePrevious();
+                });
             }
         }
     };
