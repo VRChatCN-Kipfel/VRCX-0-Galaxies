@@ -4,6 +4,7 @@ import { useRuntimeStore } from '@/state/runtimeStore';
 import { useVrccForceAnnouncementStore } from '@/state/vrccForceAnnouncementStore';
 
 import { VrccAnnouncementDialog } from './components/VrccAnnouncementDialog';
+import { useVrccAnnouncementCache } from './vrccAnnouncementCache';
 import { loadAnnouncements } from './vrccAnnouncementLoader';
 import {
     markSeenIds,
@@ -97,12 +98,18 @@ export function VrccAnnouncementHost() {
 
     const advance = (id: number) => {
         markSeenIds([id]);
+        // 玩家刚表过态：让缓存失效，下一次进页面重新拉。
+        // 收益不大，但这正是该失效的时刻——站方可能刚好同时发了新的须知，
+        // 玩家也可能在别的设备上确认过别的条目。确认动作本身很低频。
+        useVrccAnnouncementCache.getState().invalidate();
         // 从序列里摘掉这条，弹窗自己会夹住索引并前进到下一条。
         setPosts((prev) => prev.filter((post) => (post.id ?? 0) !== id));
     };
 
     const skipAll = (ids: readonly number[]) => {
         markSeenIds(ids);
+        // 同上：表白过态就让缓存过期。
+        useVrccAnnouncementCache.getState().invalidate();
         setPosts([]);
     };
 

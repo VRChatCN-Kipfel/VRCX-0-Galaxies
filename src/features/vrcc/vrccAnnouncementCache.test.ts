@@ -72,6 +72,19 @@ describe('loadAnnouncements', () => {
         expect(announcements).toHaveBeenCalledTimes(1);
     });
 
+    it('玩家确认公告后缓存失效，下次重新拉', async () => {
+        announcements.mockResolvedValue({ posts: [], stop: null });
+        await loadAnnouncements();
+
+        // `VrccAnnouncementHost` 的 advance / skipAll 会调这个。收益不大，
+        // 但那正是「玩家刚表过态」的时刻：站方可能刚发了新的须知，玩家也
+        // 可能在别的设备上确认过别的条目。
+        useVrccAnnouncementCache.getState().invalidate();
+
+        await loadAnnouncements();
+        expect(announcements).toHaveBeenCalledTimes(2);
+    });
+
     it('force 绕开缓存', async () => {
         announcements.mockResolvedValue({ posts: [], stop: null });
         await loadAnnouncements();
