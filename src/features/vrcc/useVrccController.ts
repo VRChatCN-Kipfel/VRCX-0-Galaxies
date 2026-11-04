@@ -14,6 +14,7 @@ import { useRuntimeStore } from '@/state/runtimeStore';
 import { useVrccUnreadStore } from '@/state/vrccUnreadStore';
 import { useVrcNotificationStore } from '@/state/vrcNotificationStore';
 
+import { loadAnnouncements } from './vrccAnnouncementLoader';
 import {
     vrccApi,
     VrccError,
@@ -458,10 +459,15 @@ export function useVrccController() {
     /**
      * 公告和停站。拿不到不算页面错误：它只是附加信息，停站时个人接口
      * 自己也会报「停站维护中」。
+     *
+     * 走共享加载器而不是直接 `vrccApi.announcements()`：登录后的全局宿主
+     * 已经拉过一次，1 分钟内这里直接复用缓存，两个消费点不再各发一次请求。
+     * 这也顺带躲开 `min_gap: 30s` 的本地限流——登录后 30 秒内进页面时，
+     * 以前第二次请求会得到 `ThrottledLocally`，`pop` 直接拉不到。
      */
     const refreshAnnouncements = useCallback(async () => {
         try {
-            const announcements = await vrccApi.announcements();
+            const announcements = await loadAnnouncements();
             patch({ announcements });
         } catch (error) {
             console.error('[vrcc] refreshAnnouncements failed:', error);

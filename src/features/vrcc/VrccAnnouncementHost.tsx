@@ -4,13 +4,13 @@ import { useRuntimeStore } from '@/state/runtimeStore';
 import { useVrccForceAnnouncementStore } from '@/state/vrccForceAnnouncementStore';
 
 import { VrccAnnouncementDialog } from './components/VrccAnnouncementDialog';
+import { loadAnnouncements } from './vrccAnnouncementLoader';
 import {
     markSeenIds,
     readSeenIds,
     selectPendingAnnouncements
 } from './vrccAnnouncementStore';
 import type { VrccAnnouncement } from './vrccApi';
-import { vrccApi } from './vrccApi';
 
 /**
  * 全局的 `force` 公告宿主。
@@ -50,7 +50,11 @@ export function VrccAnnouncementHost() {
         let cancelled = false;
         void (async () => {
             try {
-                const announcements = await vrccApi.announcements();
+                // 走共享加载器：这一次拉取与进入星遇同频页时的那一次是
+                // **同一份数据**。以前这里各自调 `vrccApi.announcements()`
+                // 发两次请求，而这一次只用 `force`、`pop`/`bar` 全被丢掉。
+                // 现在一次拉取写进缓存，两处各取所需。
+                const announcements = await loadAnnouncements();
                 if (cancelled) return;
                 setLoadedFor(currentUserId);
                 setPosts(
