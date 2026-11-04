@@ -985,7 +985,7 @@
             },
             "sorts": {
                 "title": "Change the ordering",
-                "description": "Top, this week, and newly listed. The board underneath reorders as you switch — press one and watch the rows move."
+                "description": "Top, this week, and newly listed. Press one of these three and the rows below reorder — that is the whole effect. Only this row can be pressed here; the board underneath is shown just so you can watch it change."
             },
             "detail": {
                 "title": "The world page",

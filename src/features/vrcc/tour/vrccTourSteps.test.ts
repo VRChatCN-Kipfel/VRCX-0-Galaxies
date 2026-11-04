@@ -76,7 +76,12 @@ describe('页面级步骤会先回到页面', () => {
                 ? [sortStep.element]
                 : [...(sortStep.element ?? [])];
 
-        expect(selectors).toContain('[data-tour="vrcc-maps-list"]');
+        // 点亮的是**前几行**而不是整个列表：整块都亮的话气泡只能压在列表
+        // 下缘、盖住最后几行，而这一步只要看见名次重排就够了。
+        expect(selectors).toContain('[data-tour="vrcc-maps-head"]');
+        expect(selectors).not.toContain('[data-tour="vrcc-maps-list"]');
+        // 榜单那部分只亮不点，排序行（下标 0）保持可点。
+        expect(sortStep.readOnly).toEqual([1]);
     });
 
     it('提醒那一步会关掉对话框并切页', async () => {

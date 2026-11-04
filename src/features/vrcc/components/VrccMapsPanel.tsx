@@ -123,8 +123,27 @@ export function VrccMapsPanel({
             ) : (
                 <div
                     data-tour="vrcc-maps-list"
-                    className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+                    className="relative min-h-0 flex-1 overflow-y-auto rounded-xl border"
                 >
+                    {/*
+                     * 「换个排法」那一步只点亮榜单**前几行**，而不是整个列表。
+                     *
+                     * 整块都亮的话，气泡只能落在列表下缘、压住最后几行；而这一步
+                     * 只想让玩家看到「切换排序后名次跟着重排」，看前几名就够。
+                     * 前几行的并集正好在可视区顶部，气泡落在它下方不挡关键内容。
+                     *
+                     * 用一个绝对定位的覆盖层来标这个范围，而不是逐行加属性：
+                     * 覆盖层不参与布局（`pointer-events: none`），布局完全不变，
+                     * 而多元素高亮要的是**一个可测量的矩形**。
+                     *
+                     * 高度按行高估算即可——它只是给导览画框用的，不必精确到像素。
+                     * 悬停列表时淡出，避免那块半透明区域看起来像加载遮罩。
+                     */}
+                    <div
+                        data-tour="vrcc-maps-head"
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[268px]"
+                    />
                     <ul className="divide-y">
                         {maps.map((map, index) => {
                             // 本周榜只按本周的打分排，`rank` 却还是总榜名次：
