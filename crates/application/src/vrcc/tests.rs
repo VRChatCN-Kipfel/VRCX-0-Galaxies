@@ -165,6 +165,8 @@ struct FakeRemote {
     notes_polled: Mutex<Vec<(Option<i64>, Option<i64>)>>,
     /// 记录 `device_code` 收到的 `scope`。
     device_code_scopes: Mutex<Vec<Option<String>>>,
+    /// `device_token` 成功时返回的令牌；没设就按传输失败处理。
+    device_token_response: Mutex<Option<VrccTokenResponse>>,
     /// `crossings` / `crossing_cards` 的返回。
     crossings: Mutex<Option<VrccCrossings>>,
     cards: Mutex<Option<VrccCrossingCards>>,
@@ -212,6 +214,11 @@ impl FakeRemote {
         *self.cards.lock().unwrap() = Some(cards);
     }
 
+    /// 预设 `device_token` 成功时返回的令牌。
+    fn set_device_token(&self, response: VrccTokenResponse) {
+        *self.device_token_response.lock().unwrap() = Some(response);
+    }
+
     /// 让下一次个人调用失败。
     fn set_error(&self, error: VrccError) {
         *self.next_error.lock().unwrap() = Some(error);
@@ -254,7 +261,8 @@ impl VrccRemote for FakeRemote {
         Box::pin(async move { Err(transport("fake")) })
     }
     fn device_token<'a>(&'a self, _code: &'a str) -> VrccFuture<'a, VrccTokenResponse> {
-        Box::pin(async move { Err(transport("fake")) })
+        let response = self.device_token_response.lock().unwrap().clone();
+        Box::pin(async move { response.ok_or_else(|| transport("fake")) })
     }
     fn revoke<'a>(&'a self) -> VrccFuture<'a, ()> {
         Box::pin(async move {
@@ -785,6 +793,43 @@ fn wrist_prefers_the_unread_counts_over_recent() {
     // 一样的数不算变化，后台就不必通知前端。
     assert!(!service.note_unread(&counts));
     assert_eq!(service.cached_unread(), Some(counts));
+}
+
+/// 重新授权（换账号）后不能先显示上一个账号的腕表摘要。
+///
+/// `poll_device_auth` 会把连接状态重新置为 true，若不清缓存，
+/// `wrist_summary` 的 `connected` 守卫就放行，旧账号的 `●N` 立刻又可见。
+#[tokio::test]
+async fn reconnecting_clears_the_previous_accounts_wrist_summary() {
+    let (service, remote, _store) = connected_service();
+    // 造出上一个账号的未读数与腕表缓存。
+    service.note_unread(&VrccUnread {
+        inbox: 5,
+        ..Default::default()
+    });
+    assert!(service.wrist_summary(None).is_some());
+
+    remote.set_device_token(VrccTokenResponse {
+        access_token: "new-token".into(),
+        token_type: None,
+        scope: Some("profile notifications maps".into()),
+        me: None,
+    });
+    let prompt = VrccDeviceAuthPrompt {
+        user_code: "ABCD-2345".into(),
+        verification_uri: None,
+        verification_uri_complete: None,
+        expires_in_secs: 600,
+        interval_secs: 5,
+        device_code: "dev-code".into(),
+        scope: None,
+    };
+    let step = service.poll_device_auth(&prompt).await.expect("connected");
+    assert!(matches!(step, VrccDeviceAuthStep::Connected(_)));
+
+    // 新账号还没拉到任何数据：腕表整块不显示，底栏回落玩家数。
+    assert!(service.cached_unread().is_none());
+    assert!(service.wrist_summary(None).is_none());
 }
 
 #[test]

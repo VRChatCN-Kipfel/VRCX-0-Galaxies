@@ -576,15 +576,18 @@ impl VrccService {
         changed
     }
 
-    /// 断开或令牌失效后，未读数不再属于任何人：清掉，腕表回到 0。
+    /// 断开、令牌失效或换账号后，这些数字不再属于任何人：整块清掉。
+    ///
+    /// 只把 `unread` 归零是不够的——腕表里还留着上一个账号的 `●N` 和地图
+    /// 名次缓存；重新连上时 `note_unread` 会 `get_or_insert_with` 复用它，
+    /// 于是新账号先看到旧账号的摘要。直接置 `None`，让 `wrist_summary`
+    /// 按「没连过」处理，底栏回落显示玩家数。
     fn forget_unread(&self) {
         if let Ok(mut cache) = self.unread.write() {
             cache.counts = None;
         }
         if let Ok(mut wrist) = self.wrist.write() {
-            if let Some(entry) = wrist.as_mut() {
-                entry.unread = 0;
-            }
+            *wrist = None;
         }
     }
 
@@ -893,6 +896,8 @@ impl VrccService {
                     credential.vrc_name,
                     credential.scope,
                 );
+                // 新账号（或重新授权）不该先看到上一个账号的未读数和名次。
+                self.forget_unread();
                 self.set_credential_state(VrccCredentialState::Active);
                 Ok(VrccDeviceAuthStep::Connected(self.snapshot()))
             }
