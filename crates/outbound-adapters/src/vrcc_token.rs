@@ -275,8 +275,11 @@ mod tests {
 
     #[test]
     fn credential_round_trip_shape() {
-        // 只测数据形状与默认值，真正的加密往返在 persistence 的
-        // secrets_at_rest 测试里覆盖（那里有 golden vector）。
+        // 真的走一次 store：只断言刚赋值的字面量测不到持久化。
+        // 密文/明文的加密细节由 persistence 的 secrets_at_rest 覆盖（golden
+        // vector），这里钉住的是「写进去的字段能原样读回来」。
+        let (db, _dir) = test_db();
+        let store = store_for(Arc::clone(&db), Some("usr_round_trip"));
         let credential = StoredVrccCredential {
             token: "abc".into(),
             star: Some(77),
@@ -284,8 +287,13 @@ mod tests {
             scope: Some("profile maps".into()),
             client_id: Some("dev-test".into()),
         };
-        assert_eq!(credential.token, "abc");
-        assert_eq!(credential.star, Some(77));
+        store.save(&credential).expect("save");
+        let loaded = store.load().expect("load").expect("credential present");
+        assert_eq!(loaded.token, "abc");
+        assert_eq!(loaded.star, Some(77));
+        assert_eq!(loaded.vrc_name.as_deref(), Some("拾光"));
+        assert_eq!(loaded.scope.as_deref(), Some("profile maps"));
+        assert_eq!(loaded.client_id.as_deref(), Some("dev-test"));
     }
 
     #[test]

@@ -110,7 +110,7 @@ vrcc: token gone, background poll idle until reconnect
 
 ## 四、前端侧的对应证据
 
-前端日志在同一个文件里，前缀是 `[vrcc]`：
+前端日志**不写进 `error-log.txt`**：`ERROR` 级别的 `console.error` 会由应用统一写入 `error-log.txt`，而下面这些 `[vrcc]` 前缀的 `console.info` 只出现在浏览器 DevTools（Tauri 里开 devtools 后可见）。排查时请同时看 DevTools 控制台，别只翻错误日志就下结论。
 
 | 日志                                                  | 含义                                           |
 | ----------------------------------------------------- | ---------------------------------------------- |
