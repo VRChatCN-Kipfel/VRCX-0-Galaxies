@@ -945,6 +945,8 @@
             "mutual": "Propojeno obousměrně",
             "not_linked": "Zatím nepřipojeno",
             "met_world": "Crossed in {world}",
+            "met_today": "today",
+            "met_yesterday": "yesterday",
             "open_page": "Zobrazit na vrcc.cc",
             "why": {
                 "verify": "Ověřte svůj účet VRChat, abyste mohli používat křížení.",

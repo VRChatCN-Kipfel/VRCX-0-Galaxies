@@ -116,9 +116,12 @@ describe('VrccCrossingsPanel', () => {
         expect(screen.getByText('旧记录')).toBeTruthy();
     });
 
-    it('卡上带「在哪遇见」时，行里补一行世界名与时间', () => {
+    it('卡上带「在哪遇见」时，行里补一行世界名与「哪一天」', () => {
         // 「在哪个世界擦肩」只有 `/me/crossings/cards` 的 `pair.met.world`
         // 有，列表端点里完全没有这个字段。所以这一行必须靠卡片补。
+        //
+        // 时间只按天讲：`met.at` 是那天北京时间中午的取整锚点，用相对时间
+        // 会显示成「2 小时后 / 3 小时前」这种假精度。
         const container = renderCrossings(
             { stars: [{ n: 5, name: '旧记录' }] },
             {
@@ -141,11 +144,14 @@ describe('VrccCrossingsPanel', () => {
                 }
             }
         );
-        // 这里的 `t` 只回显键名、`formatRelativeTime` 恒为 now，所以断言键名
-        // 和拼接出来的时间即可；世界名本身由 title 带着。
+        // 这里的 `t` 只回显键名，所以断言键名即可；世界名本身由 title 带着。
         const text = container.textContent ?? '';
         expect(text).toContain('vrcc.crossings.met_world');
-        expect(text).toContain('· now');
+        // 既不是相对时间，也不是 ISO 字符串——只有当天的三种之一。
+        expect(text).toMatch(
+            /vrcc\.crossings\.met_(today|yesterday)|\d{4}-\d{2}-\d{2}/
+        );
+        expect(text).not.toContain('· now');
     });
 
     it('没有完整星卡时不补那一行，列表照常显示', () => {

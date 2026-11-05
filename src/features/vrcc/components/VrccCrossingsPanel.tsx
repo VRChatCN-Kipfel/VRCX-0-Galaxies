@@ -5,6 +5,7 @@ import { formatRelativeTime } from '@/lib/dateTime';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 
+import { crossingMetDay } from '../crossingMetDay';
 import type { VrccCrossingCards, VrccCrossings } from '../vrccApi';
 
 const SITE = 'https://vrcc.cc';
@@ -239,18 +240,21 @@ export function VrccCrossingsPanel({
                         // 编号只在真有的时候才用。
                         const no = star.n ?? 0;
                         const key = no > 0 ? `n-${no}` : `i-${index}`;
+                        // 列表的 `at` 现在官方已经不提供了（1.15.3 起 removed），
+                        // 留着这一支只为兼容旧服务器；线上的擦肩时间在卡的
+                        // `pair.met.at` 上，而那个**只精确到天**。
                         const crossedAt = star.at
                             ? formatRelativeTime(star.at, { style: 'short' })
                             : '';
-                        // 列表的 `at` 实测经常根本没有（官方标 required，
-                        // 线上 6/6 条都不带），真正的擦肩时间在卡的
-                        // `pair.met.at` 上。两处都缺就不显示时间。
                         const pair = cardByN.get(no)?.pair ?? null;
                         const metWorld = pair?.met?.world ?? null;
-                        const metWhen = pair?.met?.at
-                            ? formatRelativeTime(pair.met.at, {
-                                  style: 'short'
-                              })
+                        const metDay = crossingMetDay(pair?.met?.at);
+                        // 只按天讲：中间那天中午是服务器的取整锚点，不是
+                        // 真实的相遇时刻。见 `crossingMetDay` 的说明。
+                        const metWhen = metDay
+                            ? metDay.kind === 'date'
+                                ? metDay.date
+                                : t(`vrcc.crossings.met_${metDay.kind}`)
                             : '';
                         // 卡片还在路上：列表可能已经渲染出来了，而「在哪遇见」
                         // 要等卡片回来才知道。这段时间先占住这一行的高度，

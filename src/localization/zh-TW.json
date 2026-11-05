@@ -940,6 +940,8 @@
             "mutual": "已雙向連上",
             "not_linked": "還沒連上",
             "met_world": "在 {world} 相遇",
+            "met_today": "今天",
+            "met_yesterday": "昨天",
             "open_page": "在 vrcc.cc 上查看",
             "why": {
                 "verify": "先驗證 VRChat 帳號才能使用星軌相交。",
