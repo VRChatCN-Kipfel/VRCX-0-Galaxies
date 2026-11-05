@@ -958,6 +958,19 @@ fn classify_splits_reauth_from_throttle() {
     assert_eq!(kind, VrccErrorKind::MissingScope);
     assert_eq!(need.as_deref(), Some("today"));
 
+    // 服务器漏带 `need` 时也必须归 MissingScope，而不是 NeedsReauth：
+    // 后者会让 settle() 把这份仍然有效的令牌清掉。
+    let missing_without_need = http(403, "scope");
+    let (kind, need) = classify_vrcc_error(&missing_without_need);
+    assert_eq!(kind, VrccErrorKind::MissingScope);
+    assert_eq!(need, None);
+
+    let unreviewed_without_need = http(403, "scope_unreviewed");
+    assert_eq!(
+        classify_vrcc_error(&unreviewed_without_need).0,
+        VrccErrorKind::MissingScope
+    );
+
     let transport = transport("timeout");
     assert_eq!(classify_vrcc_error(&transport).0, VrccErrorKind::Transport);
 }

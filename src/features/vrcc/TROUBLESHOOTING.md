@@ -97,11 +97,11 @@ vrcc: new notices exceed per-poll toast limit; older ones not toasted  fresh=5 l
 ### 连接失效时
 
 ```
-vrcc: token is gone (disconnected on the site, re-authorized elsewhere, or unused for 90 days); dropping it
-vrcc: token gone, background poll idle until reconnect
+vrcc: token is invalid (disconnected on the site, re-authorized elsewhere, client mismatch, or unused for 90 days); dropping it
+vrcc: token invalid, background poll idle until reconnect
 ```
 
-服务器回了 `404 gone`：玩家在网页上断开了、在别处重新授权过，或 90 天没调用过任何接口被自动断开。本地令牌已经清掉，「我的」页会提示重新连接。
+服务器回了 `404 gone`、`403 client_mismatch` 或 `401 token`：令牌已被服务器判作废。本地令牌已经清掉，轮询会停下，「我的」页会提示重新连接。注意 `403 scope`（缺权限）**不在此列**——令牌仍有效，重新授权只是为了多要一项权限。
 
 ## 四、前端侧的对应证据
 

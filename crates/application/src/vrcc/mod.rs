@@ -319,7 +319,13 @@ pub fn classify_vrcc_error(error: &VrccError) -> (VrccErrorKind, Option<String>)
                 VrccErrorKind::Throttled
             } else if http.status == 503 && http.error == "stop" {
                 VrccErrorKind::Transport
-            } else if http.need.is_some() && error.needs_reauth() {
+            } else if error.needs_reauth()
+                && matches!(http.error.as_str(), "scope" | "scope_unreviewed")
+            {
+                // 缺权限：令牌仍有效，只能提示重新授权去多要一项。
+                // 判据按错误码而不是 `need` 是否为空——服务器漏带 `need`
+                // 时它也归这里，否则会落到 NeedsReauth，被 settle() 当成
+                // 令牌作废清掉，白扔一份还能收提醒、看榜单的授权。
                 VrccErrorKind::MissingScope
             } else if error.needs_reauth() {
                 VrccErrorKind::NeedsReauth
@@ -587,15 +593,20 @@ impl VrccService {
         self.unread.read().ok()?.counts.clone()
     }
 
-    /// 收拾一个错误：`404 gone` 表示令牌已经失效，清掉它。
+    /// 收拾一个错误：令牌已被服务器判作废时清掉它。
     ///
-    /// 官方的要求是「收到 `404 gone` 就停下轮询，让玩家重新授权」。不清的话，
-    /// 后台轮询会拿着一个死令牌每分钟问一次，界面上也一直显示「已连接」。
+    /// 判据复用 [`classify_vrcc_error`] 的结论，而不是自己再解析一次 HTTP
+    /// 细节：分类只在那一处算（错误结构最清楚的地方），这里只负责副作用。
+    /// `NeedsReauth` 涵盖 `404 gone`、`403 client_mismatch` / `client_unknown` /
+    /// `client_off` / `client_missing`、`401 token`；`MissingScope`（缺权限）
+    /// 不在此列——那种令牌仍有效，清掉等于白扔一份还能收提醒、看榜单的授权。
+    ///
+    /// 不清的话，后台轮询会拿着死令牌每分钟问一次，界面还一直显示「已连接」。
     /// 1.10.0 起「90 天没调用过任何接口」也会这样，所以这不是罕见情况。
     fn settle(&self, error: VrccError) -> VrccError {
-        if error.is_gone() {
+        if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth {
             tracing::info!(
-                "vrcc: token is gone (disconnected on the site, re-authorized elsewhere, or unused for 90 days); dropping it"
+                "vrcc: token is invalid (disconnected on the site, re-authorized elsewhere, client mismatch, or unused for 90 days); dropping it"
             );
             if let Err(clear_error) = self.store.clear() {
                 tracing::warn!(%clear_error, "vrcc: failed to clear the dead token");

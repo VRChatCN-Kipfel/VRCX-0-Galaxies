@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
-use vrcx_0_application::vrcc::{StoredCredential, VrccFailure, VrccService, VrccTokenStore};
+use vrcx_0_application::vrcc::{
+    classify_vrcc_error, StoredCredential, VrccErrorKind, VrccFailure, VrccService, VrccTokenStore,
+};
 use vrcx_0_contracts::vrcc::{
     scope_grants, VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot,
     VrccCredentialState, VrccGuidanceState, VrccMapPage, VrccMyBoard, VrccMyBoardSort, VrccMyMap,
@@ -572,12 +574,15 @@ impl DesktopVrccRuntime {
                                     event_sink.emit(event, json!({}));
                                 }
                             }
-                            Err(error) if error.is_gone() => {
-                                // 令牌失效，应用层已经把它清掉了：之后几轮会因为
+                            Err(error)
+                                if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth =>
+                            {
+                                // 令牌已作废，应用层已经把它清掉了：之后几轮会因为
                                 // 未连接而跳过，等玩家重新连接。告诉前端改显示。
+                                // 判据复用应用层的单点分类，不在这里再判一次 HTTP。
                                 tracing::info!(
                                     round,
-                                    "vrcc: token gone, background poll idle until reconnect"
+                                    "vrcc: token invalid, background poll idle until reconnect"
                                 );
                                 event_sink.emit(VRCC_CONNECTION_CHANGED_EVENT, json!({}));
                             }
@@ -704,12 +709,16 @@ async fn poll_once(
             if first_poll || !fresh.is_empty() {
                 match service.recent_notifications(false).await {
                     Ok(_) => outcome.changed = true,
-                    Err(error) if error.is_gone() => return Err(error),
+                    Err(error) if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth => {
+                        return Err(error)
+                    }
                     Err(error) => tracing::warn!(%error, "vrcc: recent notices refresh failed"),
                 }
             }
         }
-        Err(error) if error.is_gone() => return Err(error),
+        Err(error) if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth => {
+            return Err(error)
+        }
         // 未读数拿不到不影响提醒：记一笔，下一轮再试。
         Err(error) => tracing::warn!(%error, "vrcc: unread count failed"),
     }
