@@ -39,7 +39,7 @@ import type { VrccCrossingStar } from '../vrccApi';
 import { VrccCrossingsPanel } from './VrccCrossingsPanel';
 import { VrccMapsPanel } from './VrccMapsPanel';
 import { VrccMutualsPanel } from './VrccMutualsPanel';
-import { VrccNotificationsPanel } from './VrccNotificationsPanel';
+import { VrccNotificationsPanel, toAbsolute } from './VrccNotificationsPanel';
 
 afterEach(() => {
     cleanup();
@@ -221,6 +221,34 @@ describe('VrccNotificationsPanel', () => {
     it('有 crossings 时照常显示，0 也显示', () => {
         renderNotifications({ inbox: 0, cross: 0, chats: 0, notes: 0 });
         expect(screen.getByText(/vrcc\.unread\.cross/)).toBeTruthy();
+    });
+});
+
+describe('toAbsolute', () => {
+    it('相对路径拼到 vrcc.cc 应用界面下', () => {
+        expect(toAbsolute('/match/?tab=inbox')).toBe(
+            'https://vrcc.cc/match/?tab=inbox'
+        );
+        expect(toAbsolute('match/?tab=inbox')).toBe(
+            'https://vrcc.cc/match/?tab=inbox'
+        );
+    });
+
+    it('绝对地址只接受 https://vrcc.cc，其余一律回落', () => {
+        expect(toAbsolute('https://vrcc.cc/match/?tab=inbox')).toBe(
+            'https://vrcc.cc/match/?tab=inbox'
+        );
+        expect(toAbsolute('http://vrcc.cc/match/')).toBe(
+            'https://vrcc.cc/match'
+        );
+        expect(toAbsolute('https://evil.example/match/')).toBe(
+            'https://vrcc.cc/match'
+        );
+        expect(toAbsolute('https://vrcc.cc.evil.example/')).toBe(
+            'https://vrcc.cc/match'
+        );
+        expect(toAbsolute('not a url')).toBe('https://vrcc.cc/not a url');
+        expect(toAbsolute('')).toBe('https://vrcc.cc/match');
     });
 });
 

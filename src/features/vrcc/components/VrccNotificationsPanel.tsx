@@ -35,18 +35,29 @@ const SITE = 'https://vrcc.cc';
 const SITE_APP = `${SITE}/match`;
 
 /**
- * 把官方给的**相对路径**拼成完整地址。
+ * 把官方给的地址拼成完整链接，并且**只接受 `https://vrcc.cc`**。
  *
- * 官方 `/me/notifications/recent` 的 `url` 形如 `/match/?tab=inbox`，
- * 接在 `https://vrcc.cc` 后面才是可点的链接。已经是绝对地址的原样返回。
+ * - 相对路径（如 `/match/?tab=inbox`）接在站点基址后面；
+ * - 绝对地址必须是 `https://vrcc.cc/…`，其余一律回落到应用界面：
+ *   `app__open_link` 只校验协议、不校验域名，而 `map.page`、
+ *   `verificationUriComplete` 这些字段又不在契约里，不能假定它们可信。
  *
  * 没有 url 时回退到应用界面而不是站点根：那才是玩家能继续操作的地方。
  */
-function toAbsolute(url: string): string {
+export function toAbsolute(url: string): string {
     const trimmed = url.trim();
     if (!trimmed) return SITE_APP;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://'))
-        return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        try {
+            const parsed = new URL(trimmed);
+            if (parsed.protocol === 'https:' && parsed.hostname === 'vrcc.cc') {
+                return parsed.toString();
+            }
+        } catch {
+            // 不是合法 URL：按不可信地址处理，回落到应用界面。
+        }
+        return SITE_APP;
+    }
     return `${SITE}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 }
 
