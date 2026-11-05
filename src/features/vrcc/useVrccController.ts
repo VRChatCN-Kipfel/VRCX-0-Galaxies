@@ -684,37 +684,26 @@ export function useVrccController() {
     ]);
 
     /**
-     * 初次加载：只在挂载时跑一次。
+     * 初次加载。
      *
-     * **不能把 `load` 放进依赖数组。** `load` 会 `patch({ loading: true })`，
-     * 这触发重新渲染 → 生成新的 `load` → effect 重跑 → 再 patch……
-     * 依赖里放一个"自己会改状态"的回调，就是无限循环。
+     * 按 React 的生命周期写：每次挂载都正常注册清理函数，依赖用 `[load]`。
+     * 早期用 `didLoad` ref + 空依赖挡重复执行，但 `if (didLoad.current) return`
+     * 挡在 cleanup 注册之前，严格模式第二次挂载就没有 cleanup 了，
+     * `mounted.current` 会永久停在 false，`patch` 里的 setState 全部静默丢掉。
      *
-     * 用 ref 记住已经跑过，依赖数组留空。需要手动重载时走 `reload()`。
-     *
-     * **必须在这个 effect 里把 `mounted.current` 置回 true。** 严格模式下
-     * effect 会 挂载 → 清理 → 再挂载：清理时把它设成 false，而第二次挂载被
-     * `didLoad` 挡在前面直接 return，这个 ref 就永远停在 false。`patch` 的前置
-     * 判断是 `if (mounted.current)`，于是**请求照发、数据照回，但每次 setState
-     * 都被丢掉**——界面永远停在「加载中」，而后台日志里能看到完整的成功响应。
+     * `load` 只依赖稳定的 `patch`（空依赖 useCallback），它依赖的各个
+     * `refresh*` 也一样，所以 `[load]` 不会重跑。仓库里
+     * `useActivityPageResource` 用的是同一种写法。
      */
-    const didLoad = useRef(false);
     useEffect(() => {
-        // 先恢复挂载标记：清理函数会把它清掉，重挂载时（严格模式或
-        // 组件真的被卸载再挂回）需要重新打开，否则状态更新全部静默。
         mounted.current = true;
-        if (didLoad.current) return;
-        didLoad.current = true;
         void load();
         return () => {
             mounted.current = false;
             if (authTimer.current) clearTimeout(authTimer.current);
             if (cooldownTimer.current) clearInterval(cooldownTimer.current);
         };
-        // `load` 故意不放进依赖：它自己会 `patch`，进依赖就是无限循环。
-        // 上面的 `didLoad` ref 已经保证只跑一次，所以这个空依赖是正确的。
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [load]);
 
     /**
      * 玩家换世界时刷新「所在地图」卡片。
