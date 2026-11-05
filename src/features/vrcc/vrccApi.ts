@@ -172,9 +172,6 @@ export const vrccApi = {
     /** 通知中心。读了不标已读。服务器还没有 `me/notes` 时为 null。 */
     notes: () => call(() => commands.appVrccNotes()),
 
-    /** 增量轮询。游标由后端维护。 */
-    pollNotifications: () => call(() => commands.appVrccPollNotifications()),
-
     /**
      * 地图在榜上的状态与自己的评分。
      *

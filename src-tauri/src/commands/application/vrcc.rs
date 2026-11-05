@@ -493,20 +493,6 @@ pub async fn app__vrcc_my_map(
         .map_err(|failure| AppError::Vrcc { failure })
 }
 
-/// 增量轮询。游标由后端维护，前端不用关心。
-#[tauri::command]
-#[specta::specta]
-pub async fn app__vrcc_poll_notifications(
-    state: State<'_, AppState>,
-) -> Result<vrcx_0_contracts::vrcc::VrccNotifications, AppError> {
-    state
-        .runtime_host()
-        .vrcc()
-        .poll_notifications()
-        .await
-        .map_err(|failure| AppError::Vrcc { failure })
-}
-
 /// 今天这一轮 + 轮次进度。需要 `today` 敏感权限（要审核）。
 #[tauri::command]
 #[specta::specta]

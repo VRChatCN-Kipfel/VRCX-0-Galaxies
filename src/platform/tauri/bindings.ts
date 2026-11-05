@@ -545,12 +545,6 @@ const generatedCommands = {
         return await TAURI_INVOKE('app__vrcc_my_board', { sort });
     },
     /**
-     * 增量轮询。游标由后端维护，前端不用关心。
-     */
-    async appVrccPollNotifications(): Promise<VrccNotifications> {
-        return await TAURI_INVOKE('app__vrcc_poll_notifications');
-    },
-    /**
      * 今天这一轮 + 轮次进度。需要 `today` 敏感权限（要审核）。
      */
     async appVrccToday(): Promise<VrccToday> {

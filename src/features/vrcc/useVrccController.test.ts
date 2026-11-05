@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
     unread: vi.fn(),
     notes: vi.fn(),
     recentNotifications: vi.fn(),
-    pollNotifications: vi.fn(),
     myMap: vi.fn(),
     mutuals: vi.fn(),
     crossings: vi.fn(),
@@ -66,7 +65,6 @@ vi.mock('@/platform/tauri/bindings', () => ({
         appVrccUnread: mocks.unread,
         appVrccNotes: mocks.notes,
         appVrccRecentNotifications: mocks.recentNotifications,
-        appVrccPollNotifications: mocks.pollNotifications,
         appVrccMyMap: mocks.myMap,
         appVrccMutuals: mocks.mutuals,
         appVrccCrossings: mocks.crossings,
@@ -143,12 +141,6 @@ beforeEach(() => {
     mocks.unread.mockResolvedValue({ inbox: 1, cross: 0, chats: 2, notes: 0 });
     mocks.notes.mockResolvedValue({ notes: [] });
     mocks.recentNotifications.mockResolvedValue({ items: [], read: 0 });
-    mocks.pollNotifications.mockResolvedValue({
-        last: 1,
-        items: [],
-        every: 60,
-        dot: 0
-    });
     mocks.myMap.mockResolvedValue(null);
     mocks.mutuals.mockResolvedValue({ stars: [], n: 0 });
     mocks.crossingsVisibility.mockResolvedValue({
