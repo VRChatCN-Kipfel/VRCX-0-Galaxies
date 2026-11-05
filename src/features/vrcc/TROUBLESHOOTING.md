@@ -43,30 +43,24 @@ $env:RUST_LOG = "vrcx_0=debug"
 ### 启动阶段（正常应该看到这些）
 
 ```
-vrcc: starting background poll  has_desktop_notifier=true token_connected=false client=dev-VRCX-0-Galaxies client_is_dev=true
-vrcc: background poll task started  interval_secs=60 jitter_secs=20
-vrcc: background poll scheduled
+vrcc: background poll scheduled  owner=usr_…
+vrcc: background poll task started  interval_secs=60 jitter_secs=20 owner=usr_…
 ```
 
-逐个字段的含义：
+轮询按 VRChat 登录账号起一个任务：**没登录不会起**，换号时旧任务自行退出、新任务另起。
+`error-log.txt` 里没有这两行是正常的（它们是 `info` 级）；要看就按上一节设 `RUST_LOG`。
 
-| 字段                   | 期望                  | 不对时的含义                                                          |
-| ---------------------- | --------------------- | --------------------------------------------------------------------- |
-| `has_desktop_notifier` | `true`                | `false` = 通知桥没挂上（Headless 或装配顺序问题），**不会有系统通知** |
-| `token_connected`      | 连过之后 `true`       | `false` = 还没连星遇同频，轮询会跳过                                  |
-| `client`               | `dev-VRCX-0-Galaxies` | 换正式标识后应是 `app_` 开头                                          |
-| `client_is_dev`        | 开发态 `true`         | `true` 时拿不到敏感权限，`mutuals` 等必然 403                         |
-
-**如果连这四行都没有**，说明轮询根本没起来——检查日志里有没有 `background poll not scheduled`（任务被拒绝）。
+**如果这两行都没有**，说明轮询根本没起来——检查日志里有没有 `background poll not scheduled`（任务被拒绝）。
 
 ### 运行阶段（每轮一条，需 debug 级）
 
 每轮先问 `me/notifications?since=`（新提醒，没有每天上限），再问 `me/unread`（几处未读数，每天 1500 次）。
 
 ```
-vrcc: background poll round finished  round=3 fresh=1 unread=Some(3) toast_attempted=1 changed=true
-vrcc: background poll skipped (not connected)  round=4
-vrcc: background poll sleeping         round=3 delay_ms=71234
+vrcc: background poll round finished  fresh=1 persisted=1 unread=Some(3) toast_attempted=1 changed=true
+vrcc: background poll skipped (not connected)
+vrcc: background poll skipped (token lacks notifications)
+vrcc: background poll sleeping  delay_ms=71234
 ```
 
 `unread=None` 表示服务器还没有 `me/unread`（旧版接口），这时只在刚连上或来了新提醒时拉一次「最近的提醒」。
@@ -75,21 +69,22 @@ vrcc: background poll sleeping         round=3 delay_ms=71234
 
 ```
 vrcc: fetched new notices      fresh=1
-vrcc: desktop notification dispatched  notice_id=1026 body_len=42
+vrcc: notice handed to the notification dispatcher  notice_id=1026 body_len=42 icon=true
 ```
+
+「handed to the dispatcher」只表示**交给了通知分发器**，不等于系统通知已经弹出来了——免打扰、隐私锁、通道偏好还可能把它拦下，没挂通知桥时 `show()` 也可能静默成功。别拿这行当「通知已送达」的证据。
 
 每条提醒只弹一次：`me/notifications` 只给游标之后的。刚连上（或刚启动）的第一轮服务器只告诉「现在到哪了」，不给旧提醒，所以启动时不会把旧提醒再弹一遍——它们在「提醒」页里看得到。
 
 ### 通知没弹出去时
 
-```
-vrcc: desktop notification not delivered  notice_id=1026 error=...
-```
+先按上一节开 `RUST_LOG=debug` 看 `round finished` 里的 `toast_attempted`：
 
-| 错误内容            | 原因                                                |
-| ------------------- | --------------------------------------------------- |
-| 无错误但也没弹      | 窗口处于后台且系统通知被关闭（Windows 设置 → 通知） |
-| `notification: ...` | 系统级失败，通常是应用未注册到通知中心              |
+| 现象                             | 排查方向                                                     |
+| -------------------------------- | ------------------------------------------------------------ |
+| `toast_attempted=0` 且 `fresh>0` | 分发器之前的筛选：免打扰、隐私锁、声音/通道偏好              |
+| `toast_attempted>0` 但没弹       | 系统侧：Windows 通知开关、应用未注册到通知中心、窗口处于后台 |
+| 连续 `background poll failed`    | 网络或服务端；注意 `error-log.txt` 只收 ERROR，这类是 `warn` |
 
 ### 超过每轮上限时
 
@@ -121,7 +116,7 @@ vrcc: token gone, background poll idle until reconnect
 | `[vrcc] subscribe vrccNoticesChanged event failed: …` | 订阅失败，界面只能手动刷新                     |
 | `[vrcc] load failed: ...`                             | 首屏加载失败                                   |
 
-**关键判断**：如果日志里有 `desktop notification dispatched`（后端弹了通知）但**没有** `notices changed event received`（前端没收到），问题在事件通道；如果两者都有但界面没变，问题在前端刷新逻辑。
+**关键判断**：如果 `round finished` 里 `toast_attempted > 0`（后端已交给分发器）但 DevTools 里**没有** `notices changed event received`（前端没收到），问题在事件通道；如果两者都有但界面没变，问题在前端刷新逻辑。注意 `round finished` 需 `RUST_LOG=vrcx_0=debug`。
 
 ## 五、常见症状对照
 
@@ -129,20 +124,19 @@ vrcc: token gone, background poll idle until reconnect
 
 按顺序核对：
 
-1. `starting background poll` 有没有出现？没有 → 轮询没起
-2. `has_desktop_notifier` 是 `true` 吗？`false` → 通知桥没挂
-3. `token_connected` 是 `true` 吗？`false` → 没连星遇同频
-4. `round finished` 的 `fresh` 是 0 吗？是 → 这段时间确实没有新提醒
-5. `fresh > 0` 但无 `dispatched` → 看有没有 `not delivered`
-6. 以上都正常 → 检查 Windows 系统通知设置，以及「专注助手」是否开启
+1. `background poll scheduled` / `background poll task started` 有没有出现？没有 → 轮询没起（多半是 VRChat 还没登录）
+2. 有没有 `background poll skipped (not connected)`？有 → 没连星遇同频
+3. `round finished` 的 `fresh` 是 0 吗？是 → 这段时间确实没有新提醒
+4. `fresh > 0` 但 `toast_attempted=0` → 看免打扰 / 隐私锁 / 通道偏好
+5. 以上都正常 → 检查 Windows 系统通知设置，以及「专注助手」是否开启
 
 ### 症状：网页上有提醒，但没弹系统通知
 
 提醒是在应用关着的时候来的：启动后的第一轮只记下「现在到哪了」，不补弹旧提醒。它们在「提醒」页里，页签上有未读数。这是按官方的轮询设计来的，不是 bug。
 
-### 症状：界面显示「未连接」但日志 `token_connected=true`
+### 症状：界面显示「未连接」但后台轮询仍在跑
 
-前端 `connection` 状态没刷到。看 `[vrcc] load failed`。
+前端 `connection` 状态没刷到。看 DevTools 里的 `[vrcc] load failed`。
 
 ### 症状：`403 scope` / `scope_unreviewed`
 
@@ -181,24 +175,24 @@ curl.exe -sS -o NUL -w "%{http_code}`n" --ssl-no-revoke -x http://127.0.0.1:7890
 1. `error-log.txt`，以及按上一节设 `RUST_LOG=vrcx_0=debug` 之后的完整输出
    （**建议先搜 `vrcc` 只贴相关行**，其余内容可能含个人信息）
 2. 上面「手工验证网络」两条命令的输出
-3. `has_desktop_notifier` / `token_connected` 两行的实际值
+3. `background poll scheduled` 与 `round finished` 两行的实际值
 4. 系统版本（Win10 / Win11），以及是否开了专注助手
 
 ---
 
 ## 附：探针清单（给开发者）
 
-| 位置                                   | 级别  | 内容                                   |
-| -------------------------------------- | ----- | -------------------------------------- |
-| `state.rs::start_vrcc_background_poll` | info  | 启动前提四要素                         |
-| `vrcc.rs::spawn_background_poll`       | info  | 任务启动、停止请求                     |
-| 同上                                   | debug | 每轮结果、休眠时长、跳过原因           |
-| 同上                                   | warn  | 轮询失败、任务未被调度                 |
-| `poll_once`                            | debug | 这一轮的新提醒条数                     |
-| `poll_once`                            | info  | 每条通知投递成功（含 id 与正文字节数） |
-| `poll_once`                            | warn  | 投递失败、超每轮上限、未读数拿不到     |
-| 应用层 `VrccService::settle`           | info  | 令牌失效（`404 gone`），已清掉         |
-| 前端 `useVrccController`               | info  | 订阅、收事件、退订                     |
-| 前端 `useVrccController`               | error | 订阅失败、加载失败、跳转失败           |
+| 位置                                   | 级别  | 内容                                      |
+| -------------------------------------- | ----- | ----------------------------------------- |
+| `state.rs::start_vrcc_background_poll` | info  | 任务已调度（按账号幂等）                  |
+| `vrcc.rs::spawn_background_poll`       | info  | 任务启动、停止请求、令牌失效              |
+| 同上                                   | debug | 每轮结果、跳过原因、休眠时长              |
+| 同上                                   | warn  | 轮询失败                                  |
+| `poll_once` / `handle_recent_notices`  | debug | 新提醒条数、交给分发器的通知（id + 长度） |
+| 同上                                   | warn  | 超每轮上限、未读数拿不到                  |
+| 应用层 `VrccService::settle`           | info  | 令牌失效（`404 gone`），已清掉            |
+| 前端 `useVrccController`               | info  | 订阅、收事件、退订（DevTools 控制台）     |
+| 前端 `useVrccController`               | error | 订阅失败、加载失败、跳转失败              |
 
+「交给分发器」不等于「已弹出」：免打扰、隐私锁、通道偏好、通知桥是否挂载都会影响结果。
 **正文内容从不进日志**，只记 `body_len` 与 `notice_id`——提醒正文属于玩家数据。
