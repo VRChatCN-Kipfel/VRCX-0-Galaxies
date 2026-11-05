@@ -7629,7 +7629,11 @@ export type VrccCredentialState =
 export type VrccCrossingCards = {
     cards?: VrccStarCard[];
     /**
-     * 上次看过时最新那次擦肩的时间；`at` 比它新就是新的。
+     * 上次看过时最新那次擦肩的时间。
+     *
+     * 2026-11-05（1.15.3）起官方不再返回这个字段——那时它也从 `required`
+     * 里拿掉了。留着只为兼容还在返回它的旧服务器；为 `None` 时不要当成
+     * 「没看过」。
      */
     seen?: number | null;
     /**
@@ -8444,11 +8448,15 @@ export type VrccScoreBand = {
 /**
  * 一张星卡：`/me/today`、`/me/inbox` 里的条目。
  *
- * 字段照官方 `StarCard` schema。`additionalProperties: true`，所以还有文档
- * 没列出的字段存在，这里只取我们用得到的那些；多出来的字段解析时被忽略。
+ * 字段照官方 `StarCard` schema。`additionalProperties: true`，线上字段比文档
+ * 列的多，这里只取我们用得到的那些；多出来的字段解析时被忽略。
  *
- * 注意：这张卡**没有** `at` 时间字段（官方 `StarCard` 不提供），时间由
- * 外层结构给。
+ * 下面三个字段在官方字段表里没有、只在示例里出现，属于上面那种「多出来」的：
+ * - `at`：最近一次擦肩 / 路过的时间，只出现在「路过」类清单里；
+ * - `linked_me`：TA 已经连向我，和 `linked`（我连向 TA）、`mutual`（双向）互补；
+ * - `why`：这张卡为什么出现在这里（`me/today` 给 `cross` 之类）。
+ *
+ * 别的星卡上没有这三个键，所以都是 `Option`。
  */
 export type VrccStarCard = {
     /**
@@ -8471,6 +8479,10 @@ export type VrccStarCard = {
      */
     star?: number | null;
     /**
+     * 星位坐标，形如 `L2` / `Z1` / `G2`（世界里的固定座位）。
+     */
+    pos?: string | null;
+    /**
      * 对方验证过 VRChat 账号。
      */
     verified?: boolean | null;
@@ -8483,6 +8495,13 @@ export type VrccStarCard = {
      */
     mutual?: boolean | null;
     /**
+     * TA 已经连向我（`linkedMe`）。
+     *
+     * 和 [`Self::linked`]（我连向 TA）、[`Self::mutual`]（双向）是三个互补的
+     * 状态。只在「路过」类清单里给，别的星卡上是 `None`。
+     */
+    linkedMe?: boolean | null;
+    /**
      * 对方的 VRChat 名字，**只在互相连上时才有**。
      */
     vrc?: string | null;
@@ -8494,6 +8513,77 @@ export type VrccStarCard = {
      * 共同的星友数（对方不公开时为 `null`）。
      */
     friends?: number | null;
+    /**
+     * 最近一次擦肩 / 路过的时间（毫秒时间戳）。
+     *
+     * 只出现在「路过」类清单：`/me/crossings/cards` 的 `at` 是最近一次擦肩，
+     * `me/today` 的卡上是这一轮路过的时刻。其余星卡没有这个键。
+     */
+    at?: number | null;
+    /**
+     * 这张卡为什么出现在这个清单里（`me/today` 给 `cross` 这种）。
+     *
+     * 保留服务器原样的代号：不认识的也照样收下，界面不认识就不显示。
+     */
+    why?: string | null;
+    /**
+     * 怎么认识的：什么时候互连、从哪认识、在哪遇见。
+     *
+     * 1.15.3 起写进官方文档：**只有互相连上（`mutual: true`）的星卡才有**。
+     * 仍然是 `Option`——没连上的卡没有这个键，老服务器也没有。
+     */
+    pair?: VrccStarPair | null;
+};
+/**
+ * 星卡上的「怎么认识的」（1.15.3 起随 [`VrccStarCard::pair`] 写进文档）。
+ *
+ * 网页「星轨相交」里点开一颗星，浮层上那几行就是它拼出来的。
+ */
+export type VrccStarPair = {
+    /**
+     * 互相连上的时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 最先那条线是怎么来的。
+     *
+     * 官方取值：`rec` 今日推荐、`back` 回应对方的连线、`fof` 共同好友、
+     * `pick` 在星空里挑中、`invite` 邀请口令、`xd` 报名星搭、
+     * `xd-ok` 星搭选中同行、`cross` 星轨相交、`yq` 从星友圈看到。
+     * 可能增加新取值，老记录也可能是 `null`——不认识的当成没有。
+     */
+    src?: string | null;
+    /**
+     * 最先那条线是不是我连的。
+     */
+    mine?: boolean | null;
+    /**
+     * 最近一次星轨相交。
+     *
+     * 只在双方都开着星轨相交、且最近 30 天内有记录时才有。
+     */
+    met?: VrccStarPairMet | null;
+};
+/**
+ * 星卡上「在哪遇见」。
+ */
+export type VrccStarPairMet = {
+    /**
+     * 最近一次星轨相交的时间（毫秒时间戳）。
+     *
+     * **只精确到天**：官方写明它是「那一天北京时间中午 12 点」的锚点，
+     * 是有意取整的。所以只能拿它算「哪一天」，不能当精确时刻显示——
+     * 当天上午看它还在未来，下午看又像是几小时前。
+     */
+    at?: number | null;
+    /**
+     * VRChat 世界名的**原文**。
+     *
+     * 可能自带「世界名｜社群名」这样的尾巴（分隔符也是世界名的一部分），
+     * 也可能是干干净净一个名字。**不要按分隔符拆**，拆了会把正常世界名拆坏。
+     * 还没读到名字、或这张地图不能显示时是 `null`。
+     */
+    world?: string | null;
 };
 /**
  * `GET /status`：不需要 client 标识的探活接口。

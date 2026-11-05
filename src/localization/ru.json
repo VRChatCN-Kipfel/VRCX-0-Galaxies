@@ -946,6 +946,9 @@
             "linked": "Вы связались",
             "mutual": "Связь в обе стороны",
             "not_linked": "Ещё не связано",
+            "met_world": "Crossed in {world}",
+            "met_today": "today",
+            "met_yesterday": "yesterday",
             "open_page": "Открыть на vrcc.cc",
             "why": {
                 "verify": "Подтвердите аккаунт VRChat, чтобы использовать пересечения.",

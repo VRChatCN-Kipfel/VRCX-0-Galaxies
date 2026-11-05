@@ -1,10 +1,11 @@
-import { ExternalLink, Radar, Sparkles } from 'lucide-react';
+import { ExternalLink, Radar, Sparkles, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { formatRelativeTime } from '@/lib/dateTime';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 
+import { crossingMetDay } from '../crossingMetDay';
 import type { VrccCrossingCards, VrccCrossings } from '../vrccApi';
 
 const SITE = 'https://vrcc.cc';
@@ -49,9 +50,11 @@ function whyKey(why: string): WhyKey | null {
  * 其余几种原因（未验证、机器人好友排队等）**要显示**并说明下一步，因为
  * 那是「功能在但暂时用不了」。
  *
- * **合规边界**：星轨相交的条目**没有** `vrcUser`（官方只在 `mutuals` 端点
- * 给这个 ID），所以这里不提供「打开玩家详情」，只把玩家送到网页那一页
- * 自己看完整星卡、自己决定连不连。程序不代做任何连线动作，也不代发好友请求。
+ * **合规边界**：列表 `/me/crossings` 的 `stars[]` **没有** `vrcUser`；但
+ * `/me/crossings/cards` 的卡上**有**（本批 6/6 张都带，官方文档没写这个差别）。
+ * 即便拿得到，这一页仍然只把玩家送到网页看完整星卡：官方要求提供「加好友」
+ * 入口时只能打开玩家页让人手动点，**不得由程序代发好友请求**，这里也就没有
+ * 任何自动加好友的通道。
  */
 export function VrccCrossingsPanel({
     connected,
@@ -105,17 +108,32 @@ export function VrccCrossingsPanel({
     const left = cards?.left;
     const max = cards?.max;
 
-    // 有 why：功能在，但暂时用不了，要说明下一步做什么。
-    if (why && stars.length === 0) {
-        const key = whyKey(why);
+    // 卡片按星编号索引：列表给的是「谁跟我擦过肩」，卡上才带「在哪遇见 / 怎么
+    // 认识的」。旧服务器、或令牌没有 crossings 的完整权限时 `cards` 是 null，
+    // 这些行整块不渲染，列表照常显示。
+    const cardByN = new Map(
+        (cards?.cards ?? []).map((card) => [card.n, card] as const)
+    );
+
+    // `why` 非 null 就是「功能在，但暂时用不了」，官方要求把原因告诉玩家。
+    //
+    // 这是**独立于列表**的状态，不能绑在「列表为空」上：`queued` / `sent` /
+    // `gone` / `friend` 这几种前置没满足时，历史记录照样留在 `stars` 里，
+    // 服务端只是不再产生新的。只在空列表时提示，玩家会看着一屏旧记录以为
+    // 一切照常，其实早就没有新擦肩了。
+    const reasonKey = why ? whyKey(why) : null;
+    const whyText = why
+        ? reasonKey
+            ? t(`vrcc.crossings.why.${reasonKey}`)
+            : t('vrcc.crossings.why.unknown')
+        : null;
+
+    // 没有记录可显示时，原因就是这一页唯一的正文。
+    if (whyText && stars.length === 0) {
         return (
             <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
                 <Radar className="size-6" />
-                <div className="leading-relaxed">
-                    {key
-                        ? t(`vrcc.crossings.why.${key}`)
-                        : t('vrcc.crossings.why.unknown')}
-                </div>
+                <div className="leading-relaxed">{whyText}</div>
             </div>
         );
     }
@@ -193,6 +211,16 @@ export function VrccCrossingsPanel({
                 </Button>
             </div>
 
+            {/* 有记录也有原因：原因照样要说，而且排在「这次刷新失败」前面——
+                「为什么不再有新擦肩」比「这次没刷新成功」更要紧，顺序反了会
+                让人以为是网络问题。 */}
+            {whyText && (
+                <div className="flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-xs leading-relaxed">
+                    <TriangleAlert className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+                    <span>{whyText}</span>
+                </div>
+            )}
+
             {/* 有旧数据、这次刷新失败：**留着列表**，只在上面加一条提示。
                 把已经看到过的记录清掉，比显示一条过时数据更糟。 */}
             {crossingsError && (
@@ -215,9 +243,30 @@ export function VrccCrossingsPanel({
                         // 编号只在真有的时候才用。
                         const no = star.n ?? 0;
                         const key = no > 0 ? `n-${no}` : `i-${index}`;
+                        // 列表的 `at` 现在官方已经不提供了（1.15.3 起 removed），
+                        // 留着这一支只为兼容旧服务器；线上的擦肩时间在卡的
+                        // `pair.met.at` 上，而那个**只精确到天**。
                         const crossedAt = star.at
                             ? formatRelativeTime(star.at, { style: 'short' })
                             : '';
+                        const pair = cardByN.get(no)?.pair ?? null;
+                        const metWorld = pair?.met?.world ?? null;
+                        const metDay = crossingMetDay(pair?.met?.at);
+                        // 只按天讲：中间那天中午是服务器的取整锚点，不是
+                        // 真实的相遇时刻。见 `crossingMetDay` 的说明。
+                        const metWhen = metDay
+                            ? metDay.kind === 'date'
+                                ? metDay.date
+                                : t(`vrcc.crossings.met_${metDay.kind}`)
+                            : '';
+                        // 卡片还在路上：列表可能已经渲染出来了，而「在哪遇见」
+                        // 要等卡片回来才知道。这段时间先占住这一行的高度，
+                        // 否则卡片一到，整列会被往下顶一截。
+                        //
+                        // 只在 `loading` 为真时占位。请求结束仍没有卡片
+                        // （旧服务器、权限不足、这次失败）就不再占——
+                        // 那会变成一条永远转圈的空行。
+                        const metPending = loading && !metWorld;
                         return (
                             <li
                                 key={key}
@@ -272,6 +321,36 @@ export function VrccCrossingsPanel({
                                             </span>
                                         )}
                                     </div>
+                                    {/* 在哪遇见。世界名是**原文**：有些世界名
+                                        自带「｜社群名」，有些没有，绝不按分隔符拆。
+                                        时间只有日期粒度（同一天的多张卡是同一个
+                                        值），所以这里只当「大约什么时候」。
+                                        还没拿到卡片时**占住这一行**的高度：先出来
+                                        的列表如果少一行，等卡片回来时整列会被往下
+                                        顶一截，看着像在跳。 */}
+                                    {metWorld ? (
+                                        <div
+                                            className="text-muted-foreground mt-0.5 truncate text-[11px]"
+                                            title={metWorld}
+                                        >
+                                            {t('vrcc.crossings.met_world', {
+                                                world: metWorld
+                                            })}
+                                            {metWhen && ` · ${metWhen}`}
+                                        </div>
+                                    ) : (
+                                        metPending && (
+                                            <div
+                                                className="mt-0.5 flex h-4 items-center"
+                                                role="status"
+                                                aria-label={t(
+                                                    'vrcc.crossings.loading'
+                                                )}
+                                            >
+                                                <Spinner className="text-muted-foreground size-3" />
+                                            </div>
+                                        )
+                                    )}
                                 </div>
                                 {/* 网页上「星轨相交」那一页：可以看完整星卡，
                                     也可以从那里连线。客户端不代做连线。

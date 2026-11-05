@@ -4,8 +4,11 @@
 //! 假数据，MIT）。每个接口测三种形状：
 //!
 //! - **旧服务器（1.8.x）**：没有 1.11.0 以后加的字段；
-//! - **现在（1.14.0）**：新字段都有，弃用中的字段也还在；
+//! - **现在（1.15.3）**：新字段都有，弃用中的字段也还在；
 //! - **弃用字段停了以后**（2026-11-26 / 2026-12-26）：`vibe`、`can`、`need` 等不再返回。
+//!
+//! 1.15.3 把星轨相交的文档对上了线上：`stars[].at`、`cards[].seen` 不再返回，
+//! `pair` 写进文档。所以这两处仍然按「旧服务器可能给、也可能不给」解析。
 //!
 //! 三种都要能解析。官方的规则是「v1 只做加法、弃用字段至少留 60 天」，
 //! 这里钉住的就是客户端这一侧：新字段当可选、不依赖弃用字段。
@@ -348,4 +351,99 @@ fn crossings_parse_and_the_why_reasons_classify_correctly() {
     assert!(empty.stars.is_empty());
     assert!(empty.me.is_none());
     assert!(!empty.hidden);
+}
+
+/// `/me/crossings/cards` 的星卡：`linkedMe` / `at` / `why` 这三个字段不在官方
+/// `StarCard` 的字段表里，只在示例里出现（`additionalProperties: true` 的那种）。
+///
+/// 三个都关系到界面上能说清什么：`at` 是「最近一次擦肩是什么时候」，`linkedMe`
+/// 是「TA 是不是已经连向我」，`why` 是「这张卡为什么出现在这一页」。少一个，
+/// 界面就只能说出「有这个人」，其余全靠猜。
+#[test]
+fn crossing_cards_keep_the_fields_the_star_card_table_never_lists() {
+    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+
+    let cards: VrccCrossingCards = parse(
+        r#"{"cards":[
+            {"n":3,"name":"彩蛋猎人","group":"G","why":"cross","linked":false,
+             "mutual":false,"linkedMe":true,"at":1792830000000},
+            {"n":4,"name":"夜航"}
+        ],"seen":0,"left":5,"max":5}"#,
+    );
+
+    assert_eq!(cards.cards.len(), 2);
+    let first = &cards.cards[0];
+    assert_eq!(first.linked_me, Some(true));
+    assert_eq!(first.at, Some(1_792_830_000_000));
+    assert_eq!(first.why.as_deref(), Some("cross"));
+    // 和 `linked` 是两条独立的边：TA 连向我，不代表我连了 TA。
+    assert_eq!(first.linked, Some(false));
+    assert_eq!(first.mutual, Some(false));
+
+    // 没有这三个键的星卡照旧能读——它们不是必填。
+    let second = &cards.cards[1];
+    assert_eq!(second.linked_me, None);
+    assert_eq!(second.at, None);
+    assert_eq!(second.why, None);
+
+    assert_eq!(cards.seen, Some(0));
+    assert_eq!(cards.left, Some(5));
+    assert_eq!(cards.max, Some(5));
+}
+
+/// `/me/crossings/cards` 的 `pair`：网页「星轨相交」点开一颗星时，浮层上那几行
+/// 全靠它（什么时候互连、从哪认识、在哪遇见）。
+///
+/// 这个键当初不在官方文档、`StarCard` 字段表、`examples/responses.json` 里，
+/// 是我们实测出来、再反馈到上游的；1.15.3 起官方已经写进文档，并明确：
+/// 只有 `mutual: true` 的卡才带它，`met.at` 只精确到天。
+///
+/// 契约这边仍然全部按可选解析——没连上的卡没有这个键，老服务器也没有；
+/// `met.world` 必须是**世界名原文**：有的世界名自带「｜社群名」，有的没有，
+/// 按分隔符拆会把正常世界名拆坏。
+#[test]
+fn crossing_cards_carry_the_pair_section_the_docs_never_mention() {
+    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+
+    let cards: VrccCrossingCards = parse(
+        r#"{"cards":[
+            {"n":827,"pos":"L2","pair":{"at":1792778779575,"src":"yq","mine":false,
+             "met":{"at":1792900800000,"world":"天井 Skywell｜中文社区 Chinese Community"}}},
+            {"n":859,"pos":"Z0","pair":{"at":1792925092206,"src":"fof","mine":true,
+             "met":{"at":1792900800000,"world":"咖啡厅v1․31"}}},
+            {"n":4,"name":"没有 pair 的旧卡"}
+        ],"left":5,"max":5}"#,
+    );
+
+    assert_eq!(cards.cards.len(), 3);
+
+    let with_club = &cards.cards[0];
+    assert_eq!(with_club.pos.as_deref(), Some("L2"));
+    let pair = with_club.pair.as_ref().expect("pair 必须解析出来");
+    assert_eq!(pair.at, Some(1_792_778_779_575));
+    assert_eq!(pair.src.as_deref(), Some("yq"));
+    assert_eq!(pair.mine, Some(false));
+    let met = pair.met.as_ref().expect("met 必须解析出来");
+    assert_eq!(met.at, Some(1_792_900_800_000));
+    // 世界名原样保留，连全角分隔符一起：这不是「世界 + 社群」的拼接串。
+    assert_eq!(
+        met.world.as_deref(),
+        Some("天井 Skywell｜中文社区 Chinese Community")
+    );
+
+    // 没有分隔符的普通世界名，同样原样保留（它里面还有 U+2024）。
+    let plain = &cards.cards[1];
+    let world = plain
+        .pair
+        .as_ref()
+        .and_then(|pair| pair.met.as_ref())
+        .and_then(|met| met.world.as_deref());
+    assert_eq!(world, Some("咖啡厅v1․31"));
+    assert_eq!(
+        plain.pair.as_ref().and_then(|pair| pair.src.as_deref()),
+        Some("fof")
+    );
+
+    // 没有 `pair` 的卡照旧能读：它不是必填，界面会整块不渲染。
+    assert!(cards.cards[2].pair.is_none());
 }

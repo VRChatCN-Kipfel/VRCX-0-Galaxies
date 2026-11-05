@@ -265,6 +265,9 @@ export type VrccCrossingStar = NonNullable<VrccCrossings['stars']>[number];
 export type VrccCrossingCards = Awaited<
     ReturnType<typeof commands.appVrccCrossingCards>
 >;
+export type VrccStarCard = NonNullable<
+    NonNullable<VrccCrossingCards>['cards']
+>[number];
 export type VrccMutualStar = NonNullable<VrccMutuals['stars']>[number];
 export type VrccMyMap = NonNullable<
     Awaited<ReturnType<typeof commands.appVrccMyMap>>

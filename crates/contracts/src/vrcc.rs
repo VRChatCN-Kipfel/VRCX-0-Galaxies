@@ -4,12 +4,18 @@
 //! 不做"我猜它应该叫这个"的推断。凡是官方允许缺失的字段，一律 `Option`，
 //! 因为接口在不同 scope / 审核状态下返回的字段集合并不相同。
 //!
-//! 对照的是开放接口 1.14.0。官方的兼容规则是「v1 只做加法，要删的字段先标
+//! 对照的是开放接口 1.15.3。官方的兼容规则是「v1 只做加法，要删的字段先标
 //! 弃用、至少再留 60 天」，所以这里：
 //! - 新字段一律 `#[serde(default)]`，旧服务器没给也能解析；
 //! - **不读弃用中的字段**（`vibe`、`can`、`need`、`teen`、`adj`、
 //!   `counts.regenToday`、`counts.styles`），到期不再返回时什么都不会坏；
 //! - 不写 `deny_unknown_fields`，服务器多给的字段直接忽略。
+//!
+//! 1.15.3 那版是照着本仓库提的 [`星轨相交` 文档问题] 改的：`stars[].at` 与
+//! `cards[].seen` 被移除（相交的具体时间不提供，判断新旧用 `fresh`），
+//! `pair` 写进了文档。此前 `pair` 是按「可能会变、缺了就不显示」实现的。
+//!
+//! [`星轨相交` 文档问题]: https://github.com/vrcc-cc/xingyu-tongpin-api/issues/1
 
 use serde::{Deserialize, Serialize};
 
@@ -918,11 +924,15 @@ impl VrccMyMap {
 
 /// 一张星卡：`/me/today`、`/me/inbox` 里的条目。
 ///
-/// 字段照官方 `StarCard` schema。`additionalProperties: true`，所以还有文档
-/// 没列出的字段存在，这里只取我们用得到的那些；多出来的字段解析时被忽略。
+/// 字段照官方 `StarCard` schema。`additionalProperties: true`，线上字段比文档
+/// 列的多，这里只取我们用得到的那些；多出来的字段解析时被忽略。
 ///
-/// 注意：这张卡**没有** `at` 时间字段（官方 `StarCard` 不提供），时间由
-/// 外层结构给。
+/// 下面三个字段在官方字段表里没有、只在示例里出现，属于上面那种「多出来」的：
+/// - `at`：最近一次擦肩 / 路过的时间，只出现在「路过」类清单里；
+/// - `linked_me`：TA 已经连向我，和 `linked`（我连向 TA）、`mutual`（双向）互补；
+/// - `why`：这张卡为什么出现在这里（`me/today` 给 `cross` 之类）。
+///
+/// 别的星卡上没有这三个键，所以都是 `Option`。
 #[derive(Clone, Debug, Default, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VrccStarCard {
@@ -946,6 +956,9 @@ pub struct VrccStarCard {
     /// 点亮编号（对方没公开时为 `null`）。
     #[serde(default)]
     pub star: Option<i64>,
+    /// 星位坐标，形如 `L2` / `Z1` / `G2`（世界里的固定座位）。
+    #[serde(default)]
+    pub pos: Option<String>,
     /// 对方验证过 VRChat 账号。
     #[serde(default)]
     pub verified: Option<bool>,
@@ -955,6 +968,12 @@ pub struct VrccStarCard {
     /// 已经互相连上。
     #[serde(default)]
     pub mutual: Option<bool>,
+    /// TA 已经连向我（`linkedMe`）。
+    ///
+    /// 和 [`Self::linked`]（我连向 TA）、[`Self::mutual`]（双向）是三个互补的
+    /// 状态。只在「路过」类清单里给，别的星卡上是 `None`。
+    #[serde(default)]
+    pub linked_me: Option<bool>,
     /// 对方的 VRChat 名字，**只在互相连上时才有**。
     #[serde(default)]
     pub vrc: Option<String>,
@@ -964,6 +983,70 @@ pub struct VrccStarCard {
     /// 共同的星友数（对方不公开时为 `null`）。
     #[serde(default)]
     pub friends: Option<i64>,
+    /// 最近一次擦肩 / 路过的时间（毫秒时间戳）。
+    ///
+    /// 只出现在「路过」类清单：`/me/crossings/cards` 的 `at` 是最近一次擦肩，
+    /// `me/today` 的卡上是这一轮路过的时刻。其余星卡没有这个键。
+    #[serde(default)]
+    pub at: Option<i64>,
+    /// 这张卡为什么出现在这个清单里（`me/today` 给 `cross` 这种）。
+    ///
+    /// 保留服务器原样的代号：不认识的也照样收下，界面不认识就不显示。
+    #[serde(default)]
+    pub why: Option<String>,
+    /// 怎么认识的：什么时候互连、从哪认识、在哪遇见。
+    ///
+    /// 1.15.3 起写进官方文档：**只有互相连上（`mutual: true`）的星卡才有**。
+    /// 仍然是 `Option`——没连上的卡没有这个键，老服务器也没有。
+    #[serde(default)]
+    pub pair: Option<VrccStarPair>,
+}
+
+/// 星卡上的「怎么认识的」（1.15.3 起随 [`VrccStarCard::pair`] 写进文档）。
+///
+/// 网页「星轨相交」里点开一颗星，浮层上那几行就是它拼出来的。
+#[derive(Clone, Debug, Default, Deserialize, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VrccStarPair {
+    /// 互相连上的时间（毫秒时间戳）。
+    #[serde(default)]
+    pub at: Option<i64>,
+    /// 最先那条线是怎么来的。
+    ///
+    /// 官方取值：`rec` 今日推荐、`back` 回应对方的连线、`fof` 共同好友、
+    /// `pick` 在星空里挑中、`invite` 邀请口令、`xd` 报名星搭、
+    /// `xd-ok` 星搭选中同行、`cross` 星轨相交、`yq` 从星友圈看到。
+    /// 可能增加新取值，老记录也可能是 `null`——不认识的当成没有。
+    #[serde(default)]
+    pub src: Option<String>,
+    /// 最先那条线是不是我连的。
+    #[serde(default)]
+    pub mine: Option<bool>,
+    /// 最近一次星轨相交。
+    ///
+    /// 只在双方都开着星轨相交、且最近 30 天内有记录时才有。
+    #[serde(default)]
+    pub met: Option<VrccStarPairMet>,
+}
+
+/// 星卡上「在哪遇见」。
+#[derive(Clone, Debug, Default, Deserialize, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VrccStarPairMet {
+    /// 最近一次星轨相交的时间（毫秒时间戳）。
+    ///
+    /// **只精确到天**：官方写明它是「那一天北京时间中午 12 点」的锚点，
+    /// 是有意取整的。所以只能拿它算「哪一天」，不能当精确时刻显示——
+    /// 当天上午看它还在未来，下午看又像是几小时前。
+    #[serde(default)]
+    pub at: Option<i64>,
+    /// VRChat 世界名的**原文**。
+    ///
+    /// 可能自带「世界名｜社群名」这样的尾巴（分隔符也是世界名的一部分），
+    /// 也可能是干干净净一个名字。**不要按分隔符拆**，拆了会把正常世界名拆坏。
+    /// 还没读到名字、或这张地图不能显示时是 `null`。
+    #[serde(default)]
+    pub world: Option<String>,
 }
 
 /// 「今天」的轮次信息。这一轮连了几颗、下一轮什么时候开始。
@@ -1225,7 +1308,11 @@ impl VrccCrossings {
 pub struct VrccCrossingCards {
     #[serde(default)]
     pub cards: Vec<VrccStarCard>,
-    /// 上次看过时最新那次擦肩的时间；`at` 比它新就是新的。
+    /// 上次看过时最新那次擦肩的时间。
+    ///
+    /// 2026-11-05（1.15.3）起官方不再返回这个字段——那时它也从 `required`
+    /// 里拿掉了。留着只为兼容还在返回它的旧服务器；为 `None` 时不要当成
+    /// 「没看过」。
     #[serde(default)]
     pub seen: Option<i64>,
     /// 今天还能从星轨相交连几颗。

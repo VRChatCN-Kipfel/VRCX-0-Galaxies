@@ -941,6 +941,9 @@
             "linked": "你已连向 TA",
             "mutual": "已双向连上",
             "not_linked": "还没连上",
+            "met_world": "在 {world} 相遇",
+            "met_today": "今天",
+            "met_yesterday": "昨天",
             "open_page": "在 vrcc.cc 上查看",
             "why": {
                 "verify": "先验证 VRChat 账号才能使用星轨相交。",

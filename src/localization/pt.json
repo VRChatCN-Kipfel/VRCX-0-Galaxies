@@ -938,6 +938,9 @@
             "linked": "Você a conectou",
             "mutual": "Conectados nos dois sentidos",
             "not_linked": "Ainda não conectado",
+            "met_world": "Crossed in {world}",
+            "met_today": "today",
+            "met_yesterday": "yesterday",
             "open_page": "Ver no vrcc.cc",
             "why": {
                 "verify": "Verifique sua conta do VRChat para usar os cruzamentos.",

@@ -35,7 +35,7 @@ vi.mock('../useMutualPresence', () => ({
     })
 }));
 
-import type { VrccCrossingStar } from '../vrccApi';
+import type { VrccCrossingStar, VrccStarCard } from '../vrccApi';
 import { VrccCrossingsPanel } from './VrccCrossingsPanel';
 import { VrccMapsPanel } from './VrccMapsPanel';
 import { VrccMutualsPanel } from './VrccMutualsPanel';
@@ -57,6 +57,8 @@ function renderCrossings(
         loading?: boolean;
         error?: string | null;
         needsScope?: boolean;
+        /** 完整星卡；缺省为 null，等同于旧服务器 / 没有完整权限。 */
+        cards?: { cards: VrccStarCard[]; left?: number; max?: number } | null;
     } = {}
 ) {
     const { container } = render(
@@ -74,7 +76,7 @@ function renderCrossings(
                       }
                     : null
             }
-            cards={null}
+            cards={options.cards ?? null}
             loading={options.loading ?? false}
             crossingsError={options.error ?? null}
             crossingsNeedsScope={options.needsScope ?? false}
@@ -99,6 +101,84 @@ describe('VrccCrossingsPanel', () => {
         // 下一步做什么。藏起来会让人以为功能消失了。
         renderCrossings({ why: 'verify', hidden: false });
         expect(screen.getByText('vrcc.crossings.why.verify')).toBeTruthy();
+    });
+
+    it('有旧记录时也要说原因，不能只在列表为空时才提', () => {
+        // `queued` / `sent` / `gone` / `friend` 这几种前置没满足时，历史记录
+        // 照样留在 `stars` 里，服务端只是不再产生新的。只在空列表时提示，
+        // 等于让玩家看着一屏旧记录以为一切照常。
+        renderCrossings({
+            why: 'friend',
+            hidden: false,
+            stars: [{ n: 9, name: '旧记录' }]
+        });
+        expect(screen.getByText('vrcc.crossings.why.friend')).toBeTruthy();
+        expect(screen.getByText('旧记录')).toBeTruthy();
+    });
+
+    it('卡上带「在哪遇见」时，行里补一行世界名与「哪一天」', () => {
+        // 「在哪个世界擦肩」只有 `/me/crossings/cards` 的 `pair.met.world`
+        // 有，列表端点里完全没有这个字段。所以这一行必须靠卡片补。
+        //
+        // 时间只按天讲：`met.at` 是那天北京时间中午的取整锚点，用相对时间
+        // 会显示成「2 小时后 / 3 小时前」这种假精度。
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            {
+                cards: {
+                    cards: [
+                        {
+                            n: 5,
+                            pair: {
+                                at: 1792778779575,
+                                src: 'yq',
+                                met: {
+                                    at: 1792900800000,
+                                    world: '天井 Skywell｜中文社区 Chinese Community'
+                                }
+                            }
+                        }
+                    ],
+                    left: 5,
+                    max: 5
+                }
+            }
+        );
+        // 这里的 `t` 只回显键名，所以断言键名即可；世界名本身由 title 带着。
+        const text = container.textContent ?? '';
+        expect(text).toContain('vrcc.crossings.met_world');
+        // 既不是相对时间，也不是 ISO 字符串——只有当天的三种之一。
+        expect(text).toMatch(
+            /vrcc\.crossings\.met_(today|yesterday)|\d{4}-\d{2}-\d{2}/
+        );
+        expect(text).not.toContain('· now');
+    });
+
+    it('没有完整星卡时不补那一行，列表照常显示', () => {
+        const container = renderCrossings({
+            stars: [{ n: 5, name: '旧记录' }]
+        });
+        const text = container.textContent ?? '';
+        expect(text).toContain('旧记录');
+        expect(text).not.toContain('vrcc.crossings.met_world');
+    });
+
+    it('卡片还在路上时先占住那一行，别让列表等会儿被顶下去', () => {
+        // 列表和卡片是两个请求：列表先回来时整行已经渲染，「在哪遇见」还
+        // 没有。这段空档如果不占高度，卡片一到整列会往下一跳。
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            { loading: true }
+        );
+        expect(container.querySelector('[role="status"]')).toBeTruthy();
+    });
+
+    it('请求结束后仍没有卡片就不占位，别留一条永远转圈的空行', () => {
+        const container = renderCrossings(
+            { stars: [{ n: 5, name: '旧记录' }] },
+            { loading: false }
+        );
+        expect(container.querySelector('[role="status"]')).toBeNull();
     });
 
     it('服务器给没见过的 why 时退回 unknown，不拼键名', () => {

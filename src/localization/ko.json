@@ -941,6 +941,9 @@
             "linked": "내가 연결함",
             "mutual": "양방향 연결됨",
             "not_linked": "아직 연결되지 않음",
+            "met_world": "Crossed in {world}",
+            "met_today": "today",
+            "met_yesterday": "yesterday",
             "open_page": "vrcc.cc에서 보기",
             "why": {
                 "verify": "별궤도 교차를 쓰려면 VRChat 계정 인증이 필요합니다.",
