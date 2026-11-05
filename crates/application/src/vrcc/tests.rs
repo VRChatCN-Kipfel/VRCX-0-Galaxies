@@ -77,6 +77,8 @@ struct MemoryStore {
     inner: Mutex<Option<StoredCredential>>,
     /// 「上一个令牌的结局」。和令牌分开：`clear` 不动它，这也是真仓库的行为。
     outcome: Mutex<VrccCredentialState>,
+    /// 「首连引导讲到哪一步」。同样按账号，和凭据互不影响。
+    guidance: Mutex<VrccGuidanceState>,
 }
 
 impl MemoryStore {
@@ -97,6 +99,10 @@ impl MemoryStore {
 
     fn outcome(&self) -> VrccCredentialState {
         *self.outcome.lock().unwrap()
+    }
+
+    fn guidance(&self) -> VrccGuidanceState {
+        *self.guidance.lock().unwrap()
     }
 }
 
@@ -125,6 +131,15 @@ impl VrccTokenStore for MemoryStore {
             VrccCredentialState::Active | VrccCredentialState::Never => VrccCredentialState::Never,
             other => other,
         };
+        Ok(())
+    }
+
+    fn load_guidance(&self) -> Result<VrccGuidanceState> {
+        Ok(self.guidance())
+    }
+
+    fn save_guidance(&self, state: VrccGuidanceState) -> Result<()> {
+        *self.guidance.lock().unwrap() = state;
         Ok(())
     }
 }
@@ -705,6 +720,42 @@ fn connecting_again_clears_the_recorded_outcome() {
     service.set_credential_state(VrccCredentialState::Active);
     assert_eq!(store.outcome(), VrccCredentialState::Never);
     assert_eq!(service.snapshot().credential, VrccCredentialState::Active);
+}
+
+#[test]
+fn guidance_starts_unseen_and_survives_a_restart() {
+    let store = Arc::new(MemoryStore::default());
+    let service = VrccService::new(
+        Arc::clone(&store) as Arc<dyn VrccTokenStore>,
+        FakeRemote::new(),
+    );
+    assert_eq!(service.guidance_state(), VrccGuidanceState::Unseen);
+
+    service
+        .set_guidance_state(VrccGuidanceState::Postponed)
+        .expect("save guidance");
+    assert_eq!(store.guidance(), VrccGuidanceState::Postponed);
+
+    // 重启：只凭仓库重建，表态还在。
+    let restarted = VrccService::new(store, FakeRemote::new());
+    assert_eq!(restarted.guidance_state(), VrccGuidanceState::Postponed);
+}
+
+#[test]
+fn connecting_and_disconnecting_leaves_the_guidance_alone() {
+    // 引导说的是「讲过了没有」，不是「连没连上」：连上不该把它抹掉，
+    // 按「看过引导」记下之后也不该因为断开又回到未读。
+    let store = MemoryStore::with(StoredCredential {
+        token: "tok".into(),
+        ..Default::default()
+    });
+    let service = VrccService::new(store.clone(), FakeRemote::new());
+    service
+        .set_guidance_state(VrccGuidanceState::Seen)
+        .expect("save guidance");
+    service.set_credential_state(VrccCredentialState::Disconnected);
+    assert_eq!(service.guidance_state(), VrccGuidanceState::Seen);
+    assert_eq!(store.guidance(), VrccGuidanceState::Seen);
 }
 
 #[test]

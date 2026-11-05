@@ -863,7 +863,9 @@
             "usage_unknown": "noch unbekannt",
             "usage_reset_in": "Zurücksetzung in {time}",
             "unread_used": "Unread counts",
-            "expired": "The previous connection is no longer valid: it was disconnected on vrcc.cc, authorized again elsewhere, or unused for 90 days. Please connect again."
+            "expired": "The previous connection is no longer valid: it was disconnected on vrcc.cc, authorized again elsewhere, or unused for 90 days. Please connect again.",
+            "grant_mismatch": "This connection was authorized for a different build of the app, so it cannot be used. Connect once more to fix it.",
+            "scope_mismatch": "This connection works, but it was granted fewer permissions than this build asks for; some tabs will be unavailable. Connect once more and ask for the extra permission."
         },
         "error": {
             "unknown": "The action failed. Please try again.",
@@ -946,6 +948,90 @@
                 "friend": "Füge den VRCC-Assistenten als VRChat-Freund hinzu, um Kreuzungen zu nutzen.",
                 "unknown": "Kreuzungen sind vorübergehend nicht verfügbar."
             }
+        },
+        "tour": {
+            "next": "Next",
+            "prev": "Back",
+            "done": "Got it",
+            "intro": {
+                "title": "Welcome to VRCX-0-Galaxies",
+                "description": "This is a **downstream branch of Map1en/VRCX-0**, focused on making one community platform a first-class part of the app rather than a browser tab you keep switching to. It follows its own upstream policy: upstream major releases are merged, commits are not tracked one by one.\n\nThe platform is **星遇同频 (vrcc.cc)** — a puzzle-flavoured open social platform run by the VRCC Chinese community. It is **not provided by VRChat**, and this app is **not an official client** of it. Signing in is your call; the token stays on this machine and is only sent to vrcc.cc.\n\nThe next few steps point at the real controls in order. Press `Esc` to leave at any time — you can reopen this from the bottom of the **星遇同频 → 我的** page."
+            },
+            "entry": {
+                "title": "Where it lives",
+                "description": "Xingyu Tongpin has its own entry in the sidebar. The number on the right is how many things are unread across all of its tabs; it only appears once you are connected."
+            },
+            "connect": {
+                "title": "Connect once",
+                "description": "Most of what this integration shows needs one authorization. Press start and a code appears — it is copied to your clipboard for you, and the approval page opens in your browser. Approve it there and this page connects by itself. The token stays on this machine and is only ever sent to vrcc.cc.",
+                "connected_title": "Already connected",
+                "connected_description": "You see the connected badge on the right — so this step is already done. Press Next to continue the tour."
+            },
+            "tabs": {
+                "title": "Four tabs",
+                "description": "Rankings are public, so this tab works without connecting. Alerts and the rest need the token. Tabs you do not have permission for simply will not appear."
+            },
+            "board": {
+                "title": "The board itself",
+                "description": "One row per world: rank, name, average score, and how many rated it. If the world you are in happens to be on the board, it gets its own card just above the list, so you can see your map’s standing without hunting for it. Click a row to open it in this app’s own world page."
+            },
+            "sorts": {
+                "title": "Change the ordering",
+                "description": "Top, this week, and newly listed. Press one of these three and the rows below reorder — that is the whole effect. Only this row can be pressed here; the board underneath is shown just so you can watch it change."
+            },
+            "detail": {
+                "title": "The world page",
+                "description": "A world page holds what the board cannot: the score spread and how many people have been there. When the server sends hardware figures for the world, the small label next to the setup tier becomes a button — press it and the panel expands with VRAM, memory, load time and size. Without those figures it stays a plain label, so there is nothing here that looks pressable but is not."
+            },
+            "rating": {
+                "title": "Rate it and leave a note",
+                "description": "You can give a map a score and write a short note here. Both are sent under your own account, and the site requires that you press the button yourself — which is why the tour only points at it and never presses it for you."
+            },
+            "outro": {
+                "title": "That is it",
+                "description": "You can replay this tour any time from \"Replay the tour\" at the bottom of the \"me\" tab. If you disconnect later, the data here goes quiet until you connect again."
+            },
+            "reopen": "Replay the tour",
+            "notif_views": {
+                "title": "Two views",
+                "description": "Recent lists what the site pushed to you lately, newest first. Notes is the notification list from the site itself, read-only — switching between them does not mark anything as read."
+            },
+            "unread": {
+                "title": "The red counts up here",
+                "description": "Each number is a badge from vrcc.cc: inbox, crossings, chats, notices. Click one and that page opens in your browser — replies happen there. Crossings has no count of its own on the site, so it disappears here when the server turns it off."
+            },
+            "notif_open": {
+                "title": "Every row opens the original",
+                "description": "Click any row and it opens that item on vrcc.cc in your browser. This app is a reader for the list, not a replacement for the site — replying, accepting and the rest still happen there."
+            },
+            "mutuals": {
+                "title": "People who connected back",
+                "description": "Both sides connected, newest first. A green \"online\" means the person is in VRChat right now; otherwise you get a hint about whether they are already a friend. The button on the right opens them in this app, not on the site."
+            },
+            "community": {
+                "title": "The community group",
+                "description": "Join the group behind the site, or open its page. Whether this block appears at all depends on what the server decides for your account."
+            },
+            "crossings": {
+                "title": "Crossings",
+                "description": "People you happened to be in the same instance with. Each row says how it stands: already connected both ways, only you connected, or neither — so you know whether writing to them is possible. Only a one-way connection counts as new; if you are already connected both ways it will not be flagged, so this list does not ping you about friends you already have."
+            },
+            "usage": {
+                "title": "How much is left today",
+                "description": "Daily read counts, taken straight from the server response headers. They reset at midnight Beijing time — not your local midnight — so the reset countdown here is the server’s, not the clock on your desk."
+            },
+            "first_row": {
+                "title": "Say, this row",
+                "description": "Open it and we will carry on inside together — or press Next and I will open it for you. Either way you can always come back and open any row yourself later."
+            },
+            "rating_card": {
+                "title": "The score, before you connect",
+                "description": "This block sits in the sidebar of every world page and needs no authorization — the score, the star rating and how many people rated. So you can look up how a world is regarded without signing in to anything. The full picture, including the score spread and written reviews, is one tab away."
+            }
+        },
+        "open_link": {
+            "opened": "Opened in your browser",
+            "failed": "Could not open the browser. Please open the page yourself."
         }
     },
     "nav_menu": {

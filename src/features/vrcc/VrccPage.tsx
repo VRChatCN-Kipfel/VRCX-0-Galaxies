@@ -22,6 +22,7 @@ import { formatCompactDateTime } from '@/lib/dateTime';
 import { scopeGrants } from '@/lib/vrccScope';
 import { openExternalLink } from '@/services/shellIntegrationService';
 import { toast } from '@/services/toastService';
+import { useVrccTourActiveStore } from '@/state/vrccTourActiveStore';
 import { Badge } from '@/ui/shadcn/badge';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
@@ -35,6 +36,7 @@ import { VrccMapsPanel } from './components/VrccMapsPanel';
 import { VrccMePanel } from './components/VrccMePanel';
 import { VrccMutualsPanel } from './components/VrccMutualsPanel';
 import { VrccNotificationsPanel } from './components/VrccNotificationsPanel';
+import { useOpenExternalLink } from './useOpenExternalLink';
 import { useVrccController, type VrccTab } from './useVrccController';
 import {
     markSeenIds,
@@ -146,9 +148,19 @@ export function VrccPage() {
     const crossingsHiddenRef = useRef(crossingsHidden);
     crossingsHiddenRef.current = crossingsHidden;
     useEffect(() => {
-        // 等连接就绪再应用：`setTab` 在未连接时会直接返回，那时「提醒」页
-        // 该做的已读同步也一并跳过了，页签会落过去而同步没发生。
-        if (!connected || !isVrccTab(requestedTab)) {
+        if (!isVrccTab(requestedTab)) {
+            return;
+        }
+        // **不需要连接就能看的页签要立刻落过去**：地图榜是开放数据，「我的」
+        // 页正是连接入口本身。首连引导的「现在连接」就靠 `?tab=me` 把玩家
+        //送到连接卡片前面——早先这里对未连接一律 return，引导点下去会停在
+        // 默认页签、参数还留在地址栏里，等哪天连上了才突然跳走。
+        //
+        // 其余页签仍然等连接就绪：`setTab` 在未连接时会跳过「提醒」页的已读
+        // 同步，先落过去就是落过去了而同步没发生。
+        const reachableNow =
+            connected || requestedTab === 'maps' || requestedTab === 'me';
+        if (!reachableNow) {
             return;
         }
         // 「星轨相交」被服务端要求隐藏时不能落过去：那个页签根本不存在，
@@ -198,9 +210,28 @@ export function VrccPage() {
             (post) => normalizeLevel(post.level) === 'bar'
         ) ?? null;
     // `pop` 进弹窗序列，可 `‹ 1/3 ›` 翻。
-    const popPosts = pageAnnouncements.filter(
+    const pendingPopPosts = pageAnnouncements.filter(
         (post) => normalizeLevel(post.level) === 'pop'
     );
+
+    /**
+     * **导览在跑时，`pop` 公告先挂起。**
+     *
+     * 优先级是一条队列，不是压栈：
+     * ```
+     * force 公告  →  挂起导览（见 shouldAutoOpenFirstRun）
+     * 导览        →  挂起 pop 公告（这里）
+     * ```
+     * 同一时刻只让一样东西对玩家说话。实测过的故障：导览走到第 4/18 步
+     * 「四个页签」时，页面挂载初期拉的 `pop` 公告盖了上来（「加群领见面礼」），
+     * 一边是遮罩里指着页签条，一边是另一个带分页的弹窗，玩家不知道该看哪个。
+     *
+     * **挂起不是丢弃**：`posts` 传空数组给弹窗，它自然不渲染；等导览结束、
+     * `active` 变回 false，下一帧照常弹。已读状态全程没动——挂起期间不记
+     * 已读，所以不会把玩家还没看过的公告吞掉。
+     */
+    const tourActive = useVrccTourActiveStore((state) => state.active);
+    const popPosts = tourActive ? [] : pendingPopPosts;
 
     const dismissBar = (id: number) => {
         writeBarCursor(id);
@@ -214,18 +245,13 @@ export function VrccPage() {
         markSeenIds(ids);
         setSeenIds(readSeenIds());
     };
+    // 页面级的「打开链接」：走共享 hook，保证点击立刻有状态、成功有回执。
+    // 以前成功时静默，玩家只能等浏览器自己跳出来——期间会重复点。
+    const { open: openLinkExternally } = useOpenExternalLink();
     const openLink = (url: string) => {
         // 走系统的 `app__open_link`，不要用 `window.open`：Tauri 的 WebView
         // 会拦掉 `window.open` 且什么都不做，按钮点了没反应。
-        void openExternalLink(url).catch((error: unknown) => {
-            toast.add({
-                type: 'error',
-                title:
-                    error instanceof Error
-                        ? error.message
-                        : t('vrcc.error.unknown')
-            });
-        });
+        openLinkExternally(url);
     };
     // 只在这三种情况下才算「服务不可用」：没有状态对象、state 不是 ok、
     // 或后端明确报告了故障。
@@ -355,7 +381,7 @@ export function VrccPage() {
                         onValueChange={(value) => setTab(value as typeof tab)}
                         className="flex min-h-0 flex-1 flex-col"
                     >
-                        <TabsList className="shrink-0">
+                        <TabsList data-tour="vrcc-tabs" className="shrink-0">
                             <TabsTrigger value="maps">
                                 {t('vrcc.tab.maps')}
                             </TabsTrigger>
@@ -565,20 +591,22 @@ export function VrccExternalLink({
     /** 打开失败时的回调（一般是弹 toast）。不传就只记日志。 */
     onError?: (error: unknown) => void;
 }) {
+    // 走共享 hook：即时 pending 状态 + 成功/失败反馈。
+    // 以前成功时什么都不做——点了没反应，玩家就会重复点。
+    const { open: openLink, pending } = useOpenExternalLink();
     return (
         <button
             type="button"
+            disabled={pending}
             onClick={() => {
-                void openExternalLink(href).catch((error: unknown) => {
-                    if (onError) {
+                if (onError) {
+                    // 调用方自己管失败提示，这里只保证即时状态。
+                    void openExternalLink(href).catch((error: unknown) => {
                         onError(error);
-                    } else {
-                        console.error(
-                            'vrcc: failed to open external link',
-                            error
-                        );
-                    }
-                });
+                    });
+                    return;
+                }
+                openLink(href);
             }}
             className="text-primary inline-flex items-center gap-1 text-xs hover:underline"
         >

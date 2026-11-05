@@ -131,7 +131,14 @@ function WorldVrccRatingShell({
     // 这一块的核心信息就是「这是谁家的评分、有多少人打过分」，压成灰字之后
     // 整块像附注，和它独立成卡片的意图自相矛盾。来源声明仍然留在弱化层。
     return (
-        <div className="bg-card mt-3 min-w-0 rounded-lg border p-2.5">
+        <div
+            // 导览要点亮这一块：它是**唯一一个不用切到「星遇同频」页签、
+            // 也不用连接**就能看到星遇分数的地方——玩家打开任何一张图的详情，
+            // 第一眼就在左栏看到它。锚点放在外壳上，三种状态（读取中、没人
+            // 打分、有分数）共用同一个节点。
+            data-tour="world-vrcc-rating-card"
+            className="bg-card mt-3 min-w-0 rounded-lg border p-2.5"
+        >
             <div className="text-foreground truncate text-xs font-medium">
                 {t('dialog.world.vrcc.rating')}
             </div>

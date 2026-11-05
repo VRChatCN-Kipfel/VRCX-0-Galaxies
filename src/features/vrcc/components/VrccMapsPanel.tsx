@@ -3,7 +3,6 @@ import { Fragment, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { VrccStars } from '@/components/vrcc/VrccStars';
-import { openExternalLink } from '@/services/shellIntegrationService';
 import { Button } from '@/ui/shadcn/button';
 import { Spinner } from '@/ui/shadcn/spinner';
 import {
@@ -12,6 +11,7 @@ import {
     ToggleGroupSeparator
 } from '@/ui/shadcn/toggle-group';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import { useVrccRowVisibility } from '../useVrccRowVisibility';
 import { useVrccWorldCovers } from '../useVrccWorldCovers';
 import type { VrccBoard, VrccBoardSort } from '../vrccApi';
@@ -52,6 +52,8 @@ export function VrccMapsPanel({
     onOpenWorld: (worldId: string) => void;
 }) {
     const { t } = useTranslation();
+    // 榜单每行右侧那个「去网页看」：点下去要有即时反馈，否则玩家会重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     const maps = boards?.maps ?? [];
     const min = boards?.min;
 
@@ -68,7 +70,10 @@ export function VrccMapsPanel({
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <div className="text-muted-foreground flex shrink-0 items-center gap-2 px-1 pb-2 text-xs">
+            <div
+                data-tour="vrcc-maps-sorts"
+                className="text-muted-foreground flex shrink-0 items-center gap-2 px-1 pb-2 text-xs"
+            >
                 {sortSupported && (
                     <ToggleGroup
                         variant="outline"
@@ -116,7 +121,29 @@ export function VrccMapsPanel({
                     {t('vrcc.maps.empty')}
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+                <div
+                    data-tour="vrcc-maps-list"
+                    className="relative min-h-0 flex-1 overflow-y-auto rounded-xl border"
+                >
+                    {/*
+                     * 「换个排法」那一步只点亮榜单**前几行**，而不是整个列表。
+                     *
+                     * 整块都亮的话，气泡只能落在列表下缘、压住最后几行；而这一步
+                     * 只想让玩家看到「切换排序后名次跟着重排」，看前几名就够。
+                     * 前几行的并集正好在可视区顶部，气泡落在它下方不挡关键内容。
+                     *
+                     * 用一个绝对定位的覆盖层来标这个范围，而不是逐行加属性：
+                     * 覆盖层不参与布局（`pointer-events: none`），布局完全不变，
+                     * 而多元素高亮要的是**一个可测量的矩形**。
+                     *
+                     * 高度按行高估算即可——它只是给导览画框用的，不必精确到像素。
+                     * 悬停列表时淡出，避免那块半透明区域看起来像加载遮罩。
+                     */}
+                    <div
+                        data-tour="vrcc-maps-head"
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[268px]"
+                    />
                     <ul className="divide-y">
                         {maps.map((map, index) => {
                             // 本周榜只按本周的打分排，`rank` 却还是总榜名次：
@@ -126,6 +153,17 @@ export function VrccMapsPanel({
                             return (
                                 <li
                                     key={map.world}
+                                    // 导览靠它拿到「玩家此刻看得见的第一行」是哪个
+                                    // 世界，再打开那张图的详情。从 DOM 取而不是再
+                                    // 请求一次榜单：数据已经在界面上了。
+                                    data-world={map.world}
+                                    // 导览第 6 步要单独高亮「第一行」，让玩家看清
+                                    // 「接下来要打开的是这一行」，而不是让详情凭空
+                                    // 弹出来。只标第一行：多行都标就没有「具体某一
+                                    // 行」这个语义了。
+                                    {...(index === 0
+                                        ? { 'data-tour': 'vrcc-maps-first-row' }
+                                        : {})}
                                     // 用整个 `<li>` 观察，而不是那个 32px 的图：
                                     // 判断的是「这一行有没有露在视口里」。
                                     ref={(element) =>
@@ -221,19 +259,13 @@ export function VrccMapsPanel({
                                     和「在 VRCX 里看」是两件事。 */}
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            // 走系统的 app__open_link：WebView 里
-                                            // `target=_blank` 什么都不做。
-                                            void openExternalLink(
+                                        disabled={openLinkPending}
+                                        onClick={() =>
+                                            openLink(
                                                 map.page ??
                                                     `${SITE}/maps/${map.world}`
-                                            ).catch((error: unknown) => {
-                                                console.error(
-                                                    'vrcc: failed to open map page',
-                                                    error
-                                                );
-                                            });
-                                        }}
+                                            )
+                                        }
                                         className="text-muted-foreground hover:text-primary shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                         aria-label={t('vrcc.maps.open')}
                                     >

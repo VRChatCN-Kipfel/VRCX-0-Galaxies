@@ -219,6 +219,25 @@ describe('VrccPage 的 ?tab= 深链', () => {
         expect(view.search).toContain('tab=notifications');
     });
 
+    /**
+     * 两个页签**不需要连接**，未连接时也要立刻落过去。
+     *
+     * 「我的」是连接入口本身：首连引导的「现在连接」就靠 `?tab=me` 把玩家
+     * 送到连接卡片前面。早先这里对未连接一律 return，引导点下去会停在默认
+     * 页签、参数还留在地址栏，等哪天连上了再突然跳走。地图榜是开放数据，
+     * 同理。
+     */
+    it('未连接时，我的页和地图榜仍然立刻落过去', () => {
+        controller.connected = false;
+        for (const tab of ['me', 'maps'] as const) {
+            vi.clearAllMocks();
+            renderPage(`/vrcc?tab=${tab}`);
+
+            expect(controller.setTab).toHaveBeenCalledWith(tab);
+            expect(view.search).not.toContain('tab=');
+        }
+    });
+
     it('不认识的页签名一律忽略（也不清掉参数）', () => {
         renderPage('/vrcc?tab=nope');
 

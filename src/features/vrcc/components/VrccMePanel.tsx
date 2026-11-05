@@ -1,12 +1,13 @@
 import { ExternalLink, ShieldCheck, Unplug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { openExternalLink } from '@/services/shellIntegrationService';
+import { useVrccFirstRunStore } from '@/state/vrccFirstRunStore';
 import { Badge } from '@/ui/shadcn/badge';
 import { Button } from '@/ui/shadcn/button';
 import { Progress } from '@/ui/shadcn/progress';
 import { Spinner } from '@/ui/shadcn/spinner';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import type {
     VrccConnection,
     VrccDeviceAuthPrompt,
@@ -63,11 +64,17 @@ export function VrccMePanel({
 }) {
     const { t } = useTranslation();
     const connected = connection?.connected ?? false;
+    // 底部「第三方客户端，不是星遇同频官方」那句里的链接：点下去要有
+    // 即时反馈，否则玩家会以为没点上而重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
 
     return (
         <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
             {/* 连接状态 */}
-            <section className="rounded-xl border p-3">
+            <section
+                data-tour="vrcc-me-connect"
+                className="rounded-xl border p-3"
+            >
                 <div className="mb-2 flex items-center gap-2">
                     <ShieldCheck className="text-muted-foreground size-4" />
                     <h3 className="text-sm font-semibold">
@@ -145,6 +152,20 @@ export function VrccMePanel({
                                 {t('vrcc.me.expired')}
                             </p>
                         )}
+                        {/* 授权和当前构建对不上，两种结局的话不一样：
+                            - `grantMismatch`：令牌整个作废，得重新授权
+                            - `scopeMismatch`：令牌还能用，只是权限少了几项
+                            混成一句会让后者的玩家以为连接坏了。 */}
+                        {connection?.credential === 'grantMismatch' && (
+                            <p className="text-xs leading-relaxed">
+                                {t('vrcc.me.grant_mismatch')}
+                            </p>
+                        )}
+                        {connection?.credential === 'scopeMismatch' && (
+                            <p className="text-xs leading-relaxed">
+                                {t('vrcc.me.scope_mismatch')}
+                            </p>
+                        )}
                         <p className="text-muted-foreground text-xs leading-relaxed">
                             {t('vrcc.me.connect_hint')}
                         </p>
@@ -173,7 +194,10 @@ export function VrccMePanel({
 
             {/* 设备授权进行中 */}
             {deviceAuth && (
-                <section className="rounded-xl border p-3">
+                <section
+                    data-tour="vrcc-me-auth"
+                    className="rounded-xl border p-3"
+                >
                     <h3 className="mb-2 text-sm font-semibold">
                         {t('vrcc.me.auth_pending')}
                     </h3>
@@ -218,7 +242,10 @@ export function VrccMePanel({
 
             {/* 今日用量：全部来自服务端响应头 */}
             {usage && (
-                <section className="rounded-xl border p-3">
+                <section
+                    data-tour="vrcc-me-usage"
+                    className="rounded-xl border p-3"
+                >
                     <div className="mb-2 flex items-baseline gap-2">
                         <h3 className="text-sm font-semibold">
                             {t('vrcc.me.usage')}
@@ -256,19 +283,21 @@ export function VrccMePanel({
             )}
 
             <div className="text-muted-foreground text-center text-[10px] leading-relaxed">
+                {/* 常驻入口：自动弹只弹一次，想看的时候要能自己找回来。 */}
+                <button
+                    type="button"
+                    onClick={() =>
+                        useVrccFirstRunStore.getState().openManually()
+                    }
+                    className="hover:text-primary mr-2 inline-flex items-center gap-0.5 hover:underline"
+                >
+                    {t('vrcc.tour.reopen')}
+                </button>
                 {t('vrcc.me.disclaimer')}{' '}
                 <button
                     type="button"
-                    onClick={() => {
-                        // 走系统的 app__open_link：WebView 里 `target=_blank`
-                        // 什么都不做。
-                        void openExternalLink(SITE).catch((error: unknown) => {
-                            console.error(
-                                'vrcc: failed to open the site',
-                                error
-                            );
-                        });
-                    }}
+                    disabled={openLinkPending}
+                    onClick={() => openLink(SITE)}
                     className="hover:text-primary inline-flex items-center gap-0.5 hover:underline"
                 >
                     vrcc.cc

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use vrcx_0_contracts::vrcc::VrccCredentialState;
+use vrcx_0_contracts::vrcc::{VrccCredentialState, VrccGuidanceState};
 use vrcx_0_persistence::{secrets, DatabaseService};
 
 /// 令牌与玩家身份的配置键（**不含** owner 前缀）。
@@ -28,6 +28,12 @@ const VRCC_CLIENT_ID_KEY: &str = "vrccClientId";
 /// 和令牌分开存：`clear` 只清令牌，这一项要留下——否则「连过又手动断开」的账号
 /// 重启后会退化成「从没连过」，界面就会把用过的人当新人再讲一遍入门。
 const VRCC_OUTCOME_KEY: &str = "vrccOutcome";
+
+/// 「首连引导讲到哪一步」的配置键（**不含** owner 前缀）。
+///
+/// 和凭据同一个账号命名空间，但互不影响：断开连接不重置它（玩家已经知道
+/// 星遇同频是什么了），换账号也不会继承别人的「已看过」。
+const VRCC_GUIDANCE_KEY: &str = "vrccGuidance";
 
 /// 从配置表读写的令牌仓库。
 ///
@@ -240,6 +246,27 @@ impl LocalVrccTokenStore {
         };
         self.save_optional_string(VRCC_OUTCOME_KEY, Some(value))
     }
+
+    /// 读「首连引导讲到哪一步」。没有记录时是 [`VrccGuidanceState::Unseen`]。
+    pub fn load_guidance(&self) -> crate::Result<VrccGuidanceState> {
+        Ok(match self.load_string(VRCC_GUIDANCE_KEY)?.as_deref() {
+            Some("seen") => VrccGuidanceState::Seen,
+            Some("postponed") => VrccGuidanceState::Postponed,
+            _ => VrccGuidanceState::Unseen,
+        })
+    }
+
+    /// 写「首连引导讲到哪一步」。
+    ///
+    /// `Unseen` 落盘时等于清掉记录：它就是「没有记录」的形态。
+    pub fn save_guidance(&self, state: VrccGuidanceState) -> crate::Result<()> {
+        let value = match state {
+            VrccGuidanceState::Seen => "seen",
+            VrccGuidanceState::Postponed => "postponed",
+            VrccGuidanceState::Unseen => "",
+        };
+        self.save_optional_string(VRCC_GUIDANCE_KEY, Some(value))
+    }
 }
 
 #[cfg(test)]
@@ -447,6 +474,46 @@ mod tests {
         assert_eq!(
             bob.load_outcome().expect("load bob outcome"),
             VrccCredentialState::Never
+        );
+    }
+
+    /// 引导状态按账号记，而且**和凭据分开**：断开连接不该让人重看一遍引导。
+    #[test]
+    fn guidance_is_per_account_and_outlives_the_credential() {
+        let (db, _dir) = test_db();
+        let alice = store_for(Arc::clone(&db), Some("usr_aaaa"));
+        let bob = store_for(Arc::clone(&db), Some("usr_bbbb"));
+
+        assert_eq!(
+            alice.load_guidance().expect("fresh guidance"),
+            VrccGuidanceState::Unseen
+        );
+
+        alice
+            .save_guidance(VrccGuidanceState::Postponed)
+            .expect("save guidance");
+        alice.save(&credential("token-alice")).expect("save token");
+        alice.clear().expect("clear token");
+
+        // 令牌清掉了，引导表态还在。
+        assert!(alice.load().expect("load").is_none());
+        assert_eq!(
+            alice.load_guidance().expect("load guidance"),
+            VrccGuidanceState::Postponed
+        );
+        // 别人的账号不受影响。
+        assert_eq!(
+            bob.load_guidance().expect("load bob guidance"),
+            VrccGuidanceState::Unseen
+        );
+
+        // `Unseen` 落盘等于清掉记录。
+        alice
+            .save_guidance(VrccGuidanceState::Unseen)
+            .expect("clear guidance");
+        assert_eq!(
+            alice.load_guidance().expect("load guidance"),
+            VrccGuidanceState::Unseen
         );
     }
 }

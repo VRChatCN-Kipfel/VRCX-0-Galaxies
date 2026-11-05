@@ -95,6 +95,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 import { useVrccController } from './useVrccController';
+import { useVrccAnnouncementCache } from './vrccAnnouncementCache';
 
 const connected = {
     connected: true,
@@ -121,6 +122,11 @@ const usage = {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    // 公告走了模块级共享缓存（`vrccAnnouncementCache`），不清的话上一条
+    // 测试写进去的数据会在 1 分钟内被这条测试读到——表现为「明明 mock 成
+    // null，取到的却是上一轮的 { stop: null, posts: [] }」。
+    useVrccAnnouncementCache.getState().invalidate();
+    useVrccAnnouncementCache.getState().setInFlight(null);
     mocks.connection.mockResolvedValue(connected);
     mocks.usage.mockResolvedValue(usage);
     mocks.boards.mockImplementation((_limit: number, sort: string | null) =>

@@ -164,6 +164,13 @@ function EntityDialogTabs({
                     <TabsTrigger
                         key={tab.value}
                         value={tab.value}
+                        // 导览要能定位到「星遇同频」那一页签并点开它：
+                        // 该页签的内容在未激活时**不渲染**（`keepMounted` 没开），
+                        // 所以不切过去就没有可高亮的元素——导览会等超时跳过它，
+                        // 玩家看到的就是「第 7 步完了直接到第 10 步」。
+                        {...(tab.value === 'vrcc'
+                            ? { 'data-tour': 'dialog-vrcc-tab' }
+                            : {})}
                         className="text-muted-foreground hover:text-foreground h-11 flex-none rounded-none border-0 bg-transparent px-3 shadow-none after:hidden data-active:bg-transparent data-active:shadow-none"
                     >
                         {tab.label}

@@ -423,6 +423,9 @@ function NavMenuEntryItem({
                                   onSelect(item);
                               }
                     }
+                    // 导览要在这里挖洞高亮侧栏条目。锚在按钮本身而不是外层
+                    // `<li>`：高亮框贴住玩家真正会点的那个区域。
+                    data-tour={item.index === 'vrcc' ? 'nav-vrcc' : undefined}
                 >
                     <NotifiedNavIcon
                         entry={item}

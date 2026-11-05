@@ -3,6 +3,9 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
 @import './object-row.css';
+/* 导览的高亮层与气泡。driver.js 自带的那份只管结构与动画，
+   配色在文件末尾的 `.driver-*` 覆盖里改成主题色。 */
+@import 'driver.js/dist/driver.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -1526,4 +1529,162 @@ html[data-magicui-theme-vt='active']::view-transition-new(root) {
 ::view-transition-new(root) {
     animation: none;
     mix-blend-mode: normal;
+}
+
+/* ── 星遇同频导览 ────────────────────────────────────────────────
+   把 driver.js 的默认外观改成主题色：默认那套是米黄底配深灰字，
+   在深色主题下像一块贴纸。这里全部走 CSS 变量，深浅主题自动跟随。 */
+.driver-popover.driverjs-theme,
+.driver-popover {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 30px oklch(0 0 0 / 0.25);
+    /* driver 默认把气泡卡在 250–300px 之间（`.driver-popover` 里的
+       `min-width` / `max-width`）。首屏要讲清「星遇同频是什么」和
+       「这不是官方」，300px 里塞不下，会挤成一堵墙。放宽到 22rem。 */
+    min-width: 17rem;
+    max-width: 22rem;
+}
+
+/* 气泡正文现在允许带一点标记（加粗、行内代码、列表），
+   见 `tourMarkdown.ts`。这里是那几种元素的排版。 */
+.driver-popover .driver-popover-description p {
+    margin: 0;
+}
+
+.driver-popover .driver-popover-description p + p {
+    margin-top: 0.5rem;
+}
+
+.driver-popover .driver-popover-description ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+.driver-popover .driver-popover-description li {
+    margin-top: 0.2rem;
+}
+
+.driver-popover .driver-popover-description strong {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.driver-popover .driver-popover-description code {
+    border-radius: 0.25rem;
+    background-color: var(--muted);
+    padding: 0.05rem 0.25rem;
+    font-size: 0.95em;
+}
+
+.driver-popover .driver-popover-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.driver-popover .driver-popover-description {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.driver-popover .driver-popover-progress-text {
+    color: var(--muted-foreground);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.driver-popover .driver-popover-navigation-btns button {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background-color: var(--background);
+    color: var(--foreground);
+    text-shadow: none;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+}
+
+.driver-popover .driver-popover-navigation-btns button:hover {
+    background-color: var(--muted);
+}
+
+/* 「下一步 / 知道了」是主操作，用主色区分，避免和「上一步」长得一样。 */
+.driver-popover .driver-popover-next-btn,
+.driver-popover .driver-popover-done-btn {
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.driver-popover .driver-popover-next-btn:hover,
+.driver-popover .driver-popover-done-btn:hover {
+    background-color: var(--primary);
+    opacity: 0.9;
+}
+
+.driver-popover .driver-popover-arrow-side-left.driver-popover-arrow,
+.driver-popover .driver-popover-arrow-side-right.driver-popover-arrow,
+.driver-popover .driver-popover-arrow-side-top.driver-popover-arrow,
+.driver-popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+    border-color: var(--popover);
+}
+
+/* 高亮洞的描边用主色，玩家一眼看出「就是这一块」。 */
+.driver-active-element {
+    outline: 2px solid var(--primary) !important;
+    outline-offset: 3px;
+}
+
+/* 多元素高亮的合成框。
+   导览有时要一次点亮好几块（例如「连接卡片 + 授权码面板」合起来才讲得清
+   整条链路）。driver 只认单个元素，所以我们造一个正好包住它们包围盒的空框，
+   交给 driver 当锚点。
+
+   **它必须是 `pointer-events: none`，而且要 `!important`。**
+   框是个空 div，正压在真实控件上面。它若能接收点击，就会把点击**吞掉**，
+   下面的「开始连接」永远收不到——表现就是「点了没反应」。
+
+   这里必须 `!important`，是因为 driver 会给锚点元素加一条
+       .driver-active .driver-active-element { pointer-events: auto }
+   （特异性 0,2,0），比单属性选择器 `[data-tour-frame]`（0,1,0）更高。
+   不加就会被它反超，框又变成可点的了。
+
+   放行真实控件的那条规则在下面。 */
+[data-tour-frame] {
+    position: fixed;
+    pointer-events: none !important;
+    background: transparent;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    /* 不能用负 z-index：那会让它躲到内容层后面，driver 量的位置还在，
+       但点击会落到别处。用 0 让它待在自己那层。 */
+    z-index: 0;
+}
+
+/* 多元素高亮时，被框覆盖的**真实控件**要一起放行。
+   driver 的规则是「只有锚点及其子元素可点」，而真实控件在框外面，
+   于是被 `.driver-active *{pointer-events:none}` 一并禁掉了。
+   这条就是那个补丁，同样要 `!important` 才压得过。 */
+[data-tour-hit],
+[data-tour-hit] * {
+    pointer-events: auto !important;
+}
+
+/* 和高亮范围一起点亮、但**不该被点**的区域。
+
+   有些步骤要把一大块拉进高亮范围，好让玩家看清上下文（例如「换个排法」
+   同时点亮排序行和榜单，才能看到切换的效果），但那一大块里只有一小部分
+   该可点。driver 没有「锚点里只放行部分子元素」的开关：
+   - `.driver-active-element * { pointer-events: auto }` 会把整块都放行；
+   - `disableActiveInteraction` 又会把**整个锚点**禁掉，连该点的也一起废了。
+
+   所以用这个反向标记：被标上的子树整体关闭指针事件。它必须比
+   `.driver-active-element *`（0,2,0）更具体，`!important` 保证压过。 */
+[data-tour-readonly],
+[data-tour-readonly] * {
+    pointer-events: none !important;
 }

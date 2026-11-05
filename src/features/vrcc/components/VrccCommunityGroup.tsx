@@ -29,7 +29,10 @@ export function VrccCommunityGroup({
     const isJoined = joined === true;
 
     return (
-        <section className="shrink-0 rounded-xl border p-3">
+        <section
+            data-tour="vrcc-community"
+            className="shrink-0 rounded-xl border p-3"
+        >
             <div className="mb-2 flex items-center gap-2">
                 <Users className="text-muted-foreground size-3.5 shrink-0" />
                 <span className="text-muted-foreground text-xs">

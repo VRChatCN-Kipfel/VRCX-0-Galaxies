@@ -100,7 +100,10 @@ export function VrccMutualsPanel({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-2">
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+            <div
+                data-tour="vrcc-mutuals-list"
+                className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+            >
                 <ul className="divide-y">
                     {orderedStars.map((star) => {
                         const userId = star.vrcUser ?? '';

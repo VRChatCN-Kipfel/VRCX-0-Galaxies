@@ -2045,6 +2045,24 @@ pub fn missing_scopes(granted: Option<&str>, required: &str) -> Vec<String> {
     missing
 }
 
+/// 玩家对「首连引导」表态到哪一步。
+///
+/// 和 [`VrccCredentialState`] 分开记：凭据状态说的是「连没连上」，这一项说的是
+/// 「讲过了没有」。两者不能互相推断——连上过的人可能从没看过引导（引导是后来
+/// 才加的），看过引导的人也可能一直没连。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum VrccGuidanceState {
+    /// 没弹过，也没人表态。
+    #[default]
+    Unseen,
+    /// 看过了（点了「现在连接」，或主动点开过）。
+    Seen,
+    /// 点过「稍后」。**和「没看过」分开记**：延后过一次就不再主动弹，
+    /// 否则每次启动都问一遍等于骚扰。
+    Postponed,
+}
+
 /// 连接状态投影。
 #[derive(Clone, Debug, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]

@@ -31,6 +31,18 @@ export const vrccApi = {
     connection: () => call(() => commands.appVrccConnection()),
     usage: () => call(() => commands.appVrccUsage()),
 
+    /** 玩家对首连引导表态到哪一步（按 VRChat 账号存）。 */
+    guidance: () => call(() => commands.appVrccGuidance()),
+
+    /**
+     * 记下玩家对首连引导的表态。
+     *
+     * 写失败会抛：玩家点过「稍后」却被静默丢弃，等于下次启动又问一遍，
+     * 而界面上当初反馈的是「已记下」。
+     */
+    setGuidance: (guidance: VrccGuidanceState) =>
+        call(() => commands.appVrccSetGuidance(guidance)),
+
     /**
      * 地图榜。不需要连接。
      *
@@ -228,6 +240,10 @@ export type VrccBoardSort = NonNullable<
 export type VrccBoardMap = NonNullable<VrccBoard['maps']>[number];
 export type VrccConnection = Awaited<
     ReturnType<typeof commands.appVrccConnection>
+>;
+/** 玩家对首连引导的表态：`unseen` / `seen` / `postponed`。 */
+export type VrccGuidanceState = Awaited<
+    ReturnType<typeof commands.appVrccGuidance>
 >;
 export type VrccUsage = Awaited<ReturnType<typeof commands.appVrccUsage>>;
 export type VrccRecentNotifications = Awaited<

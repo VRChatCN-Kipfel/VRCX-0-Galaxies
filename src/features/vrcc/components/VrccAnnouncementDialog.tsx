@@ -2,10 +2,10 @@ import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openExternalLink } from '@/services/shellIntegrationService';
 import { Button } from '@/ui/shadcn/button';
 import { Dialog, DialogContent, DialogTitle } from '@/ui/shadcn/dialog';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import type { VrccAnnouncement } from '../vrccApi';
 import { VrccAnnouncementBody } from './VrccAnnouncementBody';
 
@@ -54,6 +54,9 @@ export function VrccAnnouncementDialog({
     const [index, setIndex] = useState(0);
     // 图片是外链，加载失败时收起图片区，别留一块破图占位。
     const [coverFailed, setCoverFailed] = useState(false);
+    // 公告里的「在官网查看」和正文里的链接：点下去要有即时反馈，
+    // 否则玩家会以为没点上而重复点，连着弹出好几个浏览器窗口。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
 
     if (posts.length === 0) return null;
 
@@ -107,16 +110,7 @@ export function VrccAnnouncementDialog({
                                     aria-label={t(
                                         'vrcc.announcement.view_on_site'
                                     )}
-                                    onClick={() => {
-                                        void openExternalLink(SITE).catch(
-                                            (error: unknown) => {
-                                                console.error(
-                                                    'vrcc: failed to open the site',
-                                                    error
-                                                );
-                                            }
-                                        );
-                                    }}
+                                    onClick={() => openLink(SITE)}
                                 >
                                     <ExternalLink className="size-3.5" />
                                 </Button>
@@ -184,16 +178,8 @@ export function VrccAnnouncementDialog({
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => {
-                                            void openExternalLink(link).catch(
-                                                (error: unknown) => {
-                                                    console.error(
-                                                        'vrcc: failed to open the announcement link',
-                                                        error
-                                                    );
-                                                }
-                                            );
-                                        }}
+                                        disabled={openLinkPending}
+                                        onClick={() => openLink(link)}
                                     >
                                         {t('vrcc.announcement.open')}
                                     </Button>

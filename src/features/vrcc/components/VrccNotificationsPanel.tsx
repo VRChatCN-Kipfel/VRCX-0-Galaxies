@@ -3,7 +3,10 @@ import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatRelativeTime } from '@/lib/dateTime';
-import { openExternalLink } from '@/services/shellIntegrationService';
+import {
+    useVrccTourDemoStore,
+    VRCC_TOUR_DEMO_UNREAD
+} from '@/state/vrccTourDemoStore';
 import { Button } from '@/ui/shadcn/button';
 import {
     ToggleGroup,
@@ -11,6 +14,7 @@ import {
     ToggleGroupSeparator
 } from '@/ui/shadcn/toggle-group';
 
+import { useOpenExternalLink } from '../useOpenExternalLink';
 import type { VrccNotificationsView } from '../useVrccController';
 import type {
     VrccNotes,
@@ -83,6 +87,20 @@ export function VrccNotificationsPanel({
 }) {
     const { t } = useTranslation();
 
+    /**
+     * 导览期间给一份演示用红点。
+     *
+     * 首次引导只对**从没连过**的玩家自动弹，他们没有真实数据：红点区因为
+     * `unread` 为 null 整块不渲染，于是「四处红点」那一步高亮的是空白。
+     * 与其把这一步藏掉，不如让它看起来像真的——数字是编的，但结构、位置、
+     * 点开会去哪全是真的。
+     *
+     * 真实数据存在时优先真实数据：已经连上的玩家看到的是自己的红点。
+     */
+    const tourDemoActive = useVrccTourDemoStore((state) => state.active);
+    const unreadForDisplay =
+        unread ?? (tourDemoActive ? VRCC_TOUR_DEMO_UNREAD : null);
+
     if (!connected) {
         return (
             <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-3 text-sm">
@@ -103,7 +121,10 @@ export function VrccNotificationsPanel({
     return (
         <div className="flex h-full min-h-0 flex-col gap-2">
             {(showSwitch || unread) && (
-                <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1">
+                <div
+                    data-tour="vrcc-notif-header"
+                    className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1"
+                >
                     {showSwitch && (
                         <ToggleGroup
                             variant="outline"
@@ -135,9 +156,9 @@ export function VrccNotificationsPanel({
                             )}
                         </ToggleGroup>
                     )}
-                    {unread && (
+                    {unreadForDisplay && (
                         <UnreadCounts
-                            unread={unread}
+                            unread={unreadForDisplay}
                             crossingsHidden={crossingsHidden}
                             onOpenNotes={
                                 showSwitch
@@ -181,6 +202,10 @@ function UnreadCounts({
     onOpenNotes?: () => void;
 }) {
     const { t } = useTranslation();
+    // 「点一下会去浏览器」这类动作以前没有即时反馈：成功时什么都不做，
+    // 玩家只能等浏览器自己跳出来。期间再点一次就会多开一个窗口——
+    // 这就是反馈里「触摸板抖一下弹了几个窗口」的来源。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     // 直接按条件构造，不用 `.filter`：过滤过的数组会丢掉 `key` 的字面量
     // 联合类型，调用方就得写类型断言。
     const items: Array<{
@@ -200,8 +225,25 @@ function UnreadCounts({
         { key: 'notes' }
     ];
 
+    // 一个计数都没有时整块不渲染。
+    //
+    // 否则会剩下一个空 div：导览高亮的是一块**什么都没有的地方**，而文案
+    // 在讲「这四个数字」——玩家看到的是空白，被要求理解不存在的东西。
+    // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
+    if (items.every(({ key }) => unread[key] == null)) return null;
+
+    // 一个计数都没有时整块不渲染。
+    //
+    // 否则会剩下一个空 div：导览高亮的是一块**什么都没有的地方**，而文案
+    // 在讲「这四个数字」——玩家看到的是空白，被要求理解不存在的东西。
+    // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
+    if (items.every(({ key }) => unread[key] == null)) return null;
+
     return (
-        <div className="ml-auto flex items-center gap-3 text-xs">
+        <div
+            data-tour="vrcc-unread-counts"
+            className="ml-auto flex items-center gap-3 text-xs"
+        >
             {items.map(({ key, href }) => {
                 const count = unread[key];
                 if (count == null) return null;
@@ -220,19 +262,9 @@ function UnreadCounts({
                         <button
                             key={key}
                             type="button"
+                            disabled={openLinkPending}
                             className={className}
-                            onClick={() => {
-                                // 走系统的 app__open_link：WebView 里
-                                // `target=_blank` 什么都不做。
-                                void openExternalLink(href).catch(
-                                    (error: unknown) => {
-                                        console.error(
-                                            'vrcc: failed to open notice link',
-                                            error
-                                        );
-                                    }
-                                );
-                            }}
+                            onClick={() => openLink(href)}
                         >
                             {content}
                         </button>
@@ -259,6 +291,8 @@ function UnreadCounts({
 
 function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
     const { t } = useTranslation();
+    // 同 `UnreadCounts`：点开原文要有即时反馈，否则玩家会重复点。
+    const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     const items = recent?.items ?? [];
 
     if (items.length === 0) {
@@ -271,7 +305,10 @@ function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
+        <div
+            data-tour="vrcc-notif-list"
+            className="min-h-0 flex-1 overflow-y-auto rounded-xl border"
+        >
             <ul className="divide-y">
                 {items.map((item) => {
                     // 官方 recent 的 url 是**相对路径**（以 /match/ 开头）。
@@ -282,18 +319,8 @@ function RecentList({ recent }: { recent: VrccRecentNotifications | null }) {
                         <li key={item.id}>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    // 走系统的 app__open_link：WebView 里
-                                    // `target=_blank` 什么都不做。
-                                    void openExternalLink(href).catch(
-                                        (error: unknown) => {
-                                            console.error(
-                                                'vrcc: failed to open notice link',
-                                                error
-                                            );
-                                        }
-                                    );
-                                }}
+                                disabled={openLinkPending}
+                                onClick={() => openLink(href)}
                                 className="hover:bg-muted/40 block w-full px-3 py-2 text-left"
                             >
                                 <div className="flex items-baseline gap-2">

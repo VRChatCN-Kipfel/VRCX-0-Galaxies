@@ -362,7 +362,10 @@ export function WorldVrccPanel({ worldId }: { worldId: string }) {
         // 只是让这一页正好塞得进去。
         <div className="flex h-full min-w-0 flex-col gap-5 overflow-hidden pb-2">
             {/* ① 指标行。点「配置」会在它正下方展开四宫格。 */}
-            <div className="flex min-w-0 shrink-0 flex-col gap-2">
+            <div
+                data-tour="world-vrcc-overview"
+                className="flex min-w-0 shrink-0 flex-col gap-2"
+            >
                 <VrccMetricRow items={metrics} />
                 <div ref={perfRef}>
                     <VrccCollapse open={perfOpen}>
