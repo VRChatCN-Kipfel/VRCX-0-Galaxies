@@ -160,8 +160,6 @@ fn vrcc_kind_name(kind: vrcx_0_application::vrcc::VrccErrorKind) -> &'static str
     }
 }
 
-/// 和前端 `VrccErrorKind` 的联合类型逐字一致（`needsReauth` 等），
-/// 所以前端可以直接拿来当判别用，不需要再映射一次。
 fn vrcc_layer_name(layer: vrcx_0_contracts::vrcc::ErrorLayer) -> &'static str {
     use vrcx_0_contracts::vrcc::ErrorLayer as Layer;
     match layer {
