@@ -243,13 +243,6 @@ function UnreadCounts({
     // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
     if (items.every(({ key }) => unread[key] == null)) return null;
 
-    // 一个计数都没有时整块不渲染。
-    //
-    // 否则会剩下一个空 div：导览高亮的是一块**什么都没有的地方**，而文案
-    // 在讲「这四个数字」——玩家看到的是空白，被要求理解不存在的东西。
-    // 直接不渲染，导览那一步就会因为找不到锚点而跳过。
-    if (items.every(({ key }) => unread[key] == null)) return null;
-
     return (
         <div
             data-tour="vrcc-unread-counts"
