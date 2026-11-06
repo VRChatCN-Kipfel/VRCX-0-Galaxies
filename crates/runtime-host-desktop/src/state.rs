@@ -194,7 +194,11 @@ pub struct DesktopRuntimeBundle {
     pub integration_api_observer: Arc<dyn InstanceRosterObserver>,
 }
 
-/// 把 vrcc 后台轮询挂到 VRChat 登录状态上的绑定。
+/// 把 vrcc 后台轮询挂到 **VRCX 账号登录**上的绑定。
+///
+/// 它跟的是「谁登录了 VRCX」，不是「VRChat 游戏进程在不在」：令牌属于账号，
+/// 与游戏状态无关，所以只有登出（或换号）才停任务。理由见
+/// `DesktopVrccRuntime::spawn_background_poll` 的「为什么不看游戏是否在运行」。
 ///
 /// 登录就绪时起一个属于该账号的任务；账号变化或登出时把上一代的 stop
 /// 置位，让它在下一次醒来时自行退出。旧任务不立即中止而是"下次醒来退出"，

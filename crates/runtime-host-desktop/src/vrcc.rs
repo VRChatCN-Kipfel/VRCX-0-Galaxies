@@ -1,7 +1,7 @@
 //! 星遇同频运行时：把应用层服务挂到桌面运行时上。
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use vrcx_0_application::vrcc::{
@@ -92,11 +92,26 @@ impl DesktopVrccRuntime {
     /// 后台轮询的基准间隔。
     ///
     /// 官方建议按 `me/notifications` 返回的 `every`（通常 60 秒）问，最少隔
-    /// 25 秒。这里取 60 秒和 `every` 里大的那个：`me/unread` 每天 1500 次，
-    /// 一分钟问一次正好够一整天。
+    /// 25 秒。这里取 60 秒和 `every` 里大的那个。
+    ///
+    /// 这个间隔**只约束提醒**（`me/notifications` 没有每天上限）。`me/unread`
+    /// 有自己的额度与节奏，见 [`Self::UNREAD_REFRESH_EVERY`]。
     const BACKGROUND_POLL_BASE: Duration = Duration::from_secs(60);
     /// 抖动上限，避免所有客户端撞在同一秒（官方脚本也这样做）。
     const BACKGROUND_POLL_JITTER: Duration = Duration::from_secs(20);
+
+    /// `me/unread` 自己的刷新间隔。
+    ///
+    /// 它有独立额度（每个授权每天 1500 次），不必跟着 60 秒的提醒节奏跑：
+    ///
+    /// - 60 秒一轮、一轮问一次，一天要 1200 次以上，占掉八成到九成六的额度；
+    /// - 这份数字只喂两处——腕表摘要与星遇同频页的角标。页面在加载时会强制
+    ///   问一次（`refreshUnread(true)`），所以后台这份延迟两分钟不影响玩家
+    ///   看到的数字，只影响腕表的刷新粒度。
+    ///
+    /// 两分钟是界面文档给这个接口的建议上限：一天 720 次，剩下的余量留给页面
+    /// 刷新和玩家操作。
+    const UNREAD_REFRESH_EVERY: Duration = Duration::from_secs(120);
 
     /// 星遇企划图标在站点上的路径。
     ///
@@ -479,8 +494,38 @@ impl DesktopVrccRuntime {
     /// 这里用 `TaskSupervisor::spawn_cancellable`，让任务随应用退出一起停，
     /// 不用自己管生命周期。
     ///
-    /// 通知走宿主注入的 `DesktopNotifier`：Headless 下没人挂载它，
-    /// `show()` 返回 `Err`，这里只记日志，不会 panic。
+    /// 通知走 `NotificationDispatcher`，和 VRChat 自己的活动同一条投递链：
+    /// 免打扰、隐私锁、通道偏好、图标解析、有序投递都在那里生效。
+    ///
+    /// ## 为什么不看「游戏是否在运行」
+    ///
+    /// 这条轮询只认两件事：令牌还能用、令牌带 `notifications` 权限。**刻意不判
+    /// 断 VRChat 进程在不在**，所以没有 `is_game_running` 这一支——不是漏了，
+    /// 是那一支会把功能砍掉一半：
+    ///
+    /// - 接口是**账号域**的。`me/notifications` 只认令牌，服务端既不掌握也无从
+    ///   知道本机开没开游戏；「游戏在跑」在这条链路上没有任何语义。
+    /// - 这是桌面陪伴端，不是游戏内插件。**站外提醒的价值峰恰好落在没开游戏的
+    ///   时候**：有人连向你、有人私聊你、你的星友圈动态被留言，这时玩家正坐在
+    ///   电脑前。按游戏进程开关轮询，等于把最有用的那一段静默关掉。
+    /// - 投递侧早就不看游戏状态（`external_notice_delivery` 把 `desktop` 定成
+    ///   `true`，正是为了「不该因为 VRChat 没开就丢掉」）。轮询反过来按游戏状态
+    ///   开关，只会让两处打架：要么任务停了、通知永远排不出去，要么反过来。
+    ///
+    /// 星遇同频文档里写着「只在 VRChat 开着时问」。那句是给对方自家 VRCX 脚本
+    /// 定的负载约定（提醒多由站内事件产生，而站内事件的高峰与「人在游戏里」相
+    /// 关），不是接口的前提条件。该守住的是**频率**，那条已经守了：两次之间至
+    /// 少 25 秒、按返回的 `every`（60 秒）加抖动、`me/unread` 走自己的
+    /// [`Self::UNREAD_REFRESH_EVERY`]。真正浪费的是「没有新数据也照问」，那已经
+    /// 按接口分开处理，而不是按游戏进程猜玩家想不想要提醒。
+    ///
+    /// 顺带记一个容易踩反的点：游标是进程内的，跳过若干轮不会把它清空，游戏启
+    /// 动后的第一轮仍会带上一次 `since` 把中间那批拉回来；只有 VRCX 重启才会重
+    /// 新取位置（提醒只保留一天，`me/notifications/recent` 兜底）。
+    ///
+    /// 页面也不依赖这条轮询：打开星遇同频页时前端自己按需拉
+    /// `me/notifications/recent` 与 `me/unread`，所以这个任务在不在跑，不影响
+    /// 页面上看到的数字。
     ///
     /// `event_sink` 用来告诉前端「有新数据了」或「连接失效了」。前端不再自己
     /// 轮询——双轨会让两边各拉一次、`mark` 语义互相打架，而且隐藏窗口时前端
@@ -511,6 +556,9 @@ impl DesktopVrccRuntime {
                 let notified = NotifiedIds::default();
                 // 通知图标也在轮次之间共享：第一次成功下载后就只用本地文件。
                 let mut notice_icon = NoticeIcon::default();
+                // `me/unread` 的上次询问时刻，同样跨轮次共享：它的节奏和提醒
+                // 不是一回事（见 `UNREAD_REFRESH_EVERY`）。
+                let mut unread_at: Option<Instant> = None;
                 // 启动探针：没有它，分不清「轮询没起来」和「起来了但没数据」。
                 tracing::info!(
                     interval_secs = base.as_secs(),
@@ -552,6 +600,7 @@ impl DesktopVrccRuntime {
                             &notified,
                             &mut notice_icon,
                             &owner,
+                            &mut unread_at,
                         )
                         .await
                         {
@@ -645,13 +694,35 @@ impl PollOutcome {
     }
 }
 
+/// `me/unread` 这一轮该不该问。
+///
+/// 纯函数：不读时钟、不发请求，于是「多久问一次」可以脱离网络单独验。
+///
+/// 三个条件任一成立就问：
+/// - 还没问过（刚连上）：角标和腕表要先有个数；
+/// - 这一轮有新提醒：提醒变了，未读多半也变了；
+/// - 距上一次已经过了 [`DesktopVrccRuntime::UNREAD_REFRESH_EVERY`]：兜住
+///   「没有新提醒、但某处红点悄悄变了」的情况——星轨相交、私聊就是这么来的。
+fn unread_refresh_due(first_poll: bool, fresh: usize, since_last: Option<Duration>) -> bool {
+    if first_poll || fresh > 0 {
+        return true;
+    }
+    match since_last {
+        Some(elapsed) => elapsed >= DesktopVrccRuntime::UNREAD_REFRESH_EVERY,
+        // 没有计时器（任务刚起来，或刚换过账号）：宁可多问一次。
+        None => true,
+    }
+}
+
 /// 一次轮询。
 ///
 /// 1. `me/notifications?since=`：官方给桌面客户端设计的轮询，**没有每天上限**，
 ///    每次只给游标之后的新提醒，所以每条只弹一次。第一次不带游标，服务器只
 ///    告诉「现在到哪了」，不给旧提醒——启动时不会把一天的旧提醒全弹一遍。
 /// 2. `me/unread`（1.13.0 起）：几处红点的数字，每天 1500 次单独计数，给腕表和
-///    页面角标。
+///    页面角标。**按 [`DesktopVrccRuntime::UNREAD_REFRESH_EVERY`] 自己的节奏
+///    问**：有新提醒时立刻问，否则最多两分钟一次，不再跟着提醒的 60 秒走
+///    （见 [`unread_refresh_due`]）。
 /// 3. 旧服务器没有 `me/unread` 时，只在刚连上或来了新提醒时拉一次「最近的提醒」
 ///    （每天 1000 次的第一份读），腕表的未读数靠它。
 ///
@@ -664,6 +735,7 @@ async fn poll_once(
     notified: &NotifiedIds,
     icon: &mut NoticeIcon,
     owner: &vrcx_0_core::OwnerId,
+    unread_at: &mut Option<Instant>,
 ) -> Result<PollOutcome, VrccError> {
     let first_poll = service.notifications_cursor().is_none();
     let fresh = match service.poll_notifications().await {
@@ -700,27 +772,37 @@ async fn poll_once(
         handle_recent_notices(&fresh, dispatcher, notified, icon_path, Some(owner.clone()));
     outcome.persisted = persisted;
 
-    match service.refresh_unread().await {
-        Ok(Some((counts, changed))) => {
-            outcome.unread = Some(counts.total());
-            outcome.changed |= changed;
-        }
-        Ok(None) => {
-            if first_poll || !fresh.is_empty() {
-                match service.recent_notifications(false).await {
-                    Ok(_) => outcome.changed = true,
-                    Err(error) if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth => {
-                        return Err(error)
+    if unread_refresh_due(first_poll, fresh.len(), unread_at.map(|at| at.elapsed())) {
+        // 记账放在请求**之前**：失败也算「问过了」。否则一次网络抖动就让重试
+        // 变成每轮都撞一次，额度正是这么被吃掉的。
+        *unread_at = Some(Instant::now());
+        match service.refresh_unread().await {
+            Ok(Some((counts, changed))) => {
+                outcome.unread = Some(counts.total());
+                outcome.changed |= changed;
+            }
+            Ok(None) => {
+                if first_poll || !fresh.is_empty() {
+                    match service.recent_notifications(false).await {
+                        Ok(_) => outcome.changed = true,
+                        Err(error)
+                            if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth =>
+                        {
+                            return Err(error)
+                        }
+                        Err(error) => tracing::warn!(%error, "vrcc: recent notices refresh failed"),
                     }
-                    Err(error) => tracing::warn!(%error, "vrcc: recent notices refresh failed"),
                 }
             }
+            Err(error) if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth => {
+                return Err(error)
+            }
+            // 未读数拿不到不影响提醒：记一笔，下一轮再试。
+            Err(error) => tracing::warn!(%error, "vrcc: unread count failed"),
         }
-        Err(error) if classify_vrcc_error(&error).0 == VrccErrorKind::NeedsReauth => {
-            return Err(error)
-        }
-        // 未读数拿不到不影响提醒：记一笔，下一轮再试。
-        Err(error) => tracing::warn!(%error, "vrcc: unread count failed"),
+    } else {
+        // 没新提醒、也还没到点：这一轮不问未读，省下的是它自己的每日额度。
+        tracing::debug!("vrcc: unread refresh skipped (cadence)");
     }
     Ok(outcome)
 }
@@ -1235,6 +1317,40 @@ mod tests {
         }
         // 极小 span 不能返回 0 以外的值（除零保护）。
         assert_eq!(jitter_millis(&Duration::from_millis(0)), 0);
+    }
+
+    #[test]
+    fn unread_refresh_follows_its_own_cadence() {
+        // 第一轮必须问一次，否则角标和腕表没有初始值。
+        assert!(unread_refresh_due(true, 0, None));
+        // 刚问过、也没有新提醒：不问。
+        assert!(!unread_refresh_due(false, 0, Some(Duration::from_secs(90))));
+        // 到点就问（等号的边界也要算）。
+        assert!(unread_refresh_due(
+            false,
+            0,
+            Some(DesktopVrccRuntime::UNREAD_REFRESH_EVERY)
+        ));
+        // 有新提醒时立刻问，不必等满间隔。
+        assert!(unread_refresh_due(false, 1, Some(Duration::from_secs(1))));
+        // 计时器还没设过（任务刚起来、或刚换号）：宁可多问一次。
+        assert!(unread_refresh_due(false, 0, None));
+    }
+
+    #[test]
+    fn unread_cadence_leaves_room_in_the_daily_budget() {
+        // 官方给的额度是每个授权每天 1500 次（`me/unread` 单独一份）。这条
+        // 断言是给「后来的我把间隔改回 60 秒」准备的：60 秒一轮要 1440 次，
+        // 一天的额度刚好被后台轮询吃光，页面刷新和玩家操作就没了。
+        //
+        // 钉住的是「至少留一半」——不是精确值，改间隔只要还在这条线内，
+        // 不必为了这个测试去改数字。
+        const DAILY_BUDGET: u64 = 1_500;
+        let per_day = 86_400 / DesktopVrccRuntime::UNREAD_REFRESH_EVERY.as_secs();
+        assert!(
+            per_day * 2 <= DAILY_BUDGET,
+            "unread cadence would use {per_day} of {DAILY_BUDGET} per day, leaving no headroom"
+        );
     }
 
     // -- 通知投递：包装成活动对象、点哪里 --------------------------------
