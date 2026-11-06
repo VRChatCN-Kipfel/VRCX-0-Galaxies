@@ -862,7 +862,6 @@
             "client_dev": "测试中",
             "code_copied": "授权码 {code} 已复制",
             "open_browser_failed": "打不开浏览器，请手动打开星遇同频网页",
-            "usage_note_server": "数字来自星遇同频服务器，是这个连接今天的次数，北京时间零点重置。",
             "usage_unknown": "尚未获取",
             "usage_reset_in": "{time} 后重置",
             "unread_used": "未读数",
