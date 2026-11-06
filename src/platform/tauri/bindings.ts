@@ -8298,43 +8298,6 @@ export type VrccNote = {
  */
 export type VrccNotes = { notes?: VrccNote[] };
 /**
- * 一条提醒，对应官方的 `Notice`。
- *
- * 官方定义只有 `id` / `title` / `body` / `at` 四个字段。`/me/notifications/recent`
- * 会在此之上多给一个 `url`（见 [`VrccRecentNotificationItem`]）——
- * `/me/notifications` 的轮询**没有** `url`，两者不能混用同一个类型。
- */
-export type VrccNotificationItem = {
-    /**
-     * 提醒递增编号。
-     */
-    id?: number;
-    title?: string | null;
-    body?: string | null;
-    /**
-     * 产生时间（毫秒时间戳）。
-     */
-    at?: number | null;
-};
-/**
- * `GET /me/notifications`：带增量游标的轮询接口。
- */
-export type VrccNotifications = {
-    /**
-     * 下一次轮询要回传的游标。
-     */
-    last?: number | null;
-    items?: VrccNotificationItem[];
-    /**
-     * 官方建议的轮询间隔（秒），通常 60。
-     */
-    every?: number | null;
-    /**
-     * 未读角标数。
-     */
-    dot?: number | null;
-};
-/**
  * 我打过分的某张地图：`GET /me/maps` 里的一条。
  *
  * **和 [`VrccBoardMap`] 不是同一个形状**：这里说的是「我给它打了多少分、
