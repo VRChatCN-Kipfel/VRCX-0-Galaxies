@@ -2267,9 +2267,6 @@ mod tests {
     #[test]
     fn body_over_2kb_is_rejected() {
         // 官方限制 POST 正文 2 KB，客户端在发送前就拦。
-        //
-        // 这条测试以前是假的：它只断言 `"x".repeat(MAX+1).len() > MAX`，
-        // 那是恒真的算术，根本没碰到被测代码。现在直接调拦截函数。
         assert!(
             matches!(
                 check_body_size(MAX_BODY_BYTES + 1),
