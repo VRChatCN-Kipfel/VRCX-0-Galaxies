@@ -295,6 +295,148 @@ jobs:
                   path: ${{ matrix.artifact_path }}
                   if-no-files-found: error
 
+    package-windows:
+        name: Windows Installer
+        needs: prepare
+        runs-on: windows-latest
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - uses: ./.github/actions/setup-node
+
+            - name: Import Windows code signing certificate and trust chain
+              shell: pwsh
+              env:
+                  WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+                  WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+              run: |
+                  if (-not $env:WINDOWS_CERTIFICATE) {
+                      Write-Error "WINDOWS_CERTIFICATE secret is required for signed Windows builds."
+                      exit 1
+                  }
+                  $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+                  [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+                  $secrets = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+
+                  # 离线读出整条链（EphemeralKeySet，不落盘私钥），供下面装进信任存储。
+                  $chain = [System.Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
+                  $chain.Import($pfx, $env:WINDOWS_CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+
+                  $imported = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secrets
+                  Remove-Item $pfx -Force
+
+                  # 把整条链（叶子除外）都装进用户级「受信任的根证书颁发机构」。
+                  # 这是自建 CA，不追求公共信任链的分层语义，只要 signtool 能构建出
+                  # 完整链即可。用户级存储不需要管理员权限；runner 是一次性的，这个
+                  # 信任状态不会离开本次构建，也不会让最终用户的机器信任这组自建 CA。
+                  $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
+                  $rootStore.Open('ReadWrite')
+                  try {
+                      foreach ($cert in $chain) {
+                          if ($cert.Thumbprint -eq $imported.Thumbprint) { continue }
+                          $rootStore.Add($cert)
+                      }
+                  } finally {
+                      $rootStore.Close()
+                  }
+
+                  $thumb = $imported.Thumbprint
+                  if (-not $thumb) {
+                      Write-Error "Imported certificate has no thumbprint."
+                      exit 1
+                  }
+
+                  # 证书指纹属于环境信息，不落进仓库：从刚导入的证书直接读出来注入配置。
+                  # 这样换证书只需要换 secret，不必改任何提交。
+                  $env:CODESIGN_THUMBPRINT = $thumb
+                  node -e "const fs=require('node:fs');const p='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle??={};c.bundle.windows??={};c.bundle.windows.certificateThumbprint=process.env.CODESIGN_THUMBPRINT;fs.writeFileSync(p,JSON.stringify(c,null,4)+'\n');"
+
+            - name: Show signing certificate (public fields only)
+              shell: pwsh
+              run: |
+                  # 只打印证书的公开字段，任何私钥材料都不输出、不导出。
+                  # 指纹来自上一步从导入证书注入的配置值。
+                  $config = Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
+                  $thumb = $config.bundle.windows.certificateThumbprint
+                  if (-not $thumb) {
+                      Write-Error "bundle.windows.certificateThumbprint is not set in tauri.conf.json."
+                      exit 1
+                  }
+                  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $thumb }
+                  if (-not $cert) {
+                      Write-Error "Code signing certificate $thumb was not found in CurrentUser\My after import."
+                      exit 1
+                  }
+                  Write-Host "Subject      : $($cert.Subject)"
+                  Write-Host "Issuer       : $($cert.Issuer)"
+                  Write-Host "Thumbprint   : $($cert.Thumbprint)"
+                  Write-Host "SerialNumber : $($cert.SerialNumber)"
+                  Write-Host "NotBefore    : $($cert.NotBefore.ToUniversalTime().ToString('o'))"
+                  Write-Host "NotAfter     : $($cert.NotAfter.ToUniversalTime().ToString('o'))"
+                  Write-Host "HasPrivateKey: $($cert.HasPrivateKey)"
+                  $eku = ($cert.EnhancedKeyUsageList | ForEach-Object { "$($_.FriendlyName) ($($_.ObjectId))" }) -join ', '
+                  Write-Host "EKU          : $eku"
+
+            - name: Inject updater public key
+              env:
+                  TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+              run: |
+                  if [[ -z "$TAURI_UPDATER_PUBLIC_KEY" ]]; then
+                      echo "TAURI_UPDATER_PUBLIC_KEY repository variable is required for updater artifacts" >&2
+                      exit 1
+                  fi
+                  node -e "const fs = require('node:fs'); const path = 'src-tauri/tauri.conf.json'; const config = JSON.parse(fs.readFileSync(path, 'utf8')); config.plugins ??= {}; config.plugins.updater ??= {}; config.plugins.updater.pubkey = process.env.TAURI_UPDATER_PUBLIC_KEY; fs.writeFileSync(path, JSON.stringify(config, null, 4) + '\n');"
+
+            - name: Build Windows installer
+              env:
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
+              run: npm run tauri:build -- --bundles nsis
+
+            - name: Prepare Windows release and updater assets
+              run: |
+                  bundle_dir="target/release/bundle/nsis"
+                  installer="$(find "$bundle_dir" -maxdepth 1 -name '*-setup.exe' | sort | head -n 1)"
+                  if [[ -z "$installer" ]]; then
+                      echo "No Windows installer found in $bundle_dir" >&2
+                      exit 1
+                  fi
+
+                  renamed="$bundle_dir/VRCX-0_${{ needs.prepare.outputs.build_version }}_windows_x86_64_setup.exe"
+                  if [[ "$installer" != "$renamed" ]]; then
+                      if [[ -e "$renamed" ]]; then
+                          echo "Target installer already exists: $renamed" >&2
+                          exit 1
+                      fi
+                      mv "$installer" "$renamed"
+                  fi
+
+                  if [[ ! -f "${renamed}.sig" ]]; then
+                      echo "No updater signature found at ${renamed}.sig" >&2
+                      exit 1
+                  fi
+
+                  node scripts/create-tauri-updater-manifest.ts \
+                      --version "${{ needs.prepare.outputs.build_version }}" \
+                      --tag "${{ needs.prepare.outputs.tag }}" \
+                      --target "windows-x86_64-stable" \
+                      --asset-name "$(basename "$renamed")" \
+                      --signature-file "${renamed}.sig" \
+                      --out "$bundle_dir/latest_windows.json"
+
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: release-windows
+                  path: |
+                      target/release/bundle/nsis/*.exe
+                      target/release/bundle/nsis/latest_windows.json
+                  if-no-files-found: error
+
     logger:
         name: Logger (${{ matrix.platform }} ${{ matrix.arch }})
         needs: prepare
@@ -368,6 +510,7 @@ jobs:
         needs:
             - prepare
             - package
+            - package-windows
             - logger
         runs-on: ubuntu-24.04
         permissions:
