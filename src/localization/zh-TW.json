@@ -652,6 +652,9 @@
     },
     "overlay": {
         "footer": {
+            "vrcc_unread": "未讀 {count}",
+            "vrcc_rank": "本圖第 {rank} 名",
+            "vrcc_rank_avg": "本圖第 {rank} 名 · 均分 {avg}",
             "players": "{count} 位用戶",
             "instance_duration": "停留 {duration}",
             "online_duration": "線上 {duration}"
@@ -786,6 +789,255 @@
         "expand_nav": "展開導覽列",
         "collapse_nav": "收起導覽列",
         "toggle_theme": "切換主題"
+    },
+    "vrcc": {
+        "title": "星遇同頻",
+        "description": "星遇同頻（vrcc.cc）的地圖榜、提醒與連線狀態",
+        "not_connected": "未連線",
+        "connected": "已連線",
+        "service_down": "服務無法使用",
+        "go_connect": "去連線",
+        "reconnect_hint": "去「我的」重新連線",
+        "missing_scope": "這一項需要 {scope} 權限，重新連線一次即可",
+        "tab": {
+            "maps": "地圖榜",
+            "notifications": "提醒",
+            "me": "我的",
+            "mutuals": "連上",
+            "crossings": "星軌相交"
+        },
+        "maps": {
+            "hint": "滿 {min} 人評分才進總榜",
+            "empty": "暫無榜單資料",
+            "open": "在星遇同頻打開",
+            "sort": {
+                "top": "总榜",
+                "week": "本週",
+                "new": "新上榜"
+            },
+            "week_count": "本週 {count}"
+        },
+        "current_map": {
+            "label": "你所在的地圖",
+            "open": "在世界詳情裡開啟",
+            "not_ranked": "這張圖還沒進地圖榜。在星遇同頻打分後會提交收錄審核。",
+            "avg": "均分",
+            "raters": "人數",
+            "mine": "我打的",
+            "pending": "審核中",
+            "words_pending": "短評審核中",
+            "words_hidden": "短評未通過審核"
+        },
+        "notifications": {
+            "need_connect": "連線星遇同頻後，提醒會出現在這裡",
+            "empty": "最近沒有新的提醒",
+            "untitled": "提醒",
+            "view": {
+                "recent": "提醒",
+                "notes": "通知"
+            },
+            "notes_empty": "通知中心是空的"
+        },
+        "me": {
+            "status": "連線",
+            "star": "星號",
+            "vrc_name": "VRChat 名字",
+            "scope": "權限",
+            "client": "客戶端標識",
+            "next_poll": "下次輪詢",
+            "disconnect": "斷開連線",
+            "connect_hint": "用下面的授權碼在星遇同頻網頁上同意，這裡會自動連上。權杖只存在本機，只發給 vrcc.cc。",
+            "begin": "開始連線",
+            "begin_cooldown": "{sec} 秒後可再次申請",
+            "auth_pending": "等待同意",
+            "auth_hint": "在瀏覽器裡開啟下面的連結，或手動輸入授權碼：",
+            "open_browser": "在瀏覽器開啟",
+            "auth_expires": "{minutes} 分鐘內有效，每 {sec} 秒檢查一次",
+            "usage": "今日用量",
+            "personal_used": "個人介面",
+            "device_code_used": "申請授權碼",
+            "window": "本分鐘請求",
+            "usage_note": "數字來自星遇同頻伺服器，反映最近一次請求那一刻的用量。額度按北京時間零點重置。",
+            "disclaimer": "第三方客戶端，不是星遇同頻官方。",
+            "client_dev": "測試中",
+            "code_copied": "授權碼 {code} 已複製",
+            "open_browser_failed": "打不開瀏覽器，請手動開啟星遇同頻網頁",
+            "usage_unknown": "尚未取得",
+            "usage_reset_in": "{time} 後重置",
+            "unread_used": "未讀數",
+            "expired": "上一次的連線已失效：可能在星遇同頻網頁上斷開了、在別處重新授權過，或 90 天沒用自動斷開了。請重新連線。",
+            "grant_mismatch": "這條連接是另一個版本的用戶端授權的，用不了。再連一次就好。",
+            "scope_mismatch": "這條連接還能用，但拿到的權限比目前版本要求的少，有些頁籤會不可用。再連一次，把缺的那項要上。"
+        },
+        "error": {
+            "unknown": "操作失敗，請稍後再試",
+            "device_code_quota": "申請連接碼的額度按網路出口 IP 計算，每天 30 個，同一網路下的其他裝置或玩家共用。換一個網路（例如手機熱點）可以立刻再用。",
+            "network": {
+                "connect": "連不上星遇同頻，可能被網路攔截。開了代理的話，請檢查設定裡的代理是否可用。",
+                "dns": "找不到 vrcc.cc，網域名稱解析失敗。請檢查網路或換個 DNS。",
+                "timeout": "連線星遇同頻逾時，請稍後再試。",
+                "generic": "與星遇同頻的網路連線中斷，請稍後再試。"
+            }
+        },
+        "mutuals": {
+            "need_connect": "連線星遇同頻後，這裡會顯示互相連上的星友",
+            "empty": "還沒有互相連上的星友",
+            "needs_scope": "「互相連上」需要 mutuals 權限，重新連線一次即可（開發版標識拿不到這項）。",
+            "unnamed": "未命名",
+            "unavailable": "這一項需要額外權限，當前客戶端還沒開通",
+            "rate_mine": "我給 TA 的分",
+            "linked_at": "連上的時間",
+            "presence": {
+                "online": "線上",
+                "friend": "已是好友",
+                "add": "加好友 ›"
+            }
+        },
+        "community": {
+            "label": "社群",
+            "name": "VRChat 中文社群 VRCC 的 VRChat 群組",
+            "hint": "加入後可以在 VRChat 裡找到同好",
+            "joined": "已加入",
+            "joined_hint": "你已經在群組裡了",
+            "join": "加入",
+            "open": "在 VRChat 群組詳情裡開啟"
+        },
+        "unread": {
+            "inbox": "連向我",
+            "cross": "星軌相交",
+            "chats": "私聊",
+            "notes": "通知"
+        },
+        "stop": {
+            "title": "星遇同頻正在停站維護",
+            "until": "預計 {time} 恢復"
+        },
+        "announcement": {
+            "open": "查看",
+            "dismiss": "關閉這條公告",
+            "got_it": "知道了",
+            "view_on_site": "在官網查看",
+            "prev": "上一條",
+            "next": "下一條",
+            "next_one": "下一條",
+            "skip_all": "跳過全部",
+            "source_note": "公告來源於 vrcc.cc，本應用只做原樣轉發，不對其任意內容做保證；詳情請點擊右上角按鈕在官網查看。"
+        },
+        "crossings": {
+            "loading": "正在載入星軌相交…",
+            "load_failed": "沒能載入星軌相交。",
+            "retry": "重試",
+            "stale_hint": "顯示的是上一次的列表，這次重新整理失敗了。",
+            "need_connect": "連接星遇同頻帳號後，就能看到和你擦肩而過的人。",
+            "unavailable": "這個帳號暫時用不了星軌相交。",
+            "needs_scope": "這項功能需要 crossings 權限。重新連接時勾選它。",
+            "empty": "還沒有擦肩記錄。在同一個 VRChat 房間裡遇到過的星友會出現在這裡。",
+            "count": "{count} 條擦肩記錄",
+            "quota": "今天還能連 {left} / {max} 顆",
+            "refresh": "重新整理",
+            "unnamed": "未命名星",
+            "fresh": "新",
+            "linked": "你已連向 TA",
+            "mutual": "已雙向連上",
+            "not_linked": "還沒連上",
+            "met_world": "在 {world} 相遇",
+            "met_today": "今天",
+            "met_yesterday": "昨天",
+            "open_page": "在 vrcc.cc 上查看",
+            "why": {
+                "verify": "先驗證 VRChat 帳號才能使用星軌相交。",
+                "wait": "你的 VRChat 帳號正在等待驗證。",
+                "queued": "機器人「VRCC 的小幫手」的好友邀請正在排隊。",
+                "sent": "機器人「VRCC 的小幫手」的好友邀請已送出，請在 VRChat 裡同意。",
+                "gone": "你在 VRChat 裡刪除了機器人好友。",
+                "friend": "先把機器人「VRCC 的小幫手」加為 VRChat 好友，才能使用星軌相交。",
+                "unknown": "星軌相交暫時不可用。"
+            }
+        },
+        "tour": {
+            "next": "下一步",
+            "prev": "上一步",
+            "done": "知道了",
+            "intro": {
+                "title": "歡迎使用 VRCX-0-Galaxies",
+                "description": "這是 **Map1en/VRCX-0 的下游分支**，專注於把 VRC 中文社區的 **「星遇同頻」** 平台能力做成原生整合，而不是讓你在瀏覽器分頁之間來回切。上游跟進有自己的策略：合併上游主版本，不逐提交跟隨。\n\n**星遇同頻**（vrcc.cc）是 VRCC 中文社區提供的**解謎類開放社交玩法平台**，**並非 VRChat 官方提供**；本應用也**不是它的官方客戶端**。要不要登入由你決定，權杖只留在本機、只發給 vrcc.cc。\n\n接下來幾步會按順序指出介面上真正該點的位置。隨時可以按 `Esc` 退出——以後想再看，在「星遇同頻 → 我的」頁底部可以重新打開。"
+            },
+            "entry": {
+                "title": "它在哪",
+                "description": "側邊欄裡有星遇同頻自己的入口。右邊那個數字是它四個頁籤加起來的未讀數，連上之後才會出現。"
+            },
+            "connect": {
+                "title": "先連接一次",
+                "description": "這裡大部分內容都要先授權一次才能看到。點「開始連接」會給出一個授權碼，它會自動複製到剪貼簿，同時在瀏覽器裡打開同意頁——在那邊同意，這一頁就會自己連上。權杖只存在本機，只發給 vrcc.cc。",
+                "connected_title": "已經連上了",
+                "connected_description": "右邊顯示「已連接」，說明這一步你已經做完了。點「下一步」繼續往下看。"
+            },
+            "tabs": {
+                "title": "四個頁籤",
+                "description": "地圖榜是公開資料，不連接也能看；提醒和其餘幾項要用權杖。沒有權限的頁籤會直接不顯示，不會擺一個點不動的入口。"
+            },
+            "board": {
+                "title": "榜單本身",
+                "description": "一列一張圖：名次、地圖名、平均分和評分人數。你此刻所在的那張圖如果在榜上，它的分數和名次會顯示在清單上方的一張卡片裡，不用自己一列一列找。點任意一列，會在本應用自己的世界詳情裡打開它。"
+            },
+            "sorts": {
+                "title": "換個排法",
+                "description": "總榜、本週榜、新上榜。點上面這三個裡的任意一個，下面幾列會跟著重排——效果就是這樣。這一螢幕只有上面這排能點，下面的榜單純粹是讓你看它怎麼變的。"
+            },
+            "detail": {
+                "title": "地圖詳情頁",
+                "description": "點開一張圖能看到榜單塞不下的東西：分數分布、去過多少人，以及站上對這張圖的評價。伺服器給了這張圖的硬體資料時，配置等級旁邊那個小標籤是可以點的——點開會在下面展開顯存、記憶體、載入耗時和體積；沒給資料時它只是個標籤，不會擺一個點不動的按鈕。"
+            },
+            "rating": {
+                "title": "打分、寫短評",
+                "description": "在這裡給這張圖打分並寫一句短評，都會用你自己的帳號提交。站方要求這一步必須由你本人點按鈕，所以導覽只指出位置，不會替你點。"
+            },
+            "outro": {
+                "title": "就這些",
+                "description": "以後想再看一遍，點「我的」頁底部的「重看使用導覽」就能重放。如果之後斷開了連接，這裡的資料會安靜下來，直到你重新連上。"
+            },
+            "reopen": "重看使用導覽",
+            "notif_views": {
+                "title": "兩種檢視",
+                "description": "「最近」是站方推給你最近發生的事，新的在前；「通知」是站上那張通知表本身，唯讀。來回切換不會把任何一條標成已讀。"
+            },
+            "unread": {
+                "title": "這一排紅點",
+                "description": "每個數字都是站上的紅點：連向你的、星軌相交、私聊、通知。點一下會在瀏覽器裡打開 vrcc.cc 對應的一頁——回覆在那裡做。星軌相交在站上被關掉時不出現。"
+            },
+            "notif_open": {
+                "title": "每一行都能打開原文",
+                "description": "點任意一行，會在瀏覽器裡打開 vrcc.cc 上對應的那一條。本應用是這份列表的閱讀器，不是站點的替代品——回覆、同意這些動作仍然在站上完成。"
+            },
+            "mutuals": {
+                "title": "已經互相連上的人",
+                "description": "雙向連線的人，最近連上的在前。綠色的「在線」表示對方此刻在 VRChat 裡；否則會給一句「已是好友」或「可以加入」。右邊那個按鈕是在**本應用裡**打開對方，不是跳到網頁。"
+            },
+            "community": {
+                "title": "社群群組",
+                "description": "可以加入站方自己的 VRChat 群，或打開群頁面。這一塊顯不顯示由伺服器按你的帳號決定。"
+            },
+            "crossings": {
+                "title": "星軌相交",
+                "description": "你和誰恰好在同一個房間裡待過。每行會寫明關係：已經互相連上、只有你連了 TA、還是都沒有——這樣你才知道能不能給 TA 說一句。只有單向的才算「新」，已經互相連上的不會再標新，所以這份列表不會拿老朋友來反覆打擾你。"
+            },
+            "usage": {
+                "title": "今天還剩多少",
+                "description": "每日讀取次數，數字直接來自伺服器的回應標頭。重置時間是**北京時間**零點，不是你的本地零點，所以這裡的倒數按伺服器算，不按你桌上那口鐘。"
+            },
+            "first_row": {
+                "title": "就拿這一列舉例",
+                "description": "點開它，我們一起進去看；也可以直接點「下一步」，我替你打開。之後隨時可以自己回來點開任意一列。"
+            },
+            "rating_card": {
+                "title": "不用連就能看到的分數",
+                "description": "這一塊在每張地圖詳情的左欄，不需要授權就能看：均分、星級、有多少人打過分。所以還沒連星遇同頻的時候，也能先查一張圖口碑如何。想看分數分布和別人的短評，旁邊的「星遇同頻」頁籤裡還有。"
+            }
+        },
+        "open_link": {
+            "opened": "已在瀏覽器打開",
+            "failed": "打不開瀏覽器，請手動打開頁面。"
+        }
     },
     "nav_menu": {
         "qq_group": "QQ 群組",
@@ -1846,7 +2098,8 @@
                 "decline": "拒絕",
                 "delete_log": "刪除通知",
                 "decline_with_message": "拒絕並附上訊息",
-                "ignore_locally": "僅在本機忽略"
+                "ignore_locally": "僅在本機忽略",
+                "open_vrcc": "開啟星遇同頻"
             },
             "filters": {
                 "requestInvite": "請求邀請",
@@ -1915,6 +2168,9 @@
                 "votetokick": "投票踢出",
                 "twitchdrop": {
                     "fulfilled": "Twitch Drop 已發放"
+                },
+                "vrcc": {
+                    "notice": "提醒"
                 }
             },
             "description": {
@@ -2051,7 +2307,6 @@
                     "go_to_friend": "選擇好友",
                     "cancelling": "正在取消",
                     "find_friend": "尋找好友",
-                    "open_profile": "檢視個人資料",
                     "hide_from_graph": "從關係圖中隱藏",
                     "clear_filters": "清除篩選"
                 },
@@ -3144,7 +3399,7 @@
                             "status_account_mismatch_skipped": "其他帳號的記錄檔 · 已略過",
                             "status_live_file": "VRChat 正在寫入 · 請關閉遊戲後重試",
                             "status_unreadable": "無法讀取此檔案",
-                            "inserted": "已補錄 {{count}} 筆紀錄",
+                            "inserted": "已補錄 {count} 筆紀錄",
                             "nothing_new": "紀錄皆已存在，無需補錄",
                             "unverified_warning": "部分記錄檔未包含登入帳號資訊。若確認由本人帳號產生，請勾選下方選項一併補錄；若無法確認，請勿勾選，混入其他帳號的紀錄將導致歷史資料錯亂。",
                             "confirm_unverified": "我確認這些記錄檔由本人帳號產生",
@@ -3746,8 +4001,8 @@
                 "override_disabled": "自訂 CSS 已停用。",
                 "override_cleared": "自訂 CSS 已清除。",
                 "disable_failed": "更新社群主題設定失敗。",
-                "update_available": "主題“{{name}}”有新版本",
-                "theme_updated": "社群主題已更新至 {{version}}。",
+                "update_available": "主題“{name}”有新版本",
+                "theme_updated": "社群主題已更新至 {version}。",
                 "update_failed": "更新社群主題失敗。"
             },
             "confirm": {
@@ -4706,6 +4961,81 @@
                 "failed_to_update_value": "更新{value}失敗",
                 "value_copied": "已複製{value}",
                 "set_value_as_your_vrchat_home_world": "將 {value} 設為你的 VRChat 起始世界？"
+            },
+            "vrcc": {
+                "rating": "星遇同頻評分",
+                "raters_one": "{count} 人評分",
+                "raters_other": "{count} 人評分",
+                "no_rating": "還沒有人評分",
+                "not_listed": "不在榜上",
+                "source": "資料來源於 VRC 中文社群所屬平台「星遇同頻」，非 VRChat 官方",
+                "tab": "星遇同頻",
+                "spread": "分數分布",
+                "went": "去過",
+                "went_count": "{count} 人去過",
+                "cap": "房間上限",
+                "perf_platforms": "支援平台",
+                "perf_size": "下載",
+                "perf_load": "載入",
+                "hot": "熱評",
+                "hot_went": "去過",
+                "words_hint": "完整短評與評分需要連接星遇同頻帳戶。",
+                "not_listed_hint": "星遇同頻地圖榜上還沒有這張圖。",
+                "load_failed": "暫時讀不到星遇同頻的資料。",
+                "rank": "地圖榜第 {rank} 名",
+                "open_page": "在瀏覽器開啟地圖頁",
+                "my_rating": "我的評分",
+                "not_rated_by_me": "你還沒有給這張圖打分。",
+                "no_words": "沒有寫短評。",
+                "all_words": "全部短評（{count} 條）",
+                "no_words_yet": "還沒有人寫短評。",
+                "mine": "我",
+                "check_wait": "審核中",
+                "check_hidden": "未通過",
+                "intro": "地圖介紹",
+                "no_intro": "還沒有介紹。",
+                "rate_section": "打個分吧",
+                "comments_title": "短評",
+                "sort_hot": "最熱",
+                "sort_new": "最新",
+                "perf_section": "配置要求",
+                "perf_weight": "配置",
+                "perf_vram": "顯存",
+                "perf_mem": "記憶體",
+                "weight_light": "低",
+                "weight_mid": "中等",
+                "weight_heavy": "高",
+                "went_label": "去過",
+                "cap_label": "房間上限",
+                "went_badge": "去過",
+                "unit_sec": "秒",
+                "perf_toggle": "展開或收合配置明細",
+                "rate_input_label": "選擇分數",
+                "rate_value": "{score} 分（共 {max} 分）",
+                "rate_none": "未選",
+                "rate_submit": "提交",
+                "rate_submitting": "提交中…",
+                "rate_delete": "刪除評分",
+                "rate_failed": "提交失敗，請稍後再試。",
+                "rate_needs_scope": "打分需要重新連接一次星遇同頻帳戶。",
+                "words_placeholder": "寫一句短評（可選，30 字以內）",
+                "vote_up": "這條短評有幫助",
+                "vote_down": "這條短評沒有幫助",
+                "vote_own_hint": "不能給自己的短評投票。",
+                "vote_needs_scope": "投票需要重新連接一次星遇同頻帳戶。",
+                "pending_title": "已投稿，等待審核",
+                "pending_hint": "星遇同頻審核通過後，這張圖就會出現在地圖榜上。",
+                "syncing_title": "已上榜，資料同步中",
+                "syncing_hint": "星遇同頻的公開榜單最多 5 分鐘更新一次，稍後再看。",
+                "blocked_title": "不得展示",
+                "blocked_hint": "為遵守星遇同頻的相關條款，這張圖不向當前帳號展示，這裡也不顯示它的任何資料。",
+                "unknown_title": "無法確認狀態",
+                "unknown_hint": "查不到你的投稿狀態，請稍後重試。",
+                "unknown_reauth": "登入已失效，請重新連接星遇同頻。",
+                "unknown_scope": "缺少查看地圖的權限，請重新連接時勾選同意。",
+                "unknown_network": "網路連接失敗，請檢查網路後重試。",
+                "unknown_throttled": "請求太頻繁，請稍後再試。今天的次數用完後會在北京時間零點重置。",
+                "unknown_notready": "這一輪還在生成，稍後再看。"
             }
         },
         "avatar": {

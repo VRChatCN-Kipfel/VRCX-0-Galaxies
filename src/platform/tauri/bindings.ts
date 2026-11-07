@@ -321,6 +321,279 @@ const generatedCommands = {
     async appVrcStatusRefresh(): Promise<VrcStatusSnapshot> {
         return await TAURI_INVOKE('app__vrc_status_refresh');
     },
+    async appVrccConnection(): Promise<VrccConnectionSnapshot> {
+        return await TAURI_INVOKE('app__vrcc_connection');
+    },
+    /**
+     * 玩家对首连引导表态到哪一步。
+     *
+     * 和连接状态分开问：一个说「连没连上」，一个说「讲过了没有」。
+     */
+    async appVrccGuidance(): Promise<VrccGuidanceState> {
+        return await TAURI_INVOKE('app__vrcc_guidance');
+    },
+    /**
+     * 记下玩家对首连引导的表态（看过 / 稍后）。
+     *
+     * 写不进去就报错，不静默丢弃：玩家点过「稍后」却下次启动又问一遍，比直接
+     * 告诉他没记住更糟。
+     */
+    async appVrccSetGuidance(guidance: VrccGuidanceState): Promise<null> {
+        return await TAURI_INVOKE('app__vrcc_set_guidance', { guidance });
+    },
+    /**
+     * 今日用量。口径是「今日已用 N/上限」，不是「剩余」，且全部来自服务端的
+     * `RateLimit-*` 响应头；还没拿到过时字段是 `null`（界面显示「未知」）。
+     */
+    async appVrccUsage(): Promise<VrccUsageSnapshot> {
+        return await TAURI_INVOKE('app__vrcc_usage');
+    },
+    /**
+     * 地图榜。不需要连接。`sort` 传 `null` 是总榜。
+     *
+     * 要的是本周榜或新上榜、回答里却没有 `sort` 时，说明服务器还不支持，
+     * 回的是总榜。
+     */
+    async appVrccBoards(
+        limit: number,
+        sort: VrccBoardSort | null
+    ): Promise<VrccBoard> {
+        return await TAURI_INVOKE('app__vrcc_boards', { limit, sort });
+    },
+    /**
+     * 按世界 ID 批量查地图。不需要连接。
+     *
+     * 一次最多 20 张，**只返回在榜上的**——结果条数可能少于传入的数量，前端要
+     * 按 `world` 去配，不能按下标对应。
+     */
+    async appVrccMaps(worlds: string[]): Promise<VrccBoard> {
+        return await TAURI_INVOKE('app__vrcc_maps', { worlds });
+    },
+    /**
+     * 服务探活。用来在页面上显示「星遇同频现在可用吗」。
+     */
+    async appVrccStatus(): Promise<VrccStatus> {
+        return await TAURI_INVOKE('app__vrcc_status');
+    },
+    /**
+     * 公告和停站。不需要连接。服务器还没有这个接口时返回 `null`。
+     */
+    async appVrccAnnouncements(): Promise<VrccAnnouncements | null> {
+        return await TAURI_INVOKE('app__vrcc_announcements');
+    },
+    /**
+     * 所有贴纸和材质名。不需要连接。服务器还没有这个接口时返回 `null`。
+     */
+    async appVrccStickers(): Promise<VrccStickers | null> {
+        return await TAURI_INVOKE('app__vrcc_stickers');
+    },
+    /**
+     * 第一步：申请连接码。`scope` 传 `null` 时按当前 `X-Client` 选权限。
+     */
+    async appVrccDeviceAuthBegin(
+        scope: string | null
+    ): Promise<VrccDeviceAuthPromptOutput> {
+        return await TAURI_INVOKE('app__vrcc_device_auth_begin', { scope });
+    },
+    /**
+     * 第二步：问一次令牌。前端按返回的 `interval_secs` 定时重试。
+     */
+    async appVrccDeviceAuthPoll(
+        prompt: VrccDeviceAuthPromptOutput
+    ): Promise<VrccDeviceAuthStepOutput> {
+        return await TAURI_INVOKE('app__vrcc_device_auth_poll', { prompt });
+    },
+    /**
+     * 断开。先让服务器吊销，再清本地。
+     */
+    async appVrccDisconnect(): Promise<null> {
+        return await TAURI_INVOKE('app__vrcc_disconnect');
+    },
+    /**
+     * 最近的提醒。
+     *
+     * `mark` 为 `true` 表示玩家正在看这个列表：服务器会把已读状态同步到账号，
+     * 其他设备（网页、手机 App）上的红点跟着消。后台只为算数字时传 `false`。
+     */
+    async appVrccRecentNotifications(
+        mark: boolean
+    ): Promise<VrccRecentNotifications> {
+        return await TAURI_INVOKE('app__vrcc_recent_notifications', { mark });
+    },
+    /**
+     * 几处未读数（连向我、星轨相交、私聊、通知）。
+     *
+     * `refresh` 为 `false` 时只读后台轮询的缓存、不发请求——收到
+     * `vrccNoticesChanged` 时用这个。服务器还没有 `me/unread` 时返回 `null`。
+     */
+    async appVrccUnread(refresh: boolean): Promise<VrccUnread | null> {
+        return await TAURI_INVOKE('app__vrcc_unread', { refresh });
+    },
+    /**
+     * 通知中心。读了不标已读。服务器还没有 `me/notes` 时返回 `null`。
+     */
+    async appVrccNotes(): Promise<VrccNotes | null> {
+        return await TAURI_INVOKE('app__vrcc_notes');
+    },
+    /**
+     * 当前所在地图在地图榜上的状态与我自己的评分。
+     *
+     * 一张地图在榜上的状态与我自己的评分。需要 `maps` 普通权限。
+     *
+     * ## `world` 传 `null` 时问「我现在在的地图」
+     *
+     * 这是「所在地图」卡片用的路径：位置只有后端知道，不该让每个调用点自己算。
+     *
+     * ## `world` 传具体 ID 时问那张图
+     *
+     * 世界详情对话框要问**玩家正在看的那张图**，而不是他站在哪里。这两件事在
+     * 对话框里完全不同（可以从收藏里点开一张自己没去的图）。
+     *
+     * ## 这是唯一能区分四种状态的接口
+     *
+     * 公开的 `/maps/{world}/page` 对「未收录」和「待审核」都回 `404`，分不开；
+     * 只有带令牌的这一条会用 `board` / `pending` 两个布尔把它们分开。所以
+     * 界面要正确显示「已投稿、等审核」就只能走这里。
+     *
+     * 返回 `null` 的情况：`world` 为空、**这张图被下架或不对当前玩家开放**
+     * （`off: true`，官方要求此时隐藏），以及未连接。
+     */
+    async appVrccMyMap(world: string | null): Promise<VrccMyMap | null> {
+        return await TAURI_INVOKE('app__vrcc_my_map', { world });
+    },
+    /**
+     * 我打过分的地图。需要 `maps` 普通权限。最近的在前。
+     */
+    async appVrccMyMaps(): Promise<VrccRatedMaps> {
+        return await TAURI_INVOKE('app__vrcc_my_maps');
+    },
+    /**
+     * 公开地图页。不需要令牌。不在榜上时（`404`）返回 `null`。
+     */
+    async appVrccMapPage(world: string): Promise<VrccMapPage | null> {
+        return await TAURI_INVOKE('app__vrcc_map_page', { world });
+    },
+    /**
+     * 带令牌的地图页：完整短评列表 + 我的评分。需要 `maps` 普通权限。
+     *
+     * 不在榜上时（`404`）返回 `null`；未连接时返回需要连接的失败，不会被当成
+     * 「这张图不在榜」。
+     */
+    async appVrccMyMapPage(
+        world: string,
+        sort: string | null
+    ): Promise<VrccMyMapPage | null> {
+        return await TAURI_INVOKE('app__vrcc_my_map_page', { world, sort });
+    },
+    /**
+     * 给地图打分 / 写短评。需要 `maps.rate` 敏感权限。
+     *
+     * `text` 用三态字符串表达官方那三种语义，**不能用 `Option<String>` 糊过去**：
+     *
+     * | 参数 | 结果 |
+     * |---|---|
+     * | `textMode = "keep"` | 只改分数，保留原短评 |
+     * | `textMode = "clear"` | 删掉短评，保留分数 |
+     * | `textMode = "write"` + `text` | 提交或更新短评 |
+     *
+     * 用两个字段而不是一个可空字段：Rust 侧要能区分「没传」和「传了空串」，
+     * 前端传 `null` 与不传在 JSON 里看起来是一样的，这里显式给一个模式位。
+     */
+    async appVrccRateMap(
+        world: string,
+        score: number,
+        textMode: string,
+        text: string | null
+    ): Promise<VrccMyMap> {
+        return await TAURI_INVOKE('app__vrcc_rate_map', {
+            world,
+            score,
+            textMode,
+            text
+        });
+    },
+    /**
+     * 删掉自己给这张图的评分。需要 `maps.rate` 敏感权限。
+     */
+    async appVrccDeleteMapRating(world: string): Promise<null> {
+        return await TAURI_INVOKE('app__vrcc_delete_map_rating', { world });
+    },
+    /**
+     * 给短评或地图介绍投票。需要 `maps.write` 敏感权限。
+     *
+     * `vote` 用 `"up"` / `"down"` / `"none"`：`none` 表示取消。
+     * 用字符串而不是整数，是因为界面会在「当前票值」与「点一下之后发什么」之间
+     * 来回换算，枚举化的字面量比 `1` / `-1` / `0` 更难写错。
+     *
+     * **不能给自己的内容投票**——这条由界面提前禁用按钮，服务端也会拒。
+     */
+    async appVrccVoteMapContent(
+        kind: VrccVoteKind,
+        id: number,
+        vote: VrccVote
+    ): Promise<VrccVoteResult> {
+        return await TAURI_INVOKE('app__vrcc_vote_map_content', {
+            kind,
+            id,
+            vote
+        });
+    },
+    /**
+     * 玩家视角地图榜。需要 `maps` 普通权限。
+     */
+    async appVrccMyBoard(sort: VrccMyBoardSort | null): Promise<VrccMyBoard> {
+        return await TAURI_INVOKE('app__vrcc_my_board', { sort });
+    },
+    /**
+     * 今天这一轮 + 轮次进度。需要 `today` 敏感权限（要审核）。
+     */
+    async appVrccToday(): Promise<VrccToday> {
+        return await TAURI_INVOKE('app__vrcc_today');
+    },
+    /**
+     * 「互相连上」的星友列表。需要 `mutuals` 敏感权限（要审核）。
+     *
+     * 条目里的 `vrcUser` 用来打开 VRCX-0 自己的玩家详情页；加好友由玩家在那里
+     * 自己点。官方合规要求明文禁止程序代玩家发好友请求，所以这里只有这个命令。
+     */
+    async appVrccMutuals(): Promise<VrccMutuals> {
+        return await TAURI_INVOKE('app__vrcc_mutuals');
+    },
+    /**
+     * 星轨相交：在同房间偶遇过的玩家列表。需要 `crossings` 敏感权限（要审核）。
+     *
+     * `mark` 只在玩家真的打开「星轨相交」页时为 true —— 它会把已读同步到账号，
+     * 网页和手机上的红点跟着消。后台只为算未读数时**必须**传 false。
+     *
+     * 返回里的 `hidden` 已经由应用层按 `why` 定好：为 true 时整个模块都不应显示
+     * （16–17 岁星池，或玩家在隐私设置里关了星轨相交）。
+     */
+    async appVrccCrossings(mark: boolean): Promise<VrccCrossings> {
+        return await TAURI_INVOKE('app__vrcc_crossings', { mark });
+    },
+    /**
+     * 只看「星轨相交对这个玩家可见吗」，不标已读。
+     *
+     * 界面在打开星遇同频页面时先调这一条，拿到 `hidden` 再决定入口是否存在。
+     * 官方要求 `hide` 时客户端不显示此模块，而 `hide` 只有问过才知道。
+     *
+     * 和 `app__vrcc_crossings(false)` 请求的是同一份数据，存在的理由是本地限流
+     * 槽不同：探测不该把玩家随后点开页签那一次（带 `mark=1`）挡在本地，否则那
+     * 一次根本发不出去，红点也就消不掉。
+     */
+    async appVrccCrossingsVisibility(): Promise<VrccCrossings> {
+        return await TAURI_INVOKE('app__vrcc_crossings_visibility');
+    },
+    /**
+     * 星轨相交的完整星卡（1.13.0 起）。与列表分开，算第二份读的额度。
+     *
+     * 旧服务器上没有这个接口，返回 `null`。
+     */
+    async appVrccCrossingCards(
+        mark: boolean
+    ): Promise<VrccCrossingCards | null> {
+        return await TAURI_INVOKE('app__vrcc_crossing_cards', { mark });
+    },
     async appNotificationHideAndExpire(
         input: NotificationHideExpireInput
     ): Promise<NotificationActionOutcome> {
@@ -3318,14 +3591,57 @@ export type AppErrorCode =
     | 'integration_api_port_in_use'
     | 'integration_api_bind'
     | 'feed_logger'
+    | 'vrcc'
     | 'custom';
 export type AppErrorPayload = {
     code: AppErrorCode;
     message: string;
+    /**
+     * 星遇同频的错误分类。
+     *
+     * **为什么放在这里而不是让前端解析文案**：分类必须在知道
+     * `VrccError` 确切变体的那一层算（runtime/application），前端只能看到
+     * 字符串。早先前端靠对中文文案做子串匹配，结果 `401 token` 落进
+     * `Other`、缺权限的 `need` 在转字符串时丢失、`missing_scope` 提示
+     * 永远不显示。这里把结论随错误一起带出去。
+     */
+    vrcc?: AppErrorVrccDetail | null;
     sqliteCategory?: SqliteErrorCategory | null;
     statusCode?: number | null;
     port?: number | null;
     feedLoggerCode?: FeedLoggerErrorCode | null;
+};
+/**
+ * 星遇同频错误的结构化细节，直接来自 `VrccFailure`。
+ */
+export type AppErrorVrccDetail = {
+    /**
+     * 行为分类：`needsReauth` / `missingScope` / `throttled` / `notReady` /
+     * `transport` / `other`。
+     */
+    kind: string;
+    /**
+     * 失败发生在哪一层：`input` / `client` / `transport` / `server` /
+     * `session`。
+     *
+     * 前端据此区分「网络问题」和「业务拒绝」——这正是玩家分不清的那件事。
+     * `input` 表示我们自己构造请求出了错，**不该显示给玩家**。
+     */
+    layer: string;
+    /**
+     * 缺哪个权限（`missingScope` 时通常有值）。
+     */
+    need?: string | null;
+    /**
+     * 传输层卡在哪一步：`dns` / `connect` / `timeout` / `body` / `other`。
+     * 不是传输层错误时不带这个字段。
+     */
+    transportKind?: string | null;
+    /**
+     * 发起调用的接口标识。同一个错误码在不同接口下含义可能不同，
+     * 例如 `429 too_many` 在 `device_code` 上是按网络出口 IP 算的额度。
+     */
+    op?: string | null;
 };
 export type AppLauncherEntry = {
     id: string;
@@ -4156,7 +4472,15 @@ export type DesktopNotificationActivation = {
 export type DesktopNotificationTarget =
     | { kind: 'openUserProfile'; userId: string }
     | { kind: 'openGroupProfile'; groupId: string }
-    | { kind: 'openLocation'; location: string };
+    | { kind: 'openLocation'; location: string }
+    /**
+     * 星遇同频的提醒。点击后打开星遇同频页签。
+     *
+     * 只带一个可选的提醒 id：vrcc 的提醒没有 VRChat 的用户/世界 ID，
+     * 无法复用上面三种落点。带 id 是为了将来能定位到具体那一条，
+     * 现在前端只需要跳到页签。
+     */
+    | { kind: 'openVrcc'; notice_id: string | null };
 export type DesktopWidgetSnapshot = {
     supported: boolean;
     enabled: boolean;
@@ -7059,6 +7383,1393 @@ export type VrcStatusSnapshot = {
     pollingIntervalMs: number;
     refreshing: boolean;
     error: string;
+};
+/**
+ * 一条公告（`GET /announcements` 的 `posts[]`）。
+ */
+export type VrccAnnouncement = {
+    id?: number;
+    /**
+     * 网页上怎么显示：`bar` 顶上一条、`pop` 弹窗、`force` 强制。
+     */
+    level?: string | null;
+    /**
+     * 纯文字，显示时不要当 HTML。
+     */
+    title?: string | null;
+    body?: string | null;
+    /**
+     * 「查看」打开的完整网址。
+     */
+    link?: string | null;
+    /**
+     * 卡片顶上的图（完整网址）。
+     */
+    cover?: string | null;
+    /**
+     * 什么时候撤下（毫秒），`null` 是没定。
+     */
+    end?: number | null;
+};
+/**
+ * `GET /announcements`：给所有玩家的公告和停站说明（1.12.0 起，不用令牌）。
+ */
+export type VrccAnnouncements = {
+    /**
+     * 停站时才有。
+     */
+    stop?: VrccStop | null;
+    /**
+     * 正在显示的公告，新的在前。
+     */
+    posts?: VrccAnnouncement[];
+};
+/**
+ * 地图榜 / 批量查地图 / 我打过的图，三者的外层结构一致。
+ */
+export type VrccBoard = {
+    board?: string | null;
+    /**
+     * 这次用的排序：`top` / `week` / `new`（1.13.0 起）。
+     *
+     * 旧服务器不认 `sort`、照旧回总榜，回答里也没有这个字段。所以要的是
+     * 本周榜或新上榜、回来的却没有 `sort` 时，说明服务器还不支持，不能把
+     * 总榜当成本周榜显示。
+     */
+    sort?: string | null;
+    /**
+     * 有名次最少需要几人评分（当前为 1）。
+     */
+    min?: number | null;
+    maps?: VrccBoardMap[];
+    /**
+     * 榜单快照时间（毫秒）。
+     */
+    at?: number | null;
+};
+/**
+ * `GET /me/board` 的 `dot`：哪一块有新内容。
+ */
+export type VrccBoardDot = { maps?: boolean; went?: boolean };
+/**
+ * `GET /boards/maps`、`GET /maps`、`GET /me/maps` 共用的地图条目。
+ */
+export type VrccBoardMap = {
+    /**
+     * 世界 ID，形如 `wrld_…`。
+     */
+    world: string;
+    name?: string | null;
+    author?: string | null;
+    /**
+     * 平均分（1–10）。
+     */
+    avg?: number | null;
+    /**
+     * 评分人数；有一个评分就有名次（`min` 现在是 1）。
+     */
+    raters?: number | null;
+    /**
+     * 总榜名次，1 起；新上榜里还没人评分的是 `null`。
+     *
+     * 本周榜里也是总榜名次：本周榜只按本周的打分重新排顺序，本周的名次是
+     * 它在列表里的位置。
+     */
+    rank?: number | null;
+    /**
+     * 多小咕实测的轻重：`light` / `mid` / `heavy`，没测过是 `null`。
+     */
+    weight?: string | null;
+    /**
+     * vrcc.cc 上的地图页。
+     */
+    page?: string | null;
+    /**
+     * 封面图地址。
+     */
+    img?: string | null;
+    /**
+     * 同一张封面的完整网址。
+     *
+     * **官方 `boards/maps` 至今不返回这个字段**（只有 `me/board`、地图页、
+     * `me/maps/{world}` 才有），所以这里读到的通常是 `None`。仍然留着它，
+     * 是因为哪天官方统一了就直接能接上，不用再改一轮契约。
+     */
+    imgUrl?: string | null;
+    /**
+     * 热评：最热的一条短评（1.10.1 起写进文档），没有时是 `null`。
+     */
+    hot?: VrccMapHot | null;
+    /**
+     * 只在本周榜（`sort=week`）里有：本周几人打分（1.13.0 起）。
+     */
+    week?: number | null;
+};
+/**
+ * 地图榜的排序（1.13.0 起）：总榜、本周榜、新上榜。
+ *
+ * 和网页地图榜的「总榜」「本周」「新上榜」一样，只是不分星池。
+ */
+export type VrccBoardSort = 'top' | 'week' | 'new';
+/**
+ * 连接状态投影。
+ */
+export type VrccConnectionSnapshot = {
+    /**
+     * 是否持有令牌。
+     */
+    connected: boolean;
+    /**
+     * 上一个令牌是不是被服务器判了失效（`404 gone`）后清掉的。
+     *
+     * 玩家在网页上断开、同一个客户端又授权了一次、星被删除，以及 1.10.0 起
+     * 「90 天没调用过任何接口自动断开」，都会这样。界面据此提示「连接已失效，
+     * 请重新连接」，而不是只显示一个「未连接」让玩家摸不着头脑。
+     */
+    expired: boolean;
+    /**
+     * 凭据状态。
+     *
+     * 和 `connected` / `expired` 并存而不是替换：那两个是**本会话**的即时判断，
+     * 这一项是**跨重启**的结论——它决定界面要不要把玩家当新人讲一遍。
+     */
+    credential?: VrccCredentialState;
+    /**
+     * 星号，已连接且拿到时才有。
+     */
+    star: number | null;
+    /**
+     * 公开的 VRChat 名字。
+     */
+    vrcName: string | null;
+    /**
+     * 令牌实际拿到的 scope。
+     */
+    scope: string | null;
+    /**
+     * 客户端标识。
+     */
+    client: string;
+    /**
+     * 当前是否在用 `dev-` 开发态标识。
+     *
+     * 给界面用：`dev-` 标识在玩家同意页会被标成「（测试中）」，且只能要普通
+     * 权限。界面上让开发者和测试者看到这件事，比事后排查 403 省事。
+     */
+    clientIsDev: boolean;
+    /**
+     * 上次成功轮询提醒的时间（毫秒）。
+     */
+    lastPollAt: number | null;
+    /**
+     * 下一次建议轮询时间（毫秒）。
+     */
+    nextPollAt: number | null;
+};
+/**
+ * 本账号的凭据处在哪一档。
+ *
+ * **为什么不能只靠 `connected` / `expired`**：这两个布尔区分不了「从没连过」和
+ * 「连过又断开」——两者都是 `connected: false, expired: false`。而界面要说的话
+ * 完全不同：前者要讲一遍星遇同频是什么，后者只该说「重新连一次」。
+ *
+ * 落盘的不是这个枚举本身，而是其中「令牌已经不在了」的那几种结局：令牌在时
+ * 一望即知是 [`VrccCredentialState::Active`]，不需要额外记录。
+ */
+export type VrccCredentialState =
+    /**
+     * 这个账号从来没有连过星遇同频。
+     */
+    | 'never'
+    /**
+     * 手里有令牌。
+     */
+    | 'active'
+    /**
+     * 玩家自己在界面上断开的。
+     *
+     * 断开之后重启仍然算这一档，**不要退化成 [`VrccCredentialState::Never`]**：
+     * 那等于把用过的人当新人，再讲一遍入门。
+     */
+    | 'disconnected'
+    /**
+     * 令牌被服务器判失效（`404 gone`）：玩家在网页上断开、同一个客户端又授权了
+     * 一次、星被删除，以及 1.10.0 起「90 天没调用过任何接口自动断开」。
+     */
+    | 'expired'
+    /**
+     * 授权和当前构建对不上的**两种**情况之一：令牌不是这个 `X-Client` 签发的。
+     *
+     * 换了正式标识、或改了构建期的 `X-Client` 之后会这样，服务器对**每个**请求
+     * 都回 `403 client_mismatch`——令牌整个作废，本地要清掉，玩家得重新授权。
+     *
+     * 「权限变了」不属于这一档，见 [`VrccCredentialState::ScopeMismatch`]：那两者
+     * 看着都是「授权该更新了」，但令牌的命运相反，混在一起就会把一份还能用的
+     * 授权清掉。
+     */
+    | 'grantMismatch'
+    /**
+     * 令牌还在、还能用，但权限比当前构建要求的少。
+     *
+     * 权限是**签发时定死的**，事后要更多只能重新授权，所以这种令牌会一直在
+     * 少数接口上回 `403 scope`。和 [`VrccCredentialState::GrantMismatch`] 的区别
+     * 是：这里的令牌**必须留下**——它还能收提醒、看榜单，清掉等于白扔一份授权；
+     * 界面该说的是「重新连一次可以多要一项权限」，而不是「连接已失效」。
+     *
+     * 能比出来的前提是本地记了签发时的 `scope`；旧存档没记时不下这个结论。
+     */
+    | 'scopeMismatch';
+/**
+ * `GET /me/crossings/cards`：星轨相交的完整星卡（1.13.0 起）。
+ *
+ * 与 [`VrccCrossings`] 的区别：那个是**列表**（谁跟我擦过肩），这个是
+ * **完整星卡**（网页「连向我 → 星轨相交」的样子），另带今天还能连几颗。
+ * 只有带 `?mark=1` 才标成看过。算第二份读的次数。
+ */
+export type VrccCrossingCards = {
+    cards?: VrccStarCard[];
+    /**
+     * 上次看过时最新那次擦肩的时间。
+     *
+     * 2026-11-05（1.15.3）起官方不再返回这个字段——那时它也从 `required`
+     * 里拿掉了。留着只为兼容还在返回它的旧服务器；为 `None` 时不要当成
+     * 「没看过」。
+     */
+    seen?: number | null;
+    /**
+     * 今天还能从星轨相交连几颗。
+     */
+    left?: number | null;
+    /**
+     * 每天最多几颗。
+     */
+    max?: number | null;
+};
+/**
+ * 星轨相交里的「我」的摘要（`GET /me/crossings` 的 `me` 字段）。
+ *
+ * 字段名照官方 `#/components/schemas/Me` 抄：`star`（点亮编号）+ `vrc`
+ * （VRChat 名字），两个都是必填但可为 `null`。早先这里写成了 `{n, name}`，
+ * 那是把「星的编号」和「星名」硬套进来——服务器不会那样回，接上之后只会
+ * 拿到一堆 `null`；而离线测试用的是同一个错误形状，所以一直没暴露。
+ */
+export type VrccCrossingMe = {
+    /**
+     * 我的点亮编号（官方 `/light/` 那一套）。
+     */
+    star?: number | null;
+    /**
+     * 我的 VRChat 名字。
+     */
+    vrc?: string | null;
+};
+/**
+ * 一条星轨相交记录（`stars[]` 的条目）。
+ */
+export type VrccCrossingStar = {
+    /**
+     * 星的编号；网页直达地址是 `https://vrcc.cc/match/?tab=inbox&cross={n}`。
+     */
+    n?: number;
+    /**
+     * 星位名称。
+     */
+    name?: string | null;
+    /**
+     * 星位的一句话描述。
+     */
+    line?: string | null;
+    /**
+     * 星群代号。
+     *
+     * 官方 `Group` 是 `"G" / "W" / "Z" / "L" / "A"` 的枚举串，**没有 `name`
+     * 字段**——带名字的是星卡的 `groupName`（「漫游星群」这种）。早先这里
+     * 的注释写「展示时按 `name`」，会让人去找一个不存在的字段。
+     */
+    group?: string | null;
+    /**
+     * `/light/` 点亮编号；对方未公开时为 `null`。
+     */
+    star?: number | null;
+    /**
+     * 匿名星卡介绍的前 60 个字。
+     */
+    intro?: string | null;
+    /**
+     * 对方的 VRChat 名字。
+     *
+     * **只在 `mutual` 为 `true`（双向连线）后才返回**，否则为 `null`。
+     * 也就是说这里的 `vrc` 是「连上之后才解锁」的信息，不能当通用字段用。
+     */
+    vrc?: string | null;
+    /**
+     * 我是否已经连向对方。
+     */
+    linked?: boolean;
+    /**
+     * 是否已经双向连上。
+     */
+    mutual?: boolean;
+    /**
+     * 相交发生的时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 是否为上次查看后新产生的记录。
+     */
+    fresh?: boolean;
+};
+/**
+ * `GET /me/crossings`：在同一个 VRChat 房间偶遇过的星遇同频玩家。
+ *
+ * 对应网页「连向我 → 星轨相交」。**需要 `crossings` 敏感权限**；`dev-`
+ * 标识要不到（回 `403 scope_unreviewed`），16–17 岁星池没有这一项。
+ *
+ * 与「互相连上」(`mutuals`) 的区别：互相连上是**双向已连线**的星友，
+ * 星轨相交只是**同房间擦肩**，绝大多数还没有连线。所以这里每条要带上
+ * `linked` / `mutual` 两个状态，让界面能区分「我已连 TA」「已双向」「都还没」。
+ */
+export type VrccCrossings = {
+    stars?: VrccCrossingStar[];
+    /**
+     * 列表里的星数量。
+     */
+    n?: number | null;
+    /**
+     * 星轨相交不可用或为空的原因，见 [`VrccCrossingWhy`]。
+     *
+     * 保留服务器的原始字符串（界面用它挑文案），判定统一走 [`Self::hidden`]。
+     */
+    why?: string | null;
+    /**
+     * 是否必须**整个模块都不显示**（由应用层按 [`VrccCrossingWhy`] 算好）。
+     *
+     * 给成字段而不是让每个消费方各判一次 `why == "hide"`：这条判定的两边
+     * 后果不对称——把 `hide` 当普通空列表，等于向不该看到的人确认「这里有
+     * 星轨相交」这个事实。只在一处算，才不会有一处漏。
+     */
+    hidden?: boolean;
+    /**
+     * 当前玩家自己的星位摘要。
+     */
+    me?: VrccCrossingMe | null;
+};
+/**
+ * 设备授权的起步结果。`device_code` 是唯一需要回传的字段，其余是给玩家看的。
+ *
+ * 它同时是 `device_auth_poll` 的入参，所以既要 `Serialize` 也要 `Deserialize`。
+ */
+export type VrccDeviceAuthPromptOutput = {
+    /**
+     * 给玩家看的码，形如 `ABCD-2345`。
+     */
+    userCode: string;
+    /**
+     * 手动输码的页面。
+     */
+    verificationUri: string | null;
+    /**
+     * 带码的同意链接，优先用这个。
+     */
+    verificationUriComplete: string | null;
+    /**
+     * 多少秒内有效。
+     */
+    expiresInSecs: number;
+    /**
+     * 官方建议的轮询间隔。
+     */
+    intervalSecs: number;
+    /**
+     * 内部用，换令牌时要回传。
+     */
+    deviceCode: string;
+    /**
+     * 这次要到的权限。
+     */
+    scope: string | null;
+};
+/**
+ * 轮询一次授权的三种结果。
+ */
+export type VrccDeviceAuthStepOutput =
+    /**
+     * 玩家还没点同意，`interval_secs` 后再问。
+     */
+    | { state: 'pending'; interval_secs: number }
+    /**
+     * 连上了。
+     */
+    | { state: 'connected'; connection: VrccConnectionSnapshot }
+    /**
+     * 玩家取消或缺码过期，这条流程结束。
+     */
+    | { state: 'terminal'; message: string };
+/**
+ * 玩家对「首连引导」表态到哪一步。
+ *
+ * 和 [`VrccCredentialState`] 分开记：凭据状态说的是「连没连上」，这一项说的是
+ * 「讲过了没有」。两者不能互相推断——连上过的人可能从没看过引导（引导是后来
+ * 才加的），看过引导的人也可能一直没连。
+ */
+export type VrccGuidanceState =
+    /**
+     * 没弹过，也没人表态。
+     */
+    | 'unseen'
+    /**
+     * 看过了（点了「现在连接」，或主动点开过）。
+     */
+    | 'seen'
+    /**
+     * 点过「稍后」。**和「没看过」分开记**：延后过一次就不再主动弹，
+     * 否则每次启动都问一遍等于骚扰。
+     */
+    | 'postponed';
+/**
+ * 地图榜条目上的热评 `{text, by, up, went}`。
+ *
+ * **`hot` 不在官方 `openapi.yaml` 的 `BoardMap` 里**，是 1.10.1 才写进文档的
+ * 附加字段；README「开放数据」一节也写明公开榜单「不给谁打了分，也不给短评」。
+ * 也就是说它随时可能改形状或下线。
+ *
+ * 因此每个字段都容忍「形状不对」：`text` / `by` 若不是字符串就当没有，
+ * 而不是让整个 `VrccBoard` 解析失败——那会让地图榜整页空白、腕表上的名次
+ * 也不再更新，代价远大于少显示一句短评。
+ */
+export type VrccMapHot = {
+    /**
+     * 那句短评。
+     */
+    text?: string | null;
+    /**
+     * 出处（形如「某位炉边倾听者」）。
+     */
+    by?: string | null;
+    /**
+     * 点赞数。
+     */
+    up?: number | null;
+    /**
+     * 写的人去过这张图。
+     */
+    went?: boolean | null;
+};
+/**
+ * 地图介绍。
+ */
+export type VrccMapIntro = {
+    id?: number | null;
+    text?: string | null;
+    up?: number | null;
+    down?: number | null;
+    at?: number | null;
+    who?: VrccMapRateWho | null;
+};
+/**
+ * `GET /maps/{world}/page`：公开地图页（1.13.0 起，**不需要令牌**）。
+ *
+ * 和 vrcc.cc 上每张地图的页面一样：榜上那一行、分数分布、去过的人数、
+ * 房间上限、多小咕实测。短评和介绍不在这里。
+ *
+ * 不在榜上或没过审时是 `404 not_found`——那是**正常状态**，不是故障。
+ */
+export type VrccMapPage = {
+    /**
+     * 榜上的那一行。
+     */
+    map: VrccBoardMap;
+    /**
+     * 分数分布：9–10、7–8、5–6、3–4、1–2 各占百分之几。
+     */
+    spread?: VrccScoreBand[];
+    /**
+     * 去过的人数。
+     */
+    went?: number;
+    /**
+     * 房间人数上限。
+     */
+    cap?: number | null;
+    /**
+     * 多小咕实测；没测过是 `null`。
+     */
+    perf?: VrccMapPerf | null;
+    /**
+     * 服务器生成这份数据的时刻（毫秒）。
+     */
+    at?: number;
+};
+/**
+ * 多小咕的实测数据（`perf`）。**整个可以没有**，里面每一项也可以是 `null`。
+ *
+ * 所以除了 `from` 之外全部是 `Option`——没测过的图不该显示成一堆 0。
+ */
+export type VrccMapPerf = {
+    /**
+     * 实测方式：`test`（测地图本身）/ `hang`（挂房的平均）。
+     */
+    from?: string | null;
+    /**
+     * 轻重档位：`light` / `mid` / `heavy`。
+     */
+    weight?: string | null;
+    /**
+     * 显存（MB）。
+     */
+    vram?: number | null;
+    /**
+     * 内存（MB）。
+     */
+    mem?: number | null;
+    /**
+     * 加载时间（毫秒）。
+     */
+    load?: number | null;
+    /**
+     * 下载大小（字节）。
+     */
+    size?: number | null;
+    /**
+     * 支持的平台：`PC` / `Quest` / `iOS`。
+     */
+    platforms?: string[];
+    /**
+     * 挂房的分钟数（实测时为 `null`）。
+     */
+    minutes?: number | null;
+};
+/**
+ * 一条打分记录（短评）：`/me/maps/{world}/page` 的 `rates[]` 与 `mine.rate`。
+ *
+ * 公开的地图页**不给**这个列表，只有带令牌的 `/me/…/page` 才有。官方还会按
+ * 令牌权限调整写者身份：有 `mutuals` 且客户端审核通过时给对方的 `n`，
+ * 否则一律匿名成 `{"name": "某位<星位>", "group": "G"}`。**我们只照原样显示
+ * `who`，不自己拼匿名格式**——那是服务器的职责，我们拼就可能在权限变化时
+ * 显示错的东西。
+ */
+export type VrccMapRate = {
+    /**
+     * 这条打分的编号。
+     */
+    id?: number | null;
+    /**
+     * 短评正文；没写短评时是 `null`。
+     */
+    text?: string | null;
+    /**
+     * 打的分（1–10）。
+     */
+    score?: number | null;
+    /**
+     * 赞、踩的计数。
+     */
+    up?: number | null;
+    down?: number | null;
+    /**
+     * 打分时间（毫秒）。
+     */
+    at?: number | null;
+    /**
+     * 写者。字段形状由服务器按权限决定，这里宽松处理。
+     */
+    who?: VrccMapRateWho | null;
+    /**
+     * 是不是我写的。
+     */
+    mine?: boolean | null;
+    /**
+     * 我投的票：`1` 赞 / `-1` 踩 / `0` 没投。
+     */
+    vote?: number | null;
+    /**
+     * 被折叠（内容或作者被隐藏）。
+     */
+    folded?: boolean | null;
+    /**
+     * 只有 `mine.rate` 才有：审核状态（`wait` / `ok` / `hidden`）。
+     */
+    check?: string | null;
+};
+/**
+ * 一条打分里「写者」的身份。
+ *
+ * 官方按权限决定给多少：审核通过的客户端 + `mutuals` 能看到别人的 `n` 和
+ * VRChat 名字；否则只有匿名的「某位<星位>」。**这里全部是 `Option`**——
+ * 缺字段是常态，不是异常。
+ */
+export type VrccMapRateWho = {
+    n?: number | null;
+    name?: string | null;
+    /**
+     * 星群代号（`G` / `W` / `Z` / `L` / `A`）。
+     */
+    group?: string | null;
+    photo?: boolean | null;
+    /**
+     * 互相连上时对方的 VRChat 名字。
+     */
+    vrc?: string | null;
+    mutual?: boolean | null;
+    /**
+     * 是不是我。
+     */
+    me?: boolean | null;
+};
+/**
+ * 我给一颗互相连上的星的评价，和网页上互相连上的卡一样。
+ *
+ * 只有我给 TA 的，没有 TA 给我的。
+ */
+export type VrccMutualRate = {
+    /**
+     * 一起玩过没有；`null` 是还没回答。
+     */
+    played?: boolean | null;
+    /**
+     * 我给的分，0–5，半颗星一档；`0` 是没打。
+     */
+    mine?: number | null;
+};
+/**
+ * 「互相连上」的一颗星，对应 `GET /me/mutuals` 的条目。
+ *
+ * `vrc_user` 是对方的 VRChat 用户 ID（`usr_…`），**只在对方已验证且公开
+ * 「已验证」标志时才有**。有它才能打开 VRCX 自己的玩家详情页。
+ */
+export type VrccMutualStar = {
+    /**
+     * 星的编号。
+     */
+    n?: number;
+    /**
+     * 星位名称。
+     */
+    name?: string | null;
+    group?: string | null;
+    /**
+     * 点亮编号。
+     */
+    star?: number | null;
+    /**
+     * 对方的 VRChat 显示名。
+     */
+    vrc?: string | null;
+    /**
+     * 对方的 VRChat 用户 ID；对方没公开时为 `null`。
+     *
+     * **合规提醒**：官方要求客户端若提供「加好友」入口，只能打开客户端自己
+     * 的玩家页面让玩家手动点添加，**不得由程序代发好友请求**。这里只把 ID
+     * 交出去用于打开玩家详情页，不提供任何自动发送好友请求的通道。
+     */
+    vrcUser?: string | null;
+    /**
+     * 互相连上的时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 我给 TA 的分（1.12.0 起）。连上的第二天起才有，当天和旧服务器都是 `null`。
+     */
+    rate?: VrccMutualRate | null;
+};
+/**
+ * `GET /me/mutuals`：与当前玩家双向连线的星友列表。
+ */
+export type VrccMutuals = {
+    stars?: VrccMutualStar[];
+    /**
+     * 互相连上的总数。
+     */
+    n?: number | null;
+};
+/**
+ * `GET /me/board`：玩家看到的地图榜。
+ *
+ * 需要 `maps` 普通权限。和网页「榜单」一样，带玩家自己的评分、去过、热评。
+ * `dot` 是「有新内容」的提示，`min` 是进榜需要几人评分。
+ */
+export type VrccMyBoard = {
+    sort?: string | null;
+    min?: number | null;
+    /**
+     * 有新内容的提示。
+     */
+    dot?: VrccBoardDot | null;
+    maps?: VrccMyBoardMap[];
+};
+/**
+ * 玩家视角地图榜里的一行（`GET /me/board` 的 `maps` 条目）。
+ *
+ * 比公开榜单多了「我自己的视角」：去过几次、我有没有打过分、热评、名次、
+ * 介绍首行。**不复用 [`VrccBoardMap`]**：那边没有这些字段，硬塞会让
+ * 调用方分不清「没有」和「不适用」。
+ */
+export type VrccMyBoardMap = {
+    /**
+     * 世界 ID（1.11.0 起也有同值的 `world`）。
+     */
+    id?: string | null;
+    world?: string | null;
+    name?: string | null;
+    author?: string | null;
+    /**
+     * 房间人数上限。
+     */
+    cap?: number | null;
+    /**
+     * 封面**相对路径**。
+     */
+    img?: string | null;
+    /**
+     * 同一张封面的完整网址（1.11.0 起）。
+     */
+    imgUrl?: string | null;
+    /**
+     * 榜单状态。
+     */
+    status?: string | null;
+    avg?: number | null;
+    raters?: number | null;
+    /**
+     * 去过的人数。
+     */
+    went?: number | null;
+    /**
+     * 总榜或本周榜上的名次；有人打分的才有。筛选不改名次。
+     */
+    rank?: number | null;
+    /**
+     * 赞最多的那段介绍的第一行。
+     */
+    intro?: string | null;
+    /**
+     * 最热的一条短评。
+     */
+    hot?: VrccMapHot | null;
+    /**
+     * 最多 3 条短评。
+     */
+    hots?: VrccMapHot[];
+};
+/**
+ * `GET /me/board` 的排序。比公开榜多一个 `went`（我去过的）。
+ *
+ * 单独一个枚举而不是复用 [`VrccBoardSort`]：多出来的那一个值在公开榜上
+ * 不存在，塞进同一个枚举会让公开榜的调用点也「支持」一个它其实发不出去的
+ * 值。
+ */
+export type VrccMyBoardSort =
+    | 'top'
+    | 'week'
+    | 'new'
+    /**
+     * 我去过的。
+     */
+    | 'went';
+/**
+ * `GET /me/maps/{world}`：玩家**当前所在地图**在地图榜上的状态与本人评分。
+ *
+ * 字段照官方 `MyMap`。三个布尔各有明确含义，客户端行为直接依赖它们：
+ *
+ * | 字段 | 为 `true` 时 |
+ * | --- | --- |
+ * | `board` | 已正式在榜上展示 |
+ * | `pending` | 已提交收录、等审核 |
+ * | `off` | **不给当前玩家看**（下架或年龄池不符）→ 客户端**必须隐藏**这张图的卡片与打分入口 |
+ *
+ * 三者皆 `false` 表示地图榜还没有这张图；玩家首次打分时会自动提交审核。
+ */
+export type VrccMyMap = {
+    world?: string | null;
+    name?: string | null;
+    /**
+     * 是否已正式在地图榜上展示。
+     */
+    board?: boolean | null;
+    /**
+     * 是否已提交收录、正在等待审核。
+     */
+    pending?: boolean | null;
+    /**
+     * 是否不给当前玩家看；为 `true` 时客户端应隐藏这张图。
+     */
+    off?: boolean | null;
+    avg?: number | null;
+    raters?: number | null;
+    /**
+     * 自己打的分（1–10）。
+     */
+    mine?: number | null;
+    /**
+     * 自己的短评。
+     */
+    words?: string | null;
+    /**
+     * 短评的审核状态：`wait` 审核中 / `ok` 已通过 / `hidden` 未通过；
+     * 没有短评时为 `null`。
+     */
+    wordsOk?: string | null;
+    /**
+     * 封面**相对路径**（接在 [`VRCC_SITE_ORIGIN`] 之后使用）。
+     *
+     * 官方给的示例是 `/api/match?xdimg=…`，也就是说这个图片来自网页端那套
+     * 内部接口。我们只把它当图片地址加载，不通过它取任何数据。
+     */
+    img?: string | null;
+    /**
+     * 同一张封面的完整网址（1.11.0 起）。有它就不用自己拼。
+     */
+    imgUrl?: string | null;
+};
+/**
+ * `/me/maps/{world}/page`：带令牌的地图页（1.13.0 起）。
+ *
+ * 比公开版多出：完整短评列表、地图介绍、正在开的房，以及**我自己的评分**。
+ * 需要 `maps` 普通权限（我们已有），因此不需要重新授权。
+ */
+export type VrccMyMapPage = {
+    /**
+     * 榜上的那一行。
+     */
+    map?: VrccBoardMap | null;
+    /**
+     * 地图介绍；没有时是 `null`。
+     */
+    intro?: VrccMapIntro | null;
+    /**
+     * 短评列表，按 `sort` 排。
+     */
+    rates?: VrccMapRate[];
+    /**
+     * 我自己的评分与短评。
+     */
+    mine?: VrccMyRate | null;
+    /**
+     * 当前的排序方式（`hot` / `new`）。
+     */
+    sort?: string | null;
+};
+/**
+ * 「我的」那一小块：自己打的分数与短评。
+ */
+export type VrccMyRate = {
+    /**
+     * 我的打分记录；没打过分时是 `null`。
+     */
+    rate?: VrccMapRate | null;
+    /**
+     * 我写的地图介绍；没有时是 `null`。
+     */
+    intro?: VrccMapIntro | null;
+};
+/**
+ * 通知中心的一条（`GET /me/notes`，1.13.0 起）。
+ */
+export type VrccNote = {
+    id?: number;
+    /**
+     * `link` / `mutual` / `gift` / `invite` / `yq` / `map` / `about`，
+     * 以后可能加新的：不认识的照样显示 `text`。
+     */
+    kind?: string | null;
+    /**
+     * 网页上显示的那句话（纯文字）。
+     */
+    text?: string | null;
+    /**
+     * 毫秒时间戳。
+     */
+    at?: number | null;
+    /**
+     * 玩家在网页上看过没有。
+     */
+    seen?: boolean | null;
+    /**
+     * 点开去的星友圈动态编号。
+     */
+    post?: number | null;
+    /**
+     * 点开去的地图（`wrld_…`）。
+     */
+    world?: string | null;
+};
+/**
+ * `GET /me/notes`：网页「通知」那张表，最多 60 条，新的在前。读了不标已读。
+ */
+export type VrccNotes = { notes?: VrccNote[] };
+/**
+ * 我打过分的某张地图：`GET /me/maps` 里的一条。
+ *
+ * **和 [`VrccBoardMap`] 不是同一个形状**：这里说的是「我给它打了多少分、
+ * 写了什么」，所以有 `score` / `words` / `at`，没有 `avg` / `rank`。
+ * 把两者塞进同一个结构体会让一半字段永远是空的，调用方也分不清「没有」
+ * 和「不适用」。
+ */
+export type VrccRatedMap = {
+    /**
+     * 世界 ID，形如 `wrld_…`。
+     */
+    world: string;
+    /**
+     * 地图名；官方不知道时是 `null`。
+     */
+    name?: string | null;
+    /**
+     * 我打的分数（1–10）。
+     */
+    score?: number | null;
+    /**
+     * 我写的短评；没写是 `null`。
+     */
+    words?: string | null;
+    /**
+     * 短评的审核状态：`wait` / `ok` / `hidden`。
+     */
+    wordsOk?: string | null;
+    /**
+     * 打分的时间（毫秒）。
+     */
+    at?: number | null;
+    /**
+     * vrcc.cc 上的地图页。
+     */
+    page?: string | null;
+};
+/**
+ * `GET /me/maps`：我打过分的地图，**最近打的在前**，最多 200 张。
+ *
+ * 需要 `maps` 普通权限。计入个人每天 1000 次。
+ */
+export type VrccRatedMaps = { maps?: VrccRatedMap[] };
+/**
+ * `recent` 里的提醒条目：`Notice` 加上站内跳转路径。
+ */
+export type VrccRecentNotificationItem = {
+    id?: number;
+    title?: string | null;
+    body?: string | null;
+    /**
+     * 产生时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 对应的网页**相对路径**（以 `/match/` 开头），无跳转时为 `null`。
+     *
+     * 注意：这是相对路径，不是完整 URL。前面要拼上 [`VRCC_SITE_ORIGIN`]。
+     */
+    url?: string | null;
+};
+/**
+ * `GET /me/notifications/recent`：最近 24 小时内的最后 5 条（新的在前）。
+ */
+export type VrccRecentNotifications = {
+    items?: VrccRecentNotificationItem[];
+    /**
+     * 玩家最后已读的提醒 ID；大于它的可视为未读。
+     */
+    read?: number | null;
+};
+/**
+ * 「今天」的轮次信息。这一轮连了几颗、下一轮什么时候开始。
+ */
+export type VrccRound = {
+    /**
+     * 本轮开始时间（毫秒）。
+     */
+    at?: number | null;
+    /**
+     * 下一轮开始时间（毫秒）。
+     */
+    next?: number | null;
+    /**
+     * 本轮已连几颗。
+     */
+    used?: number | null;
+    /**
+     * 本轮最多能连几颗。
+     */
+    max?: number | null;
+    remind?: boolean | null;
+};
+/**
+ * 分数分布的一段：`9–10` 分占百分之几。
+ */
+export type VrccScoreBand = {
+    /**
+     * 这一段的分数下限。
+     */
+    from?: number;
+    /**
+     * 这一段的分数上限。
+     */
+    to?: number;
+    /**
+     * 占百分之几（整数）。
+     */
+    pct?: number;
+};
+/**
+ * 一张星卡：`/me/today`、`/me/inbox` 里的条目。
+ *
+ * 字段照官方 `StarCard` schema。`additionalProperties: true`，线上字段比文档
+ * 列的多，这里只取我们用得到的那些；多出来的字段解析时被忽略。
+ *
+ * 下面三个字段在官方字段表里没有、只在示例里出现，属于上面那种「多出来」的：
+ * - `at`：最近一次擦肩 / 路过的时间，只出现在「路过」类清单里；
+ * - `linked_me`：TA 已经连向我，和 `linked`（我连向 TA）、`mutual`（双向）互补；
+ * - `why`：这张卡为什么出现在这里（`me/today` 给 `cross` 之类）。
+ *
+ * 别的星卡上没有这三个键，所以都是 `Option`。
+ */
+export type VrccStarCard = {
+    /**
+     * 星的编号，连线、私聊都用它。
+     */
+    n?: number;
+    name?: string | null;
+    /**
+     * 星位的一句话描述。
+     */
+    line?: string | null;
+    group?: string | null;
+    /**
+     * 星群名称。
+     */
+    groupName?: string | null;
+    intro?: string | null;
+    /**
+     * 点亮编号（对方没公开时为 `null`）。
+     */
+    star?: number | null;
+    /**
+     * 星位坐标，形如 `L2` / `Z1` / `G2`（世界里的固定座位）。
+     */
+    pos?: string | null;
+    /**
+     * 对方验证过 VRChat 账号。
+     */
+    verified?: boolean | null;
+    /**
+     * 我连向了 TA。
+     */
+    linked?: boolean | null;
+    /**
+     * 已经互相连上。
+     */
+    mutual?: boolean | null;
+    /**
+     * TA 已经连向我（`linkedMe`）。
+     *
+     * 和 [`Self::linked`]（我连向 TA）、[`Self::mutual`]（双向）是三个互补的
+     * 状态。只在「路过」类清单里给，别的星卡上是 `None`。
+     */
+    linkedMe?: boolean | null;
+    /**
+     * 对方的 VRChat 名字，**只在互相连上时才有**。
+     */
+    vrc?: string | null;
+    /**
+     * 对方的 VRChat 用户 ID，只在互相连上且对方公开已验证时才有。
+     */
+    vrcUser?: string | null;
+    /**
+     * 共同的星友数（对方不公开时为 `null`）。
+     */
+    friends?: number | null;
+    /**
+     * 最近一次擦肩 / 路过的时间（毫秒时间戳）。
+     *
+     * 只出现在「路过」类清单：`/me/crossings/cards` 的 `at` 是最近一次擦肩，
+     * `me/today` 的卡上是这一轮路过的时刻。其余星卡没有这个键。
+     */
+    at?: number | null;
+    /**
+     * 这张卡为什么出现在这个清单里（`me/today` 给 `cross` 这种）。
+     *
+     * 保留服务器原样的代号：不认识的也照样收下，界面不认识就不显示。
+     */
+    why?: string | null;
+    /**
+     * 怎么认识的：什么时候互连、从哪认识、在哪遇见。
+     *
+     * 1.15.3 起写进官方文档：**只有互相连上（`mutual: true`）的星卡才有**。
+     * 仍然是 `Option`——没连上的卡没有这个键，老服务器也没有。
+     */
+    pair?: VrccStarPair | null;
+};
+/**
+ * 星卡上的「怎么认识的」（1.15.3 起随 [`VrccStarCard::pair`] 写进文档）。
+ *
+ * 网页「星轨相交」里点开一颗星，浮层上那几行就是它拼出来的。
+ */
+export type VrccStarPair = {
+    /**
+     * 互相连上的时间（毫秒时间戳）。
+     */
+    at?: number | null;
+    /**
+     * 最先那条线是怎么来的。
+     *
+     * 官方取值：`rec` 今日推荐、`back` 回应对方的连线、`fof` 共同好友、
+     * `pick` 在星空里挑中、`invite` 邀请口令、`xd` 报名星搭、
+     * `xd-ok` 星搭选中同行、`cross` 星轨相交、`yq` 从星友圈看到。
+     * 可能增加新取值，老记录也可能是 `null`——不认识的当成没有。
+     */
+    src?: string | null;
+    /**
+     * 最先那条线是不是我连的。
+     */
+    mine?: boolean | null;
+    /**
+     * 最近一次星轨相交。
+     *
+     * 只在双方都开着星轨相交、且最近 30 天内有记录时才有。
+     */
+    met?: VrccStarPairMet | null;
+};
+/**
+ * 星卡上「在哪遇见」。
+ */
+export type VrccStarPairMet = {
+    /**
+     * 最近一次星轨相交的时间（毫秒时间戳）。
+     *
+     * **只精确到天**：官方写明它是「那一天北京时间中午 12 点」的锚点，
+     * 是有意取整的。所以只能拿它算「哪一天」，不能当精确时刻显示——
+     * 当天上午看它还在未来，下午看又像是几小时前。
+     */
+    at?: number | null;
+    /**
+     * VRChat 世界名的**原文**。
+     *
+     * 可能自带「世界名｜社群名」这样的尾巴（分隔符也是世界名的一部分），
+     * 也可能是干干净净一个名字。**不要按分隔符拆**，拆了会把正常世界名拆坏。
+     * 还没读到名字、或这张地图不能显示时是 `null`。
+     */
+    world?: string | null;
+};
+/**
+ * `GET /status`：不需要 client 标识的探活接口。
+ */
+export type VrccStatus = {
+    /**
+     * 毫秒时间戳。
+     */
+    at?: number | null;
+    /**
+     * `ok` 表示正常。
+     */
+    state?: string | null;
+};
+/**
+ * 一张贴纸：`GET /stickers` 里 `stickers` 的一项。
+ *
+ * 官方没保证这三个字段一定存在，所以都按「可能没有」处理——少一段装饰
+ * 素材不该让整页解析失败。
+ */
+export type VrccSticker = {
+    /**
+     * 贴纸名，展示用。
+     */
+    name?: string | null;
+    /**
+     * 这张贴纸支持的材质代号（`paper` / `glitter` / …）。
+     */
+    finishes?: string[];
+    /**
+     * 贴纸图的地址；`GET /stickers/{id}?fin=…` 会按材质和磨损画。
+     */
+    url?: string | null;
+};
+/**
+ * `GET /stickers`：所有贴纸和材质名（**不需要令牌，也不需要 `client`**）。
+ *
+ * 两个字段都是「代号 → 值」的字典而不是数组：键是贴纸 ID 或材质代号，
+ * 顺序没有意义，用 `BTreeMap` 让迭代顺序稳定。
+ */
+export type VrccStickers = {
+    /**
+     * 贴纸 ID → 贴纸。
+     */
+    stickers?: Partial<{ [key in string]: VrccSticker }>;
+    /**
+     * 材质代号 → 材质名（`paper` → 纸质）。
+     */
+    finishes?: Partial<{ [key in string]: string }>;
+};
+/**
+ * 停站说明。
+ */
+export type VrccStop = {
+    say?: string | null;
+    /**
+     * 预计恢复的时间（毫秒），没定时是 `null`。
+     */
+    until?: number | null;
+};
+/**
+ * `GET /me/today`：这一轮路过的星 + 轮次进度。
+ */
+export type VrccToday = {
+    /**
+     * 第几轮，形如 `#12`。
+     */
+    day?: string | null;
+    cards?: VrccStarCard[];
+    round?: VrccRound;
+};
+/**
+ * `GET /me/unread`：网页上几个红点的数字（1.13.0 起，`notifications` 权限）。
+ *
+ * 读了不标已读。每个授权每天 1500 次，和别的读接口分开算，适合后台定时问。
+ */
+export type VrccUnread = {
+    /**
+     * 上次看「连向我」以后，新连向我的星。
+     */
+    inbox?: number;
+    /**
+     * 星轨相交里还没看过的。
+     *
+     * 只在令牌有 `crossings` 权限时才有这个键（16–17 岁没有星轨相交，恒为 0
+     * 就能看出星池）。没有时是 `None`，界面不显示这一项，而不是显示 0。
+     */
+    cross?: number | null;
+    /**
+     * 私聊未读的消息。
+     */
+    chats?: number;
+    /**
+     * 通知中心里未读的：`me/notes` 给的那些里玩家还没看过的。
+     */
+    notes?: number;
+};
+/**
+ * 本客户端今天的用量。
+ *
+ * **全部来自服务端响应头，既不落盘也不自我推算。**
+ *
+ * 1.11.0 起，带每天次数的接口会回答 `RateLimit-Limit` / `RateLimit-Remaining`
+ * / `RateLimit-Reset`，那是服务器按这个授权算的准数。官方没有「查询额度」的
+ * 接口，这组头只在你发某个请求的那一刻回一次——所以界面上显示的是「最近一次
+ * 请求时服务端说的余量」，不是实时值，也不需要是实时值。
+ *
+ * 为什么不再自己记账：官方的时间基准是**北京时间零点**（`RateLimit-Reset`
+ * 是到那时候的秒数），而本地推算只能拿到本机时区的自然日。两套时钟对非
+ * UTC+8 的玩家必然错开，本地记的数会变成「昨天下班前用了 980」这种误导，
+ * 还可能在服务端早就重置之后继续把请求拦在本地。宁可显示「未知」，也不显示
+ * 一个自己编的数。
+ */
+export type VrccUsageSnapshot = {
+    /**
+     * 今日「第一份读」已用次数（最近的提醒、星轨相交、互相连上、所在的地图、
+     * 我打过分的地图合计）。还没拿到过服务端响应头时为 `null`。
+     */
+    personalUsedToday: number | null;
+    /**
+     * 「第一份读」每个授权每天的上限（1.8.4 起是 1000）。
+     */
+    personalDailyLimit: number | null;
+    /**
+     * 今日 `me/unread` 已用次数；服务器还没给过响应头时为 `null`。
+     */
+    unreadUsedToday: number | null;
+    /**
+     * `me/unread` 每天的上限（1500）；同上，没拿到时为 `null`。
+     */
+    unreadDailyLimit: number | null;
+    /**
+     * 限流窗口内已发请求数。
+     */
+    windowUsed: number;
+    /**
+     * 限流窗口容量（每分钟）。
+     */
+    windowLimit: number;
+    /**
+     * 若正在退避，还有多少毫秒恢复。
+     */
+    backoffRemainingMs: number;
+    /**
+     * 服务端下一次重置额度还有多少秒（`RateLimit-Reset`）；没拿到时为 `null`。
+     *
+     * 这是**服务端**的时间基准（北京时间零点），界面据此显示「几点恢复」，
+     * 不要拿本机时区去推。
+     */
+    resetSecs: number | null;
+};
+/**
+ * 我对一条内容的投票。
+ *
+ * 三种取值对应官方 `v`：`1` 赞、`-1` 踩、`0` 取消。
+ *
+ * **单独建类型而不是用 `i64`**：界面会频繁地在「当前票值」和「点一下之后
+ * 该发什么」之间换算（点已赞的赞 = 取消 = 0），用枚举能把这件事写清楚，
+ * 也挡住传 `2` 这种服务器必然拒绝的值。
+ */
+export type VrccVote =
+    /**
+     * 取消投票。
+     */
+    | 'none'
+    /**
+     * 赞。
+     */
+    | 'up'
+    /**
+     * 踩。
+     */
+    | 'down';
+/**
+ * 投票的对象类型。
+ *
+ * 官方接口同一套投票同时服务于短评（`rate`）和地图介绍（`intro`）。我们
+ * 目前只做短评的投票，但**把两种都建模**：请求体里的 `kind` 是必填的，
+ * 枚举化成字面量可以减少「写错字符串」这类低级错误。
+ */
+export type VrccVoteKind =
+    /**
+     * 给一条短评投票。
+     */
+    | 'rate'
+    /**
+     * 给地图介绍投票。
+     */
+    | 'intro';
+/**
+ * 投票结果（`POST /me/map-votes` 的 200）。
+ *
+ * 官方返回的是**更新之后**的计数，所以调用方可以直接拿它刷新界面，
+ * 不必再查一次列表。
+ *
+ * ## `my_vote` 为什么不叫 `mine`
+ *
+ * 官方响应里这个字段叫 `mine`，但同名的 `VrccMapRate::mine` 表示「这条内容
+ * 是不是我写的」，语义完全不同（一个是布尔，一个是我投的票）。两个字段
+ * 放在同一个界面里用，叫同一个名字迟早会有人把「我写的」当成「我投了」，
+ * 所以这里改名，并且注明它来自官方的 `mine`。
+ */
+export type VrccVoteResult = {
+    /**
+     * 对象的类型（`rate` / `intro`）。
+     */
+    kind?: string | null;
+    /**
+     * 对象的编号。
+     */
+    id?: number | null;
+    /**
+     * 更新后的赞数。
+     */
+    up?: number | null;
+    /**
+     * 更新后的踩数。
+     */
+    down?: number | null;
+    /**
+     * 我现在的票；来自官方的 `mine` 字段（整数）。
+     */
+    mine?: number | null;
 };
 export type VrchatAuthFileAnalysisInput = {
     fileId?: string;
