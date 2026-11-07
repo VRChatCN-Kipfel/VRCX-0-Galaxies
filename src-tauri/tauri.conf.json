@@ -85,10 +85,10 @@
             }
         },
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwQTA3NTFDOTAxM0E3MjYKUldRbXB4T1FISFdnc0dXNWJhUEVNUVNNcm5ubytmR3lEdTBCUzJPUFY0dHpLcW1UdldwUFB4OWEK",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVFRjIwQkYzREMxMzgzQjAKUldTd2d4UGM4d3Z5N3MvNjk3RmZRU1JsQjNuZ1lPT2pkdnozUEhyWmRIWHZDOWR0TXhQS1A5VjkK",
             "endpoints": [
-                "https://github.com/Map1en/VRCX-0/releases/latest/download/latest_linux_and_macos.json",
-                "https://github.com/Map1en/VRCX-0/releases/latest/download/latest_windows.json"
+                "https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest/download/latest_linux_and_macos.json",
+                "https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest/download/latest_windows.json"
             ],
             "windows": {
                 "installMode": "passive"
