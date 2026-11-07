@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';

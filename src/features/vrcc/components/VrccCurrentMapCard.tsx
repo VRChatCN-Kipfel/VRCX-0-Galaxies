@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { ExternalLink, MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

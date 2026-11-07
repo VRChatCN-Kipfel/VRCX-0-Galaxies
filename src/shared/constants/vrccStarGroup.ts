@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * 星遇同频的星群（官方 `stars[].group`）。
  *

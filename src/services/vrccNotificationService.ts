@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { tauriClient } from '@/platform/tauri/client';
 import { openVrccTab } from '@/shared/utils/vrccNavigation';
 import { useVrcNotificationStore } from '@/state/vrcNotificationStore';

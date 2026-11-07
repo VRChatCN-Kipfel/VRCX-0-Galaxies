@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // @vitest-environment jsdom
 
 import type { TFunction } from 'i18next';

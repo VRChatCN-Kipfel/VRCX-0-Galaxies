@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { create } from 'zustand';
 
 import type { VrccGuidanceState } from '@/platform/tauri/bindings';

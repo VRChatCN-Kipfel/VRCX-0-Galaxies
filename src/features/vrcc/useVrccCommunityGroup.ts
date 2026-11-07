@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useEffect, useState } from 'react';
 
 import type { GroupProfileRecord } from '@/domain/entities/group';

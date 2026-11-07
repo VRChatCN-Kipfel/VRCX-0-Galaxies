@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 把 vrcc 后台轮询绑定到「VRCX 账号登录状态」上的装配。
 //!
 //! 它跟的是「谁登录了 VRCX」，不是「VRChat 游戏进程在不在」：令牌属于账号，

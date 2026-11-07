@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 星遇同频运行时：把应用层服务挂到桌面运行时上。
 
 use std::sync::Arc;

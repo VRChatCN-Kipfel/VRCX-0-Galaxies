@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 不联网的契约测试：用官方文档的示例回答喂契约。
 //!
 //! 示例来自星遇同频开放接口文档仓库的 `examples/responses.json`（离线生成的

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { queryOptions } from '@tanstack/react-query';
 
 import { entityQueryPolicies, queryKeys } from '@/lib/entityQueryCache';

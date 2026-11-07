@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 #![allow(non_snake_case)]
 
 //! 星遇同频（vrcc.cc）的命令层。

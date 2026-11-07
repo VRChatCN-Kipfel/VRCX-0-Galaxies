@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useEffect } from 'react';
 
 import i18n from '@/services/i18nService';

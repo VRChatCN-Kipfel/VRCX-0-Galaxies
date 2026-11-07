@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * VRChat 中文社区的 VRChat 群组。
  *

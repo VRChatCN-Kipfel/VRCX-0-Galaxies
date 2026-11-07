@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 星遇同频（vrcc.cc）开放接口的线上数据契约。
 //!
 //! 字段名与类型严格对照官方 `openapi.yaml` 与 `xingshi-app` 的实现，

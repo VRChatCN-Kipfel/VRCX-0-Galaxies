@@ -4,3 +4,15 @@ Portions of this repository originate from VRCX.
 Copyright (c) 2019-2026 pypy and individual contributors.
 Those portions are licensed under the MIT License. The full text is in
 LICENSES/MIT.txt.
+
+Some files carry the notice "SPDX-License-Identifier: MPL-2.0". Each such file
+is offered under the Mozilla Public License 2.0 (full text in
+LICENSES/MPL-2.0.txt) in addition to the GPL-3.0-only terms that apply to
+VRCX-0 as a whole; recipients may use that file under either license.
+
+These files are marked individually and do not form a self-contained
+component. In particular the frontend files depend on VRCX-0 internals that
+remain GPL-3.0-only.
+
+Exhibit B ("Incompatible With Secondary Licenses") is deliberately not
+attached to any of them, so the MPL-2.0 files remain combinable with GPL-3.0.

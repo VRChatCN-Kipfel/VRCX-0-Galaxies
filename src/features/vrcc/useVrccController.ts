@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { tauriClient } from '@/platform/tauri/client';
