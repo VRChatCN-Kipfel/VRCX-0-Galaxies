@@ -291,6 +291,10 @@
                 {
                     "key": "overlay.discord.title.offline",
                     "source": "overlay.discord.title.offline"
+                },
+                {
+                    "key": "vrcc.title",
+                    "source": "vrcc.title"
                 }
             ]
         },

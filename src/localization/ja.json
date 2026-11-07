@@ -1846,7 +1846,7 @@
                 "delete_log": "通知を削除",
                 "decline_with_message": "メッセージを添えて断る",
                 "ignore_locally": "ローカルで無視",
-                "open_vrcc": "Open Xingyu Tongpin"
+                "open_vrcc": "ほしあいを開く"
             },
             "filters": {
                 "requestInvite": "招待リクエスト",
@@ -7223,5 +7223,8 @@
     "mutual_graph_hint": {
         "build": "共通のフレンドのグラフが未作成です · 作成する",
         "room_scan_running": "このインスタンスの共通のフレンドを確認中です。完了後にもう一度お試しください"
+    },
+    "vrcc": {
+        "title": "ほしあい"
     }
 }

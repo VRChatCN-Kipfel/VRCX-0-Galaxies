@@ -16,6 +16,7 @@ use vrcx_0_contracts::vrcc::{
 };
 use vrcx_0_integrations::vrcc::{resolve_client_id, VrccError};
 use vrcx_0_outbound_adapters::LocalVrccTokenStore;
+use vrcx_0_persistence::config::ConfigRepository;
 use vrcx_0_persistence::DatabaseService;
 
 /// 把本地加密仓库适配成应用层端口。
@@ -86,6 +87,8 @@ pub struct DesktopVrccRuntime {
     db: Arc<DatabaseService>,
     /// 读当前登录账号。装配发生在登录之前，所以取闭包而不是固定 id。
     owner: Arc<dyn Fn() -> Option<vrcx_0_core::OwnerId> + Send + Sync>,
+    /// 界面语言所在的配置。服务名要按它取官方译名，见 [`Self::service_name_for`]。
+    config: ConfigRepository,
 }
 
 impl DesktopVrccRuntime {
@@ -133,8 +136,11 @@ impl DesktopVrccRuntime {
     const NOTICE_ROW_TYPE: &str = "vrcc.notice";
     /// 点击这一行时跳到的位置。前端按 scheme 分派，见 `openNotificationLink`。
     const NOTICE_ROW_LINK: &str = "vrcc:notifications";
-    /// 行的发送者与标题。两者都取这个名字是有意的，见 `notice_row`。
-    const NOTICE_ROW_SENDER: &str = "星遇同频";
+    /// 界面语言所在的配置键。
+    ///
+    /// 服务名（通知行的发送者、提醒缺标题时的兜底）都按它取官方译名，见
+    /// [`Self::service_name_for`]。
+    const APP_LANGUAGE_CONFIG_KEY: &str = "appLanguage";
 
     /// 构造运行时。
     ///
@@ -150,6 +156,7 @@ impl DesktopVrccRuntime {
         store: LocalVrccTokenStore,
         proxy_url: Option<&str>,
         owner: Arc<dyn Fn() -> Option<vrcx_0_core::OwnerId> + Send + Sync>,
+        config: ConfigRepository,
     ) -> Self {
         let db = Arc::clone(store.db());
         let port = Arc::new(TokenStoreAdapter { inner: store });
@@ -165,7 +172,24 @@ impl DesktopVrccRuntime {
             service: Arc::new(VrccService::new(port, remote)),
             db,
             owner,
+            config,
         }
+    }
+
+    /// 服务名（官方译名）。
+    ///
+    /// 取自原生语言目录的 `vrcc.title`：中文「星遇同频」、繁体「星遇同頻」、
+    /// 日文「ほしあい」，其余语言是英文官方名「Orbitune」。
+    ///
+    /// 这个字符串会**在写入时**落进通知中心那一行（玩家之后改语言，旧行不跟着
+    /// 变），也用作提醒缺标题时的兜底。两处都不是渲染期再本地化的通道，所以只能
+    /// 在这里定死。系统通知的标题走 `ActivityText::message`，那是渲染期取，不受
+    /// 这里影响。
+    fn service_name_for(config: &ConfigRepository) -> String {
+        let language = config
+            .get_string(Self::APP_LANGUAGE_CONFIG_KEY, "en")
+            .unwrap_or_else(|_| "en".to_string());
+        vrcx_0_i18n::text(&language, vrcx_0_i18n::OverlayMessageKey::VrccTitle)
     }
 
     /// 腕表摘要。纯内存读取，不发请求。
@@ -540,6 +564,7 @@ impl DesktopVrccRuntime {
     ) -> vrcx_0_application_core::TaskSpawnOutcome {
         let service = Arc::clone(&self.service);
         let db = Arc::clone(&self.db);
+        let config = self.config.clone();
         let base = Self::BACKGROUND_POLL_BASE;
         let jitter = Self::BACKGROUND_POLL_JITTER;
 
@@ -593,6 +618,9 @@ impl DesktopVrccRuntime {
                             "vrcc: background poll skipped (token lacks notifications)"
                         );
                     } else if snapshot.connected {
+                        // 每轮现取：玩家中途改语言时，写进通知中心的发送者名
+                        // 和兜底标题都会跟着变。
+                        let service_name = Self::service_name_for(&config);
                         match poll_once(
                             &service,
                             dispatcher.as_ref(),
@@ -601,6 +629,7 @@ impl DesktopVrccRuntime {
                             &mut notice_icon,
                             &owner,
                             &mut unread_at,
+                            &service_name,
                         )
                         .await
                         {
@@ -736,6 +765,7 @@ async fn poll_once(
     icon: &mut NoticeIcon,
     owner: &vrcx_0_core::OwnerId,
     unread_at: &mut Option<Instant>,
+    service_name: &str,
 ) -> Result<PollOutcome, VrccError> {
     let first_poll = service.notifications_cursor().is_none();
     let fresh = match service.poll_notifications().await {
@@ -751,7 +781,7 @@ async fn poll_once(
     // 落库要放在选通知之前：系统通知每轮最多弹 `MAX_NOTIFIED_PER_POLL` 条，
     // 但**这一轮拉到的每一条**都该进通知中心，否则超出的那几条就凭空消失了
     // ——游标已经过去，下一轮不会再给。
-    let persisted = persist_notices(db, owner, &fresh);
+    let persisted = persist_notices(db, owner, &fresh, service_name);
     if persisted > 0 {
         tracing::debug!(
             persisted,
@@ -768,8 +798,14 @@ async fn poll_once(
 
     // 拉取与处理分开：`handle_recent_notices` 只接收数据、不看网络，
     // 于是「拿到什么样的数据 → 弹哪些通知」可以脱离服务端直接测。
-    let mut outcome =
-        handle_recent_notices(&fresh, dispatcher, notified, icon_path, Some(owner.clone()));
+    let mut outcome = handle_recent_notices(
+        &fresh,
+        dispatcher,
+        notified,
+        icon_path,
+        Some(owner.clone()),
+        service_name,
+    );
     outcome.persisted = persisted;
 
     if unread_refresh_due(first_poll, fresh.len(), unread_at.map(|at| at.elapsed())) {
@@ -855,6 +891,7 @@ impl NotifiedIds {
 fn notice_row(
     notice: &vrcx_0_contracts::vrcc::VrccNotificationItem,
     fallback_created_at: &str,
+    sender: &str,
 ) -> serde_json::Value {
     let created_at = notice
         .at
@@ -870,7 +907,6 @@ fn notice_row(
     // 在抽屉里会显示成「星遇同频 星遇同频 …」。两者只留一处：标题走 `title`，
     // 正文走 `message`。正文缺失时退回标题，免得留下空白行。
     let message = if body.is_empty() { title } else { body };
-    let sender = DesktopVrccRuntime::NOTICE_ROW_SENDER;
     json!({
         "id": format!("{}{}", DesktopVrccRuntime::NOTICE_ROW_ID_PREFIX, notice.id),
         "createdAt": created_at,
@@ -908,6 +944,7 @@ fn persist_notices(
     db: &DatabaseService,
     owner: &vrcx_0_core::OwnerId,
     items: &[vrcx_0_contracts::vrcc::VrccNotificationItem],
+    sender: &str,
 ) -> usize {
     if items.is_empty() {
         return 0;
@@ -915,7 +952,7 @@ fn persist_notices(
     let now = vrcx_0_core::time::now_iso();
     let mut written = 0usize;
     for item in items {
-        let row = notice_row(item, &now);
+        let row = notice_row(item, &now, sender);
         match vrcx_0_persistence::notifications::notification_add_v2(
             db,
             owner.as_str().to_string(),
@@ -953,12 +990,13 @@ fn handle_recent_notices(
     notified: &NotifiedIds,
     icon: Option<&std::path::Path>,
     owner: Option<vrcx_0_core::OwnerId>,
+    service_name: &str,
 ) -> PollOutcome {
     tracing::debug!(fresh = items.len(), "vrcc: fetched new notices");
 
     // 决策与投递分开：`select_notices_to_notify` 是纯函数，可以脱离网络和
     // 通知桥单独测。这里只负责把它选出来的结果包装成通知。
-    let selection = select_notices_to_notify(items, MAX_NOTIFIED_PER_POLL);
+    let selection = select_notices_to_notify(items, MAX_NOTIFIED_PER_POLL, service_name);
 
     // 真正要弹的是「选中 且 之前没弹过」的那些。`?since=` 由服务端保证每条只给
     // 一次，但重连、换号、或服务器重发同一批时仍可能重复，本地这一层不能省。
@@ -1065,7 +1103,8 @@ fn external_notice_delivery(
             actor_relation: ActivityActorRelation::None,
             content: ActivityContent {
                 icon: "system".to_string(),
-                title: ActivityText::literal("星遇同频"),
+                // 服务名走语言目录，渲染期按界面语言取（`vrcc.title`）。
+                title: ActivityText::message(vrcx_0_i18n::OverlayMessage::vrcc_title()),
                 body: ActivityText::literal(notice.body.as_deref().unwrap_or_default()),
                 // 图标是**已经缓存好的本地文件**，不是 URL。通知层只从
                 // `image_url` 出发去解析（VRChat 资产或远程 URL），都不接受
@@ -1233,6 +1272,7 @@ struct NoticeSelection {
 fn select_notices_to_notify(
     items: &[vrcx_0_contracts::vrcc::VrccNotificationItem],
     limit: usize,
+    fallback_title: &str,
 ) -> NoticeSelection {
     let skipped = items.len().saturating_sub(limit);
     let notices = items[skipped..]
@@ -1243,7 +1283,7 @@ fn select_notices_to_notify(
                 .title
                 .clone()
                 .filter(|title| !title.trim().is_empty())
-                .unwrap_or_else(|| "星遇同频".to_string()),
+                .unwrap_or_else(|| fallback_title.to_string()),
             body: item.body.clone(),
         })
         .collect();
@@ -1267,7 +1307,7 @@ mod tests {
     #[test]
     fn every_new_notice_is_selected_in_order() {
         let items = vec![item(41, Some("a"), None), item(42, Some("b"), None)];
-        let selection = select_notices_to_notify(&items, 10);
+        let selection = select_notices_to_notify(&items, 10, "星遇同频");
         assert_eq!(
             selection.notices.iter().map(|n| n.id).collect::<Vec<_>>(),
             vec![41, 42]
@@ -1277,7 +1317,7 @@ mod tests {
 
     #[test]
     fn nothing_new_selects_nothing() {
-        let selection = select_notices_to_notify(&[], 3);
+        let selection = select_notices_to_notify(&[], 3, "星遇同频");
         assert!(selection.notices.is_empty());
         assert_eq!(selection.skipped, 0);
     }
@@ -1285,7 +1325,7 @@ mod tests {
     #[test]
     fn over_the_limit_keeps_the_newest_and_counts_the_rest() {
         let items = (1..=5).map(|id| item(id, None, None)).collect::<Vec<_>>();
-        let selection = select_notices_to_notify(&items, 3);
+        let selection = select_notices_to_notify(&items, 3, "星遇同频");
         // 弹最新的三条，按时间顺序。
         assert_eq!(
             selection.notices.iter().map(|n| n.id).collect::<Vec<_>>(),
@@ -1297,14 +1337,14 @@ mod tests {
     #[test]
     fn blank_title_falls_back_so_no_notification_is_titleless() {
         let items = vec![item(1, Some("   "), Some("body"))];
-        let selection = select_notices_to_notify(&items, 10);
+        let selection = select_notices_to_notify(&items, 10, "星遇同频");
         assert_eq!(selection.notices[0].title, "星遇同频");
     }
 
     #[test]
     fn keeps_the_body_verbatim() {
         let items = vec![item(1, Some("标题"), Some("正文内容"))];
-        let selection = select_notices_to_notify(&items, 10);
+        let selection = select_notices_to_notify(&items, 10, "星遇同频");
         assert_eq!(selection.notices[0].body.as_deref(), Some("正文内容"));
     }
 
@@ -1380,10 +1420,12 @@ mod tests {
             delivery.entry.content.body,
             vrcx_0_application_activity::ActivityText::literal("有人回复了你")
         );
-        // 标题是对方的**服务名**，只作文字归属。
+        // 标题是对方的**服务名**（官方译名），走语言目录、渲染期按界面语言取。
         assert_eq!(
             delivery.entry.content.title,
-            vrcx_0_application_activity::ActivityText::literal("星遇同频")
+            vrcx_0_application_activity::ActivityText::message(
+                vrcx_0_i18n::OverlayMessage::vrcc_title()
+            )
         );
         // 星遇同频的提醒没有 VRChat 用户/世界 ID，别伪造一个。
         assert!(delivery.entry.actor_user_id.is_empty());
@@ -1464,7 +1506,7 @@ mod tests {
 
         let first: Vec<_> = notified
             .take_new(
-                select_notices_to_notify(&items, MAX_NOTIFIED_PER_POLL)
+                select_notices_to_notify(&items, MAX_NOTIFIED_PER_POLL, "星遇同频")
                     .notices
                     .iter()
                     .map(|n| n.id),
@@ -1476,7 +1518,7 @@ mod tests {
         // 服务端又给了一遍同一条。
         let second: Vec<_> = notified
             .take_new(
-                select_notices_to_notify(&items, MAX_NOTIFIED_PER_POLL)
+                select_notices_to_notify(&items, MAX_NOTIFIED_PER_POLL, "星遇同频")
                     .notices
                     .iter()
                     .map(|n| n.id),
@@ -1539,6 +1581,7 @@ mod tests {
         let row = notice_row(
             &notice_at(42, Some("t"), None, None),
             "2026-01-01T00:00:00.000Z",
+            "星遇同频",
         );
         let id = row["id"].as_str().unwrap();
         assert_eq!(id, "vrcc_42");
@@ -1557,6 +1600,7 @@ mod tests {
         let row = notice_row(
             &notice_at(1, Some("t"), Some("b"), None),
             "2026-01-01T00:00:00.000Z",
+            "星遇同频",
         );
         assert_eq!(row["seen"], json!(false));
         // 空串 = 不过期。写成日期会让历史行在几天后从列表里消失。
@@ -1566,7 +1610,11 @@ mod tests {
     /// 点击落点写在 `link` 上：提醒没有 VRChat 用户可跳，`senderUserId` 留空。
     #[test]
     fn a_row_carries_the_link_the_frontend_dispatches_on() {
-        let row = notice_row(&notice_at(7, None, None, None), "2026-01-01T00:00:00.000Z");
+        let row = notice_row(
+            &notice_at(7, None, None, None),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
         assert_eq!(row["link"], json!("vrcc:notifications"));
         assert_eq!(row["type"], json!("vrcc.notice"));
         assert_eq!(row["senderUserId"], json!(""));
@@ -1578,6 +1626,7 @@ mod tests {
         let row = notice_row(
             &notice_at(1, None, Some("b"), Some(1_700_000_000_000)),
             "2026-01-01T00:00:00.000Z",
+            "星遇同频",
         );
         assert_eq!(row["createdAt"], json!("2023-11-14T22:13:20.000Z"));
         assert_eq!(row["updatedAt"], row["createdAt"]);
@@ -1587,7 +1636,11 @@ mod tests {
     /// ——空值会让这一行在排序里垫底。
     #[test]
     fn a_row_without_a_timestamp_falls_back() {
-        let row = notice_row(&notice_at(1, None, None, None), "2026-01-01T00:00:00.000Z");
+        let row = notice_row(
+            &notice_at(1, None, None, None),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
         assert_eq!(row["createdAt"], json!("2026-01-01T00:00:00.000Z"));
     }
 
@@ -1598,19 +1651,23 @@ mod tests {
     /// …」。这条测试钉住「两者不重复」。
     #[test]
     fn a_row_keeps_the_title_and_the_body_apart() {
-        let both = notice_row(&notice_at(1, Some("标题"), Some("正文"), None), "");
+        let both = notice_row(
+            &notice_at(1, Some("标题"), Some("正文"), None),
+            "",
+            "星遇同频",
+        );
         // 正文只有正文，不含标题。
         assert_eq!(both["message"], json!("正文"));
-        assert_eq!(both["title"], json!(DesktopVrccRuntime::NOTICE_ROW_SENDER));
+        assert_eq!(both["title"], json!("星遇同频"));
 
-        let title_only = notice_row(&notice_at(1, Some("标题"), None, None), "");
+        let title_only = notice_row(&notice_at(1, Some("标题"), None, None), "", "星遇同频");
         assert_eq!(title_only["message"], json!("标题"));
 
-        let body_only = notice_row(&notice_at(1, None, Some("正文"), None), "");
+        let body_only = notice_row(&notice_at(1, None, Some("正文"), None), "", "星遇同频");
         assert_eq!(body_only["message"], json!("正文"));
 
         // 都为空时至少不要留下 " " 这种只有空白的一栏。
-        let neither = notice_row(&notice_at(1, Some("  "), None, None), "");
+        let neither = notice_row(&notice_at(1, Some("  "), None, None), "", "星遇同频");
         assert_eq!(neither["message"], json!(""));
     }
 
@@ -1621,12 +1678,40 @@ mod tests {
         let row = notice_row(
             &notice_at(1, Some("星遇同频"), Some("有人连向了你"), None),
             "",
+            "星遇同频",
         );
         let title = row["title"].as_str().unwrap_or_default();
         let message = row["message"].as_str().unwrap_or_default();
-        assert_eq!(title, DesktopVrccRuntime::NOTICE_ROW_SENDER);
+        assert_eq!(title, "星遇同频");
         assert_eq!(message, "有人连向了你");
         // 抽屉拼起来是「星遇同频 有人连向了你」，服务名只出现一次。
         assert!(!message.contains(title));
+    }
+
+    // -- 服务名：官方译名按语言取 ----------------------------------------
+
+    /// 服务名走原生语言目录的 `vrcc.title`。
+    ///
+    /// 星遇同频官方给了三个译名：中文「星遇同频」、英文「Orbitune」、日文「ほしあい」。
+    /// 繁体沿用繁中写法，其余语言回落英文官方名——这条钉住的是「别再写成
+    /// Xingyu Tongpin 那种拼音占位」。
+    #[test]
+    fn the_service_name_follows_the_interface_language() {
+        use vrcx_0_i18n::{text, OverlayMessageKey};
+
+        for (language, expected) in [
+            ("zh-CN", "星遇同频"),
+            ("zh-TW", "星遇同頻"),
+            ("ja", "ほしあい"),
+            ("en", "Orbitune"),
+            ("ko", "Orbitune"),
+            ("de", "Orbitune"),
+        ] {
+            assert_eq!(
+                text(language, OverlayMessageKey::VrccTitle),
+                expected,
+                "service name for {language}"
+            );
+        }
     }
 }

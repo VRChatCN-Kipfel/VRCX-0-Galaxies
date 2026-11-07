@@ -812,6 +812,8 @@ impl DesktopRuntimeHostState {
             runtime.web_client().proxy_url(),
             // 和令牌存储同一个来源：通知中心的行要落到当前账号的表里。
             vrcc_owner,
+            // 服务名要按界面语言取官方译名（`vrcc.title`），所以给它配置仓库。
+            runtime.desktop_assembly().config().clone(),
         ));
         let hmd_membership_runtime = Arc::downgrade(runtime.realtime_runtime());
         desktop

@@ -1793,7 +1793,7 @@
                 "delete_log": "알림 삭제",
                 "decline_with_message": "메시지로 거절",
                 "ignore_locally": "로컬에서만 무시",
-                "open_vrcc": "Open Xingyu Tongpin"
+                "open_vrcc": "Open Orbitune"
             },
             "filters": {
                 "requestInvite": "참가 요청",
@@ -7228,5 +7228,8 @@
     "mutual_graph_hint": {
         "build": "공통 친구 그래프가 아직 없습니다 · 만들기",
         "room_scan_running": "이 인스턴스의 공통 친구를 조회하는 중입니다. 완료된 후 다시 시도하세요"
+    },
+    "vrcc": {
+        "title": "Orbitune"
     }
 }
