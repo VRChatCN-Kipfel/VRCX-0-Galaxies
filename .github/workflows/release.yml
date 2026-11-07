@@ -596,6 +596,7 @@ jobs:
               run: find release-assets -type f | sort
 
             - uses: softprops/action-gh-release@v3
+              id: gh_release
               with:
                   tag_name: ${{ needs.prepare.outputs.tag }}
                   name: ${{ needs.prepare.outputs.display_version }}
@@ -609,4 +610,10 @@ jobs:
             - name: Append related issues to release notes
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: node scripts/append-release-issues.ts "${{ needs.prepare.outputs.tag }}"
+                  RELEASE_ID: ${{ steps.gh_release.outputs.id }}
+              run: |
+                  if [[ -z "$RELEASE_ID" ]]; then
+                      echo "action-gh-release did not report a release id" >&2
+                      exit 1
+                  fi
+                  node scripts/append-release-issues.ts "$RELEASE_ID"
