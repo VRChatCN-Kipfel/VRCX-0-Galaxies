@@ -46,6 +46,7 @@ mod state;
 pub mod tray_shortcut;
 pub mod vr_overlay;
 pub mod vrcc;
+mod vrcc_poll;
 pub mod vrchat_api;
 mod vrchat_remote;
 mod world_remote;

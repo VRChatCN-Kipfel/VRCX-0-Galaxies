@@ -194,117 +194,6 @@ pub struct DesktopRuntimeBundle {
     pub integration_api_observer: Arc<dyn InstanceRosterObserver>,
 }
 
-/// 把 vrcc 后台轮询挂到 **VRCX 账号登录**上的绑定。
-///
-/// 它跟的是「谁登录了 VRCX」，不是「VRChat 游戏进程在不在」：令牌属于账号，
-/// 与游戏状态无关，所以只有登出（或换号）才停任务。理由见
-/// `DesktopVrccRuntime::spawn_background_poll` 的「为什么不看游戏是否在运行」。
-///
-/// 登录就绪时起一个属于该账号的任务；账号变化或登出时把上一代的 stop
-/// 置位，让它在下一次醒来时自行退出。旧任务不立即中止而是"下次醒来退出"，
-/// 是因为 `TaskSupervisor` 不对外暴露单个任务的句柄——只能靠任务自己看信号。
-struct VrccPollBinding {
-    runtime: Arc<crate::vrcc::DesktopVrccRuntime>,
-    /// 站外提醒走通知分发器，和 VRChat 活动同一条投递链。
-    ///
-    /// 早先这里放的是 `DesktopNotifier`，直接调 `show()`——那等于绕过了
-    /// 免打扰、隐私锁、通道偏好、图标解析和有序投递。现在没有第二条路径。
-    dispatcher: Arc<crate::notification::NotificationDispatcher>,
-    event_sink: Arc<dyn vrcx_0_application_core::RuntimeEventSink>,
-    supervisor: vrcx_0_application_core::TaskSupervisor,
-    /// 起任务时用它读出当前登录账号。
-    auth_scope: vrcx_0_application_core::RuntimeAuthScope,
-    /// 当前那代任务的停止开关；`None` 表示没有任务在跑。
-    active: std::sync::Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
-}
-
-impl VrccPollBinding {
-    /// 按当前登录状态对齐：该起就起，该停就停。
-    fn reconcile(&self, signed_in_as: Option<&str>) {
-        let mut active = match self.active.lock() {
-            Ok(active) => active,
-            Err(error) => error.into_inner(),
-        };
-
-        let desired = signed_in_as.map(str::trim).filter(|id| !id.is_empty());
-
-        match (desired, active.as_ref()) {
-            // 已登录，且已有任务在跑：同一个账号就不用动。
-            (Some(_), Some(_)) => {
-                // 简化处理：账号变化与账号不变都重起一次。任务本身很轻，
-                // 而跨代复用会让 owner 与令牌的一致性难以推理。
-                self.stop(&mut active);
-                drop(active);
-                self.spawn();
-            }
-            // 已登录但没任务：起一个。
-            (Some(_), None) => {
-                drop(active);
-                self.spawn();
-            }
-            // 未登录：停掉。
-            (None, Some(_)) => {
-                self.stop(&mut active);
-            }
-            (None, None) => {}
-        }
-    }
-
-    fn spawn(&self) {
-        let Some(owner) = self.current_owner() else {
-            return;
-        };
-        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let outcome = self.runtime.spawn_background_poll(
-            &self.supervisor,
-            Arc::clone(&self.dispatcher),
-            Arc::clone(&self.event_sink),
-            owner.clone(),
-            Arc::clone(&stop),
-        );
-        match outcome {
-            vrcx_0_application_core::TaskSpawnOutcome::Scheduled => {
-                tracing::info!(owner = %owner.as_str(), "vrcc: background poll scheduled");
-                if let Ok(mut active) = self.active.lock() {
-                    *active = Some(stop);
-                }
-            }
-            other => {
-                tracing::warn!(?other, "vrcc: background poll not scheduled");
-            }
-        }
-    }
-
-    fn stop(&self, active: &mut Option<Arc<std::sync::atomic::AtomicBool>>) {
-        if let Some(stop) = active.take() {
-            stop.store(true, std::sync::atomic::Ordering::Release);
-            tracing::info!("vrcc: background poll asked to stop (account change)");
-        }
-    }
-
-    fn current_owner(&self) -> Option<vrcx_0_core::OwnerId> {
-        let snapshot = self.auth_scope.snapshot();
-        snapshot
-            .active
-            .then(|| vrcx_0_core::OwnerId::new(snapshot.current_user_id))
-    }
-}
-
-/// 登录状态变化的观察者：转给 `VrccPollBinding` 对齐任务。
-struct VrccPollObserver {
-    binding: Arc<VrccPollBinding>,
-}
-
-impl vrcx_0_application_core::RuntimeAuthScopeObserver for VrccPollObserver {
-    fn runtime_auth_scope_changed(
-        &self,
-        snapshot: &vrcx_0_application_core::RuntimeAuthScopeSnapshot,
-    ) {
-        let user = snapshot.active.then_some(snapshot.current_user_id.as_str());
-        self.binding.reconcile(user);
-    }
-}
-
 pub struct DesktopRuntimeHostState {
     runtime: RuntimeHostState,
     game: Arc<GameRuntimeBundle>,
@@ -1874,22 +1763,13 @@ impl DesktopRuntimeHostState {
     where
         E: vrcx_0_application_core::RuntimeEventSink + 'static,
     {
-        let binding = Arc::new(VrccPollBinding {
-            runtime: Arc::clone(&self.vrcc),
-            dispatcher: self.desktop.services.notification_dispatcher(),
+        crate::vrcc_poll::install(
+            Arc::clone(&self.vrcc),
+            self.desktop.services.notification_dispatcher(),
+            self.runtime.runtime_tasks().clone(),
+            self.runtime.desktop_assembly().auth_scope().clone(),
             event_sink,
-            supervisor: self.runtime.runtime_tasks().clone(),
-            auth_scope: self.runtime.desktop_assembly().auth_scope().clone(),
-            // 当前这一代任务：换账号时把上一代的 stop 置位，让它自行退出。
-            active: std::sync::Mutex::new(None),
-        });
-        self.runtime
-            .desktop_assembly()
-            .auth_scope()
-            .add_observer(Arc::new(VrccPollObserver {
-                binding: Arc::clone(&binding),
-            }));
-        // `add_observer` 会立刻按当前状态回调一次：已登录时任务这时就起来了。
+        );
     }
 
     pub async fn preview_shared_collection(
