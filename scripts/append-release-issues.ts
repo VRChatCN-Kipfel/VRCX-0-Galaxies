@@ -147,3 +147,7 @@ if (!token || !repo || !releaseId) {
         process.exitCode = 1;
     }
 }
+
+// 让这个文件成为模块：否则顶层 await 不合法（TS1375），而且 tsconfig 会把它当成
+// 全局脚本一起检查。
+export {};
