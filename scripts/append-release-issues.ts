@@ -79,13 +79,18 @@ if (!token || !repo || !releaseId) {
                 })
             });
 
-            type RelatedIssue = { number: number; title: string; author: string };
+            type RelatedIssue = {
+                number: number;
+                title: string;
+                author: string;
+            };
             const related: RelatedIssue[] = [];
             const seen = new Set<number>();
 
             for (const number of prNumbers) {
                 const node = data?.data?.repository?.[`p${number}`];
-                for (const issue of node?.closingIssuesReferences?.nodes ?? []) {
+                for (const issue of node?.closingIssuesReferences?.nodes ??
+                    []) {
                     if (seen.has(issue.number)) {
                         continue;
                     }
