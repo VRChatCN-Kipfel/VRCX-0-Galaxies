@@ -573,6 +573,30 @@ jobs:
                           --out "$manifest_path"
                   done
 
+            - name: Verify Windows updater manifest
+              run: |
+                  manifest_path="release-assets/latest_windows.json"
+                  if [[ ! -f "$manifest_path" ]]; then
+                      echo "No Windows updater manifest found at $manifest_path" >&2
+                      exit 1
+                  fi
+
+                  node -e '
+                  const fs = require("node:fs");
+                  const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                  const platform = manifest.platforms?.["windows-x86_64-stable"];
+                  if (!platform || !platform.url || !platform.signature) {
+                      console.error("Windows updater manifest has no windows-x86_64-stable entry");
+                      process.exit(1);
+                  }
+                  const asset = platform.url.split("/").pop();
+                  if (!fs.existsSync("release-assets/" + asset)) {
+                      console.error("Windows manifest points at a missing asset: " + asset);
+                      process.exit(1);
+                  }
+                  console.log("Windows updater manifest OK -> " + asset);
+                  ' "$manifest_path"
+
             - name: Remove updater signatures from GitHub release assets
               run: find release-assets -type f -name '*.sig' -delete
 
