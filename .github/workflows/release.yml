@@ -331,19 +331,28 @@ jobs:
                   Remove-Item $pfx -Force
 
                   # 把整条链（叶子除外）都装进用户级「受信任的根证书颁发机构」。
-                  # 这是自建 CA，不追求公共信任链的分层语义，只要 signtool 能构建出
-                  # 完整链即可。用户级存储不需要管理员权限；runner 是一次性的，这个
-                  # 信任状态不会离开本次构建，也不会让最终用户的机器信任这组自建 CA。
-                  $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
-                  $rootStore.Open('ReadWrite')
-                  try {
-                      foreach ($cert in $chain) {
-                          if ($cert.Thumbprint -eq $imported.Thumbprint) { continue }
-                          $rootStore.Add($cert)
+                  # 直接在会话里调用 X509Store.Add 会在非交互的 runner 上挂死：添加根
+                  # 证书要走 CryptUI 的确认流程，而那个对话框在无交互会话里根本弹不
+                  # 出来，进程就一直等（实测该步骤 17 分钟无进展，整个 run 只能取消）。
+                  # 改成导出 .cer 交给 certutil 子进程，并给每张证书 20 秒超时：超时就
+                  # 杀掉子进程继续构建，不让它拖死流水线。
+                  $cerDir = Join-Path $env:RUNNER_TEMP 'codesign-chain'
+                  New-Item -ItemType Directory -Force -Path $cerDir | Out-Null
+                  $index = 0
+                  foreach ($cert in $chain) {
+                      if ($cert.Thumbprint -eq $imported.Thumbprint) { continue }
+                      $index++
+                      $cerPath = Join-Path $cerDir "ca-$index.cer"
+                      [IO.File]::WriteAllBytes($cerPath, $cert.RawData)
+                      $proc = Start-Process -FilePath 'certutil.exe' `
+                          -ArgumentList @('-addstore', '-f', '-user', 'Root', $cerPath) `
+                          -PassThru -NoNewWindow
+                      if (-not $proc.WaitForExit(20000)) {
+                          $proc.Kill()
+                          Write-Warning "certutil timed out adding $($cert.Subject); continuing without it."
                       }
-                  } finally {
-                      $rootStore.Close()
                   }
+                  Remove-Item $cerDir -Recurse -Force -ErrorAction SilentlyContinue
 
                   $thumb = $imported.Thumbprint
                   if (-not $thumb) {
