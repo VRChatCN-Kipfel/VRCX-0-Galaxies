@@ -504,6 +504,9 @@ jobs:
         runs-on: ubuntu-24.04
         permissions:
             contents: write
+            # notes 生成器要读 PR 与 issue，才能把「相关 issue」的作者带上。
+            pull-requests: read
+            issues: read
         steps:
             - uses: actions/checkout@v7
 
@@ -602,3 +605,8 @@ jobs:
                   files: release-assets/*
                   fail_on_unmatched_files: true
                   overwrite_files: true
+
+            - name: Append related issues to release notes
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: node scripts/append-release-issues.ts "${{ needs.prepare.outputs.tag }}"
