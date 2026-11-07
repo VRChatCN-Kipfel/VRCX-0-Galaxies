@@ -595,6 +595,26 @@ jobs:
             - name: List GitHub release assets
               run: find release-assets -type f | sort
 
+            - name: Remove stale draft release for this tag
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # 同一个 tag 重跑时，已存在的 draft 不会被重新生成 notes
+                  # （PATCH /releases 不支持 generate_release_notes），旧 body 会和新
+                  # 生成的 Full Changelog 叠加成一团。这里先删掉同 tag 的 draft，
+                  # 保证每次都走干净的创建路径。只删 draft，不碰已发布的 release。
+                  tag="${{ needs.prepare.outputs.tag }}"
+                  ids="$(gh api "repos/${{ github.repository }}/releases" --paginate \
+                      --jq ".[] | select(.draft == true and .tag_name == \"$tag\") | .id")"
+                  if [[ -z "$ids" ]]; then
+                      echo "no stale draft release for $tag"
+                      exit 0
+                  fi
+                  for id in $ids; do
+                      echo "deleting stale draft release id=$id (tag=$tag)"
+                      gh api --method DELETE "repos/${{ github.repository }}/releases/$id"
+                  done
+
             - uses: softprops/action-gh-release@v3
               id: gh_release
               with:
