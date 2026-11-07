@@ -3,7 +3,7 @@ name: CI
 on:
     push:
         branches:
-            - master
+            - vrcc
     pull_request:
         types:
             - opened
@@ -106,7 +106,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 20
         needs: changes
-        if: needs.changes.outputs.frontend == 'true' || (github.ref == 'refs/heads/master' && github.event_name == 'push')
+        if: needs.changes.outputs.frontend == 'true' || (github.ref == 'refs/heads/vrcc' && github.event_name == 'push')
         steps:
             - uses: actions/checkout@v7
             - uses: ./.github/actions/setup-node
@@ -135,7 +135,7 @@ jobs:
             - uses: ./.github/actions/setup-rust
               with:
                   cache-key: ci-linux-clippy
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - run: npm run rust:fmt:check
             - run: mkdir -p dist && printf '<!doctype html><html><body></body></html>' > dist/index.html
             - run: npm run rust:clippy:ci
@@ -154,7 +154,7 @@ jobs:
               with:
                   target: x86_64-unknown-linux-musl
                   cache-key: ci-logger-musl
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - run: sudo apt-get update && sudo apt-get install -y musl-tools
             - run: cargo build --locked -p vrcx-0-logger --target x86_64-unknown-linux-musl
 
@@ -197,7 +197,7 @@ jobs:
               with:
                   target: ${{ matrix.rust_target }}
                   cache-key: ${{ matrix.cache_key }}
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - run: mkdir -p dist && printf '<!doctype html><html><body></body></html>' > dist/index.html
             - name: Build Tauri crate
               env:
@@ -217,7 +217,7 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 60
         needs: changes
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/vrcc' && github.event_name == 'push'
         steps:
             - uses: actions/checkout@v7
             - uses: ./.github/actions/setup-linux-tauri
@@ -227,7 +227,7 @@ jobs:
               with:
                   components: llvm-tools-preview
                   cache-key: ci-linux-coverage
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - uses: taiki-e/install-action@cargo-llvm-cov
             - name: Generate coverage report
               run: cargo llvm-cov --workspace --exclude vrcx-0 --locked --json --summary-only > rust-coverage-summary.json
@@ -276,7 +276,7 @@ jobs:
             - uses: ./.github/actions/setup-rust
               with:
                   cache-key: ${{ matrix.cache_key }}
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - env:
                   RUST_TEST_ARGS: ${{ matrix.rust_test_args }}
               run: npm run rust:test:ci -- $RUST_TEST_ARGS
@@ -296,7 +296,7 @@ jobs:
             - uses: ./.github/actions/setup-rust
               with:
                   cache-key: ci-linux-bindings
-                  save-cache: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+                  save-cache: ${{ github.ref == 'refs/heads/vrcc' && github.event_name == 'push' }}
             - run: npm run generate:tauri-bindings
             - name: Verify bindings.ts is regenerated
               run: git diff --exit-code src/platform/tauri/bindings.ts
@@ -308,7 +308,7 @@ jobs:
         needs:
             - frontend-test
             - rust-coverage
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/vrcc' && github.event_name == 'push'
         permissions:
             contents: write
         steps:
