@@ -636,4 +636,4 @@ jobs:
                       echo "action-gh-release did not report a release id" >&2
                       exit 1
                   fi
-                  node scripts/append-release-issues.ts "$RELEASE_ID"
+                  node scripts/append-release-extras.ts "$RELEASE_ID"
