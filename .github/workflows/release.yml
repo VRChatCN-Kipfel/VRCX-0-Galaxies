@@ -599,19 +599,25 @@ jobs:
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  # 同一个 tag 重跑时，已存在的 draft 不会被重新生成 notes
+                  # 同一个版本重跑时，已存在的 draft 不会被重新生成 notes
                   # （PATCH /releases 不支持 generate_release_notes），旧 body 会和新
-                  # 生成的 Full Changelog 叠加成一团。这里先删掉同 tag 的 draft，
+                  # 生成的 Full Changelog 叠加成一团。这里先删掉本版本的 draft，
                   # 保证每次都走干净的创建路径。只删 draft，不碰已发布的 release。
+                  #
+                  # 注意不能只认 tag_name：draft 阶段 GitHub **还没有创建 tag**，会给
+                  # 一个 "untagged-<hash>" 占位名，只比对 tag_name 会永远匹配不到，
+                  # draft 就会一次次堆积。所以同时用 name（softprops 设的是
+                  # display_version）来认。
                   tag="${{ needs.prepare.outputs.tag }}"
+                  display="${{ needs.prepare.outputs.display_version }}"
                   ids="$(gh api "repos/${{ github.repository }}/releases" --paginate \
-                      --jq ".[] | select(.draft == true and .tag_name == \"$tag\") | .id")"
+                      --jq ".[] | select(.draft == true and (.tag_name == \"$tag\" or .name == \"$display\")) | .id")"
                   if [[ -z "$ids" ]]; then
-                      echo "no stale draft release for $tag"
+                      echo "no stale draft release for $display"
                       exit 0
                   fi
                   for id in $ids; do
-                      echo "deleting stale draft release id=$id (tag=$tag)"
+                      echo "deleting stale draft release id=$id (version=$display)"
                       gh api --method DELETE "repos/${{ github.repository }}/releases/$id"
                   done
 
