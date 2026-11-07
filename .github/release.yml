@@ -1,0 +1,23 @@
+# 生成 Release notes 时使用的分类与排除规则。
+#
+# GitHub 的 notes 生成器只认 PR 与 label，不解析 commit message；直接 push 到
+# 分支的提交不会出现，也不需要出现（发布都走 PR）。
+#
+# categories 的顺序即输出顺序，最后一项用 '*' 兜底，避免漏掉未打标签的变更。
+changelog:
+    exclude:
+        labels:
+            - ignore-for-release
+            - dependencies
+    categories:
+        - title: 新功能
+          labels:
+              - enhancement
+              - feature
+        - title: 修复
+          labels:
+              - bug
+              - fix
+        - title: 其他变更
+          labels:
+              - '*'
