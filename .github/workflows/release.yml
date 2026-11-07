@@ -398,10 +398,15 @@ jobs:
                           exit 1
                       fi
                       mv "$installer" "$renamed"
+                      # 签名文件要跟着安装包一起改名，否则下面按新名字找不到 .sig。
+                      if [[ -f "${installer}.sig" ]]; then
+                          mv "${installer}.sig" "${renamed}.sig"
+                      fi
                   fi
 
                   if [[ ! -f "${renamed}.sig" ]]; then
                       echo "No updater signature found at ${renamed}.sig" >&2
+                      ls -la "$bundle_dir" >&2
                       exit 1
                   fi
 
