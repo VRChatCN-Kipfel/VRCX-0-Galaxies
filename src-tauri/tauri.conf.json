@@ -68,8 +68,7 @@
         ],
         "windows": {
             "digestAlgorithm": "sha256",
-            "certificateThumbprint": "CF3C4BD75C0B82455ABEBFF09A2127FA92F6C140",
-            "timestampUrl": "http://time.certum.pl",
+            "timestampUrl": "http://timestamp.acs.microsoft.com",
             "nsis": {
                 "installerIcon": "icons/icon.ico",
                 "displayLanguageSelector": false,
