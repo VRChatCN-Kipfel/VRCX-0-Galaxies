@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const REPO_RELEASE_DOWNLOAD_BASE =
-    'https://github.com/Map1en/VRCX-0/releases/download';
+    'https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/download';
 
 type UpdaterPlatform = {
     signature: string;
