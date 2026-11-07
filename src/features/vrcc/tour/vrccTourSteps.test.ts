@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 只关心「哪些步骤会把玩家带回页面级」，不真的渲染界面，
 // 所以把页面/对话框那些副作用整体打桩。
@@ -32,11 +32,25 @@ import type { TourStep } from './vrccTour';
 // `openWorldDetailForTour` 是 fire-and-forget 地 `import('@/services/dialogService')`：
 // 导览里不该因为加载一个对话框而阻塞高亮，所以那边故意不 await。代价是测试触发
 // `prepareNext()` 后，导入可能还没落地环境就先销毁了，Vitest 会抛
-// EnvironmentTeardownError（3896 条断言全过，只报这一条）。
-// 这里等所有动态导入收敛再收尾——不是屏蔽，而是把异步给它一个确定边界。
+// EnvironmentTeardownError。
+//
+// 另外 `openVrccTabInDialog` 在找不到页签时每 15ms 重试、最多 20 次：测试里页签
+// 永远不出现，这串定时器会活到环境销毁之后，再醒来就是 `document is not defined`。
+// 所以这里给它一个真实的页签条（并标记为已激活，不触发重复点击），让它第一次就命中。
+let tabStrip: HTMLElement | null = null;
+
+beforeEach(() => {
+    tabStrip = document.createElement('button');
+    tabStrip.setAttribute('data-tour', 'dialog-vrcc-tab');
+    tabStrip.setAttribute('data-active', 'true');
+    document.body.appendChild(tabStrip);
+});
+
 afterEach(async () => {
     await vi.dynamicImportSettled();
     openWorldDialog.mockClear();
+    tabStrip?.remove();
+    tabStrip = null;
 });
 
 /**
