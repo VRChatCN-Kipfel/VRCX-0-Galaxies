@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import type { VrccGuidanceState } from '@/platform/tauri/bindings';
 
 /** 首连引导要不要**自动**弹。 */

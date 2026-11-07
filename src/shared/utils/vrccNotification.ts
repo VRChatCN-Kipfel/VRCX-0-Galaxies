@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * 站外提醒在通知中心里的标识。
  *

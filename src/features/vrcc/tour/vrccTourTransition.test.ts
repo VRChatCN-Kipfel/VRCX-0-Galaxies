@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

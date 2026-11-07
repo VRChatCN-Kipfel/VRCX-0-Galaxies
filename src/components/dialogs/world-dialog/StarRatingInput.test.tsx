@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';

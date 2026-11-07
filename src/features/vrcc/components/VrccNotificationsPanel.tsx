@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { BellOff, BellRing, Inbox } from 'lucide-react';
 import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';

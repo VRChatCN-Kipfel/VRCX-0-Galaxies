@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { openVrccTab, type VrccTabTarget } from '@/shared/utils/vrccNavigation';
 import { useDialogStore } from '@/state/dialogStore';
 import { useVrccUnreadStore } from '@/state/vrccUnreadStore';

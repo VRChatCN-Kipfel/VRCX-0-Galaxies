@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 星遇同频（vrcc.cc）原生集成。
 //!
 //! 只使用官方开放的 `/api/v1/`，不复刻网页端的未公开接口。

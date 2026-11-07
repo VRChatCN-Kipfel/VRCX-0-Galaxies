@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { Fragment, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

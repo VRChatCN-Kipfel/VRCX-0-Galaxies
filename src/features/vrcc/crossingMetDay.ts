@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * 「最近一次星轨相交」是哪一天。
  *

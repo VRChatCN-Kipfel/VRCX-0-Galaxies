@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * 令牌的 scope 串里有没有某一项权限。
  *

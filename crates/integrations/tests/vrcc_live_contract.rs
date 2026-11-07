@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 对真实星遇同频服务验证契约的测试。
 //!
 //! 这些测试访问 `https://vrcc.cc/api/v1/`，只用**不需要令牌**的端点。

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 应用层测试：用内存仓库替换持久化，验证编排逻辑。
 
 use std::sync::{Arc, Mutex};

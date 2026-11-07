@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
 
 import i18n from '@/services/i18nService';

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 星遇同频网络端口的适配器。
 //!
 //! **为什么需要这一层**：应用层（`vrcx_0_application::vrcc`）要编排业务，

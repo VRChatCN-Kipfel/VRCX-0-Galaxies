@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //! 星遇同频令牌的本地存储。
 //!
 //! 令牌属于凭据，走项目既有的 `secrets_at_rest`：写入时用

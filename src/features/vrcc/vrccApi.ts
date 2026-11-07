@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 /**
  * 星遇同频（vrcc.cc）前端数据层。
  *

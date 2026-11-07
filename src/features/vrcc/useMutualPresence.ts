@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { useMemo } from 'react';
 
 import { useFriendRosterStore } from '@/state/friendRosterStore';
