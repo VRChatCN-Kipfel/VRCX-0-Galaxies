@@ -652,6 +652,9 @@
     },
     "overlay": {
         "footer": {
+            "vrcc_unread": "안 읽음 {count}",
+            "vrcc_rank": "순위 #{rank}",
+            "vrcc_rank_avg": "순위 #{rank} · 평균 {avg}",
             "players": "{count}명",
             "instance_duration": "체류 {duration}",
             "online_duration": "온라인 {duration}"
@@ -1789,7 +1792,8 @@
                 "decline": "거절",
                 "delete_log": "알림 삭제",
                 "decline_with_message": "메시지로 거절",
-                "ignore_locally": "로컬에서만 무시"
+                "ignore_locally": "로컬에서만 무시",
+                "open_vrcc": "Open Orbitune"
             },
             "filters": {
                 "requestInvite": "참가 요청",
@@ -1858,6 +1862,9 @@
                 "votetokick": "투표 추방",
                 "twitchdrop": {
                     "fulfilled": "Twitch 드롭 지급"
+                },
+                "vrcc": {
+                    "notice": "Notice"
                 }
             },
             "description": {
@@ -1994,7 +2001,6 @@
                     "go_to_friend": "친구에게로 이동",
                     "cancelling": "취소 중",
                     "find_friend": "친구 찾기",
-                    "open_profile": "프로필 열기",
                     "hide_from_graph": "그래프에서 숨기기",
                     "clear_filters": "필터 초기화"
                 },
@@ -3087,7 +3093,7 @@
                             "status_account_mismatch_skipped": "다른 계정의 로그 · 건너뜀",
                             "status_live_file": "VRChat이 기록 중 · 게임을 종료한 후 다시 시도하세요",
                             "status_unreadable": "파일을 읽을 수 없음",
-                            "inserted": "기록 {{count}}개를 보충했습니다",
+                            "inserted": "기록 {count}개를 보충했습니다",
                             "nothing_new": "모든 기록이 이미 있습니다",
                             "unverified_warning": "일부 로그에 로그인 계정 정보가 없습니다. 본인 계정에서 생성된 로그라면 아래 항목을 선택해 함께 보충하세요. 확인할 수 없다면 선택하지 마세요. 다른 계정의 기록이 섞이면 기록이 손상됩니다.",
                             "confirm_unverified": "이 로그는 본인 계정에서 생성되었음을 확인합니다",
@@ -3689,8 +3695,8 @@
                 "override_disabled": "사용자 정의 CSS가 비활성화되었습니다.",
                 "override_cleared": "사용자 정의 CSS를 지웠습니다.",
                 "disable_failed": "커뮤니티 테마 설정을 업데이트하지 못했습니다.",
-                "update_available": "{{name}} 테마의 새 버전이 있습니다",
-                "theme_updated": "커뮤니티 테마를 {{version}}(으)로 업데이트했습니다.",
+                "update_available": "{name} 테마의 새 버전이 있습니다",
+                "theme_updated": "커뮤니티 테마를 {version}(으)로 업데이트했습니다.",
                 "update_failed": "커뮤니티 테마를 업데이트하지 못했습니다."
             },
             "confirm": {
@@ -4649,6 +4655,81 @@
                 "failed_to_update_value": "{value} 항목을 업데이트하지 못했습니다.",
                 "value_copied": "{value} 복사됨",
                 "set_value_as_your_vrchat_home_world": "{value} 월드를 VRChat 홈 월드로 설정할까요?"
+            },
+            "vrcc": {
+                "rating": "VRCC rating",
+                "raters_one": "{count} rating",
+                "raters_other": "{count} ratings",
+                "no_rating": "Not rated yet",
+                "not_listed": "Not on the board",
+                "source": "Data from VRCC, a VRChat community platform; not affiliated with VRChat Inc.",
+                "tab": "VRCC",
+                "spread": "Score spread",
+                "went": "Visited",
+                "went_count": "{count} visits",
+                "cap": "Capacity",
+                "perf_platforms": "Platforms",
+                "perf_size": "Download",
+                "perf_load": "Load",
+                "hot": "Top comment",
+                "hot_went": "visited",
+                "words_hint": "Full comments and rating need a connected VRCC account.",
+                "not_listed_hint": "This world is not on the VRCC map board yet.",
+                "load_failed": "Could not read VRCC data right now.",
+                "rank": "Board rank #{rank}",
+                "open_page": "Open the map page in your browser",
+                "my_rating": "My rating",
+                "not_rated_by_me": "You have not rated this world yet.",
+                "no_words": "No comment written.",
+                "all_words": "All comments ({count})",
+                "no_words_yet": "No comments yet.",
+                "mine": "Me",
+                "check_wait": "Pending review",
+                "check_hidden": "Rejected",
+                "intro": "About this world",
+                "no_intro": "No description yet.",
+                "rate_section": "Rate it",
+                "comments_title": "Comments",
+                "sort_hot": "Top",
+                "sort_new": "Newest",
+                "perf_section": "Requirements",
+                "perf_weight": "Load",
+                "perf_vram": "VRAM",
+                "perf_mem": "RAM",
+                "weight_light": "Light",
+                "weight_mid": "Medium",
+                "weight_heavy": "Heavy",
+                "went_label": "Visited",
+                "cap_label": "Capacity",
+                "went_badge": "visited",
+                "unit_sec": "s",
+                "perf_toggle": "Show or hide hardware details",
+                "rate_input_label": "Choose a score",
+                "rate_value": "{score} out of {max}",
+                "rate_none": "Not chosen",
+                "rate_submit": "Submit",
+                "rate_submitting": "Submitting…",
+                "rate_delete": "Delete rating",
+                "rate_failed": "Could not submit. Try again later.",
+                "rate_needs_scope": "Rating needs reconnecting your VRCC account once.",
+                "words_placeholder": "Write a short comment (optional, 30 characters)",
+                "vote_up": "This comment was helpful",
+                "vote_down": "This comment was not helpful",
+                "vote_own_hint": "You cannot vote on your own comment.",
+                "vote_needs_scope": "Voting needs reconnecting your VRCC account once.",
+                "pending_title": "Submitted, awaiting review",
+                "pending_hint": "This world will appear on the VRCC board once it passes review.",
+                "syncing_title": "Listed, data still syncing",
+                "syncing_hint": "The public VRCC board updates at most every five minutes — check back shortly.",
+                "blocked_title": "Not available here",
+                "blocked_hint": "Under the VRCC terms this world is not served to this account, so none of its data is shown here.",
+                "unknown_title": "Status unavailable",
+                "unknown_hint": "Your submission status could not be read. Try again later.",
+                "unknown_reauth": "Your sign-in has expired. Reconnect VRCC.",
+                "unknown_scope": "Permission to read maps is missing. Reconnect and accept it.",
+                "unknown_network": "The network request failed. Check your connection.",
+                "unknown_throttled": "Too many requests — try again later. The daily quota resets at midnight Beijing time.",
+                "unknown_notready": "This round is still being generated. Check back shortly."
             }
         },
         "avatar": {
@@ -7147,5 +7228,8 @@
     "mutual_graph_hint": {
         "build": "공통 친구 그래프가 아직 없습니다 · 만들기",
         "room_scan_running": "이 인스턴스의 공통 친구를 조회하는 중입니다. 완료된 후 다시 시도하세요"
+    },
+    "vrcc": {
+        "title": "Orbitune"
     }
 }

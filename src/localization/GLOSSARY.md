@@ -358,6 +358,7 @@ Source strings live in [`en.json`](en.json). Keep recurring terms consistent wit
 | Open In-Game                       | 在游戏内打开               | 遊戲內開啟            | ゲーム内で開く                       |
 | Open Link                          | 在浏览器打开               | 開啟連結              | リンクを開く                         |
 | Opened in VRChat                   | 已在 VRChat 中打开         | 已在 VRChat 中開啟    | VRChat で開きました                  |
+| Orbitune (星遇同频 / vrcc.cc)      | 星遇同频                   | 星遇同頻              | ほしあい                             |
 | Own Groups                         | 我创建的群组               | 自己的群組            | 自分のグループ                       |
 | Profile Details                    | 个人资料详情               | 個人資料詳細資訊      | プロフィール詳細                     |
 | Profile Icon                       | 头像                       | 頭像                  | アイコン画像                         |

@@ -15,6 +15,8 @@ import { VrcNotificationCenterHost } from '@/features/notifications/VrcNotificat
 import { PrivacyLockDialogHost } from '@/features/privacy-lock/PrivacyLockDialogHost';
 import { PrivacyLockOverlay } from '@/features/privacy-lock/PrivacyLockOverlay';
 import { CommunityThemeUpdateToastHost } from '@/features/themes/CommunityThemeUpdateToastHost';
+import { VrccAnnouncementHost } from '@/features/vrcc/VrccAnnouncementHost';
+import { VrccFirstRunHost } from '@/features/vrcc/VrccFirstRunHost';
 
 export function GlobalHosts() {
     return (
@@ -28,6 +30,8 @@ export function GlobalHosts() {
             <LinuxRenderingTrialHost />
             <FriendProfileLoadHost />
             <VrcNotificationCenterHost />
+            <VrccAnnouncementHost />
+            <VrccFirstRunHost />
             <PostUpdateChangelogToastHost />
             <LaunchDialogHost />
             <PreviousInstancesDialogHost />
