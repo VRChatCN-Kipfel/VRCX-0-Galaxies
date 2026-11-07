@@ -623,18 +623,17 @@ impl DesktopVrccRuntime {
                         // 每轮现取：玩家中途改语言时，写进通知中心的发送者名
                         // 和兜底标题都会跟着变。
                         let service_name = Self::service_name_for(&config);
-                        match poll_once(
-                            &service,
-                            dispatcher.as_ref(),
-                            &db,
-                            &notified,
-                            &mut notice_icon,
-                            &owner,
-                            &mut unread_at,
-                            &service_name,
-                        )
-                        .await
-                        {
+                        let ctx = PollContext {
+                            service: &service,
+                            dispatcher: dispatcher.as_ref(),
+                            db: &db,
+                            notified: &notified,
+                            icon: &mut notice_icon,
+                            owner: &owner,
+                            unread_at: &mut unread_at,
+                            service_name: &service_name,
+                        };
+                        match poll_once(ctx).await {
                             Ok(outcome) => {
                                 // 每一轮都记录结果，但用 debug：正常运行时不该刷屏，
                                 // 排查时打开 RUST_LOG=debug 就有完整时间线。
@@ -759,16 +758,33 @@ fn unread_refresh_due(first_poll: bool, fresh: usize, since_last: Option<Duratio
 ///
 /// 原来每轮都拉「最近的提醒」：一分钟一次一整天要一千多次，超过第一份读的
 /// 每天上限；而且只要玩家没在网页上看过，同一条提醒每轮都会再弹一次。
-async fn poll_once(
-    service: &VrccService,
-    dispatcher: &crate::notification::NotificationDispatcher,
-    db: &DatabaseService,
-    notified: &NotifiedIds,
-    icon: &mut NoticeIcon,
-    owner: &vrcx_0_core::OwnerId,
-    unread_at: &mut Option<Instant>,
-    service_name: &str,
-) -> Result<PollOutcome, VrccError> {
+/// 一轮轮询用到的全部外部依赖。
+///
+/// 打包成结构体是因为参数到了 8 个，`clippy::too_many_arguments` 会拦下；而这些
+/// 参数各自来自不同的借用源，没有哪一个能自然地当「主对象」去挂方法。
+struct PollContext<'a> {
+    service: &'a VrccService,
+    dispatcher: &'a crate::notification::NotificationDispatcher,
+    db: &'a DatabaseService,
+    notified: &'a NotifiedIds,
+    icon: &'a mut NoticeIcon,
+    owner: &'a vrcx_0_core::OwnerId,
+    unread_at: &'a mut Option<Instant>,
+    service_name: &'a str,
+}
+
+async fn poll_once(ctx: PollContext<'_>) -> Result<PollOutcome, VrccError> {
+    let PollContext {
+        service,
+        dispatcher,
+        db,
+        notified,
+        icon,
+        owner,
+        unread_at,
+        service_name,
+    } = ctx;
+
     let first_poll = service.notifications_cursor().is_none();
     let fresh = match service.poll_notifications().await {
         Ok(result) => result.items,
