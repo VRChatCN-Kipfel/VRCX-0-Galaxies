@@ -309,7 +309,7 @@ jobs:
 
             - uses: ./.github/actions/setup-node
 
-            - name: Import Windows code signing certificate and trust chain
+            - name: Import Windows code signing certificate
               shell: pwsh
               env:
                   WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -322,38 +322,13 @@ jobs:
                   $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
                   [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
                   $secrets = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-
-                  # 离线读出整条链（EphemeralKeySet，不落盘私钥），供下面装进信任存储。
-                  $chain = [System.Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
-                  $chain.Import($pfx, $env:WINDOWS_CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
-
                   $imported = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secrets
                   Remove-Item $pfx -Force
 
-                  # 把整条链（叶子除外）都装进用户级「受信任的根证书颁发机构」。
-                  # 直接在会话里调用 X509Store.Add 会在非交互的 runner 上挂死：添加根
-                  # 证书要走 CryptUI 的确认流程，而那个对话框在无交互会话里根本弹不
-                  # 出来，进程就一直等（实测该步骤 17 分钟无进展，整个 run 只能取消）。
-                  # 改成导出 .cer 交给 certutil 子进程，并给每张证书 20 秒超时：超时就
-                  # 杀掉子进程继续构建，不让它拖死流水线。
-                  $cerDir = Join-Path $env:RUNNER_TEMP 'codesign-chain'
-                  New-Item -ItemType Directory -Force -Path $cerDir | Out-Null
-                  $index = 0
-                  foreach ($cert in $chain) {
-                      if ($cert.Thumbprint -eq $imported.Thumbprint) { continue }
-                      $index++
-                      $cerPath = Join-Path $cerDir "ca-$index.cer"
-                      [IO.File]::WriteAllBytes($cerPath, $cert.RawData)
-                      $proc = Start-Process -FilePath 'certutil.exe' `
-                          -ArgumentList @('-addstore', '-f', '-user', 'Root', $cerPath) `
-                          -PassThru -NoNewWindow
-                      if (-not $proc.WaitForExit(20000)) {
-                          $proc.Kill()
-                          Write-Warning "certutil timed out adding $($cert.Subject); continuing without it."
-                      }
-                  }
-                  Remove-Item $cerDir -Recurse -Force -ErrorAction SilentlyContinue
-
+                  # 签名只需要「叶子 + 私钥」；PFX 里的中间证书也会被
+                  # Import-PfxCertificate 一并放进 CurrentUser\My，signtool 从那里取。
+                  # 不再尝试写「受信任的根」：那一步在无交互的 runner 上要么卡死、
+                  # 要么反复超时（CryptUI 的确认对话框弹不出来），纯属白等。
                   $thumb = $imported.Thumbprint
                   if (-not $thumb) {
                       Write-Error "Imported certificate has no thumbprint."
