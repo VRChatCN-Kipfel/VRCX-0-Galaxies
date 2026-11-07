@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // 只关心「哪些步骤会把玩家带回页面级」，不真的渲染界面，
 // 所以把页面/对话框那些副作用整体打桩。
 const openVrccTab = vi.hoisted(() => vi.fn());
 const closeDialog = vi.hoisted(() => vi.fn());
+const openWorldDialog = vi.hoisted(() => vi.fn());
 
 vi.mock('@/shared/utils/vrccNavigation', () => ({ openVrccTab }));
+// 导览打开详情时是 `import('@/services/dialogService')` 动态载入的。不打桩的话，
+// 真实实现会顺着 bindings → generatedInvoke 拉起一大串模块，并且要求 dialogStore
+// 具备完整形状（setDialogTrail 等）——测试里只桩了 closeDialog 就会抛
+// "store.setDialogTrail is not a function"。
+vi.mock('@/services/dialogService', () => ({ openWorldDialog }));
 // `activeDialog` 要在测试里改，所以用一个可变的持有对象——
 // 直接 `getState: () => ({ activeDialog: null })` 就没法模拟「详情已经开着」。
 let activeDialog: { kind: string; entityId: string } | null = null;
@@ -22,6 +28,16 @@ vi.mock('@/state/vrccUnreadStore', () => ({
 }));
 
 import type { TourStep } from './vrccTour';
+
+// `openWorldDetailForTour` 是 fire-and-forget 地 `import('@/services/dialogService')`：
+// 导览里不该因为加载一个对话框而阻塞高亮，所以那边故意不 await。代价是测试触发
+// `prepareNext()` 后，导入可能还没落地环境就先销毁了，Vitest 会抛
+// EnvironmentTeardownError（3896 条断言全过，只报这一条）。
+// 这里等所有动态导入收敛再收尾——不是屏蔽，而是把异步给它一个确定边界。
+afterEach(async () => {
+    await vi.dynamicImportSettled();
+    openWorldDialog.mockClear();
+});
 
 /**
  * 按锚点选择器找步骤，**不按下标**。
@@ -134,10 +150,20 @@ describe('页面级步骤会先回到页面', () => {
         document.body.appendChild(list);
 
         activeDialog = null;
+        openWorldDialog.mockClear();
         detailStep.prepareNext?.();
 
         // 没有详情开着时，导览负责打开；此时不需要先关（本来就没什么可关）。
         expect(closeDialog).not.toHaveBeenCalled();
+
+        // 打开动作是 fire-and-forget 的动态 import：必须等它落地再断言，
+        // 否则断言跑在 `.then` 之前，等于什么都没验证。
+        await vi.waitFor(() =>
+            expect(openWorldDialog).toHaveBeenCalledWith({
+                worldId: 'wrld_example',
+                title: ''
+            })
+        );
         document.body.removeChild(list);
     });
 
