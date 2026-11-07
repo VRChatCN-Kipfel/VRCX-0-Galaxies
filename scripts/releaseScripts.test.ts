@@ -217,7 +217,7 @@ describe('create-tauri-updater-manifest', () => {
             'Invalid updater target: windows-aarch64-stable'
         );
         expect(releaseAssetUrl('v2.31.4 preview', 'VRCX 0.exe')).toBe(
-            'https://github.com/Map1en/VRCX-0/releases/download/v2.31.4%20preview/VRCX%200.exe'
+            'https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/download/v2.31.4%20preview/VRCX%200.exe'
         );
     });
 
@@ -295,7 +295,7 @@ describe('create-tauri-updater-manifest', () => {
             platforms: {
                 'linux-x86_64-appimage-stable': {
                     signature: 'signed-value',
-                    url: 'https://github.com/Map1en/VRCX-0/releases/download/v2.31.4/VRCX-0.AppImage'
+                    url: 'https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/download/v2.31.4/VRCX-0.AppImage'
                 }
             }
         });
