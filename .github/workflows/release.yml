@@ -596,7 +596,7 @@ jobs:
               with:
                   tag_name: ${{ needs.prepare.outputs.tag }}
                   name: ${{ needs.prepare.outputs.display_version }}
-                  body: Draft release for ${{ needs.prepare.outputs.display_version }}.
+                  generate_release_notes: true
                   draft: true
                   prerelease: ${{ needs.prepare.outputs.prerelease }}
                   files: release-assets/*
