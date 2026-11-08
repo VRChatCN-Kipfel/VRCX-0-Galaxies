@@ -1,21 +1,21 @@
 <div align="center">
 
-# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0
+# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0-Galaxies
 
-### The fast, lightweight VRCX.
+### Forked VRCX-0: the fast, lightweight VRCX, with 星遇同频 built in.
 
 English | [Français](README.fr-FR.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
-[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/Map1en/VRCX-0/releases/latest)
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/releases)
-[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
+[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases)
+[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 [![Discord](https://img.shields.io/discord/1494343220467994644?style=flat&logo=discord&logoColor=white&label=discord&color=5865f2&labelColor=1f2328)](https://discord.gg/fehKP3SVPN)
 <br>
-[![CI](https://img.shields.io/github/actions/workflow/status/Map1en/VRCX-0/ci.yml?branch=master&label=ci&style=flat&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/VRChatCN-Kipfel/VRCX-0-Galaxies/ci.yml?branch=vrcc&label=ci&style=flat&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c566a?style=flat&labelColor=1f2328)](LICENSE)
 
-[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 
 Windows · macOS · Linux
 
@@ -26,6 +26,12 @@ Windows · macOS · Linux
 A desktop companion for VRChat: see where your friends are, keep a history of the people you've met and the worlds you've visited, manage your favorites, and more.
 
 VRCX-0 is a ground-up rewrite of VRCX by one of its former maintainers. Rebuilt in Rust, it's faster and lighter, and years of history stay smooth.
+
+This repository is **VRCX-0-Galaxies**, the [CN-Kipfel](https://github.com/VRChatCN-Kipfel)
+community build and therefore a downstream of VRCX-0. On top of upstream it adds
+the 星遇同频 (vrcc.cc) integration — the Chinese VRChat community's world ratings
+and leaderboards, built into the app — along with a self-hosted release pipeline
+with Authenticode code signing. Everything else matches upstream VRCX-0.
 
 ## Highlights
 
@@ -42,6 +48,10 @@ VRCX-0 is a ground-up rewrite of VRCX by one of its former maintainers. Rebuilt 
 
 ### Only in VRCX-0
 
+- **星遇同频 (vrcc.cc)** — the Chinese VRChat community's world ratings and
+  leaderboards, built into the app: browse the map leaderboard without
+  connecting, rate a world half a star at a time, see who you crossed paths
+  with, and get the unread count on the sidebar
 - **Social AI** — insights into your VRChat social life: who you play with
   most, who you're drifting away from, when friends are most likely online;
   just connect the AI service you already use
@@ -89,7 +99,7 @@ Everything else VRCX does, VRCX-0 does too.
 
 ## Install
 
-Grab the file for your platform from the [latest release](https://github.com/Map1en/VRCX-0/releases/latest):
+Grab the file for your platform from the [latest release](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest):
 
 | Platform              | File                                        |
 | --------------------- | ------------------------------------------- |
@@ -111,7 +121,7 @@ doesn't display properly, VRCX-0 turns it back off automatically. Setting
 ## Feedback
 
 - Questions and chat: [Discord](https://discord.gg/fehKP3SVPN)
-- Bug reports and feature requests: [GitHub Issues](https://github.com/Map1en/VRCX-0/issues)
+- Bug reports and feature requests: [GitHub Issues](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/issues)
 - Dev blog: [blog.vrcx-0.dev](https://blog.vrcx-0.dev/en/)
 
 ## Building from source
@@ -122,7 +132,7 @@ Requirements: Node.js ≥ 24.10, npm ≥ 11.5, and a stable Rust toolchain via r
 On Windows, also install **Visual Studio Build Tools** with the **Desktop development with C++** workload.
 
 ```bash
-git clone https://github.com/Map1en/VRCX-0
+git clone https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies
 cd VRCX-0
 
 npm install
@@ -144,7 +154,13 @@ npm run tauri:build -- --no-sign --no-bundle
 
 VRCX-0 is licensed under the GNU General Public License v3.0 (GPLv3).
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0?ref=badge_large)
+Some files are additionally available under the Mozilla Public License 2.0
+(MPL-2.0). They carry the header `SPDX-License-Identifier: MPL-2.0`, and you may
+use such a file under either license. The MPL-2.0 files have no Exhibit B
+notice, so they remain combinable with GPL-3.0. See [NOTICE](NOTICE) for the
+exact terms; the MPL text is in [LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt).
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies?ref=badge_large)
 
 VRCX-0 is not endorsed by VRChat Inc. VRChat and all associated properties are
 trademarks or registered trademarks of VRChat Inc.

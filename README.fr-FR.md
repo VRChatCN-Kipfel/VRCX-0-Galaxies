@@ -1,22 +1,22 @@
 <div align="center">
 
-# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0
+# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0-Galaxies
 
-### VRCX, plus léger et plus rapide.
+### Version dérivée de VRCX-0 : plus léger, plus rapide, avec 星遇同频 intégré.
 
 [English](README.md) | Français | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
-[![Version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/version.json&style=flat&color=4340a2&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/Map1en/VRCX-0/releases/latest)
-[![Téléchargements](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/downloads.json&style=flat&color=4340a2&labelColor=1f2328)](https://github.com/Map1en/VRCX-0)
-[![Installer](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/windows-installer-size.json&style=flat&label=installer&color=4340a2&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/version.json&style=flat&color=4340a2&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
+[![Téléchargements](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/downloads.json&style=flat&color=4340a2&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies)
+[![Installer](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/windows-installer-size.json&style=flat&label=installer&color=4340a2&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 [![Discord](https://img.shields.io/discord/1494343220467994644?style=flat&logo=discord&logoColor=white&label=discord&color=5865f2&labelColor=1f2328)](https://discord.gg/fehKP3SVPN)
 <br>
-[![CI](https://img.shields.io/github/actions/workflow/status/Map1en/VRCX-0/ci.yml?branch=master&label=CI&style=flat&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/coverage.json&style=flat&color=brightgreen&labelColor=1f2328)](https://github.com/Map1en/VRCX-0)
+[![CI](https://img.shields.io/github/actions/workflow/status/VRChatCN-Kipfel/VRCX-0-Galaxies/ci.yml?branch=vrcc&label=CI&style=flat&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/coverage.json&style=flat&color=brightgreen&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies)
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c566a?style=flat&labelColor=1f2328)](LICENSE)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0?ref=badge_shield)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies?ref=badge_shield)
 
-[![Télécharger](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Télécharger](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 
 Windows · macOS · Linux
 
@@ -39,7 +39,7 @@ nouvelles fonctionnalités sont créées.
 ## Installation
 
 Récupérez la
-[dernière version](https://github.com/Map1en/VRCX-0/releases/latest) pour
+[dernière version](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest) pour
 votre plateforme :
 
 | Platforme             | Fichier                                     |
@@ -68,6 +68,7 @@ L'installation est unique — VRCX-0 se mettra à jour automatiquement.
 
 De plus :
 
+- **星遇同频 (vrcc.cc)** — Les notes et classements de mondes de la communauté VRChat chinoise, intégrés à l'application : parcourir le classement sans se connecter, noter un monde par demi-étoile, voir avec qui vous vous êtes croisé, et un badge de non-lus dans la barre latérale
 - **IA Sociale** — Un assistant qui vous conseille sur vos relations VRChat :
   Demandez avec qui vous jouez le plus, de qui vous éloignez-vous ou bien
   l'heure idéalle pour jouer avec vos amis. Connectez votre propre IA pour
@@ -103,7 +104,21 @@ De plus :
 
 VRCX-0 est sous Licence publique générale GNU v3.0 (GPLv3).
 
-[![Statut FOSSA](https://app.fossa.com/api/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0?ref=badge_large)
+Ce dépôt est **VRCX-0-Galaxies**, la version communautaire maintenue par
+[CN-Kipfel](https://github.com/VRChatCN-Kipfel) et donc une déclinaison en aval de
+VRCX-0. En plus de l'amont, elle intègre 星遇同频 (vrcc.cc) — les notes et
+classements de mondes de la communauté VRChat chinoise, intégrés à
+l'application — ainsi qu'une chaîne de publication autonome avec signature de
+code Authenticode. Tout le reste est identique à VRCX-0 en amont.
+
+Certains fichiers sont également disponibles sous Mozilla Public License 2.0
+(MPL-2.0). Ils portent la mention `SPDX-License-Identifier: MPL-2.0` et peuvent
+être utilisés sous l'une ou l'autre licence. Ces fichiers n'ont pas de clause
+Exhibit B, ils restent donc combinables avec GPL-3.0. Voir [NOTICE](NOTICE) pour
+les termes exacts ; le texte MPL est dans
+[LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt).
+
+[![Statut FOSSA](https://app.fossa.com/api/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies?ref=badge_large)
 
 ## Contribuer
 
@@ -116,7 +131,7 @@ Sur Windows, installez **Visual Studio** avec la charge de travail
 **Développement Desktop en C++**
 
 ```bash
-git clone https://github.com/Map1en/VRCX-0
+git clone https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies
 cd VRCX-0
 
 npm install

@@ -1,21 +1,21 @@
 <div align="center">
 
-# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0
+# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0-Galaxies
 
-### 更快、更輕的 VRCX。
+### VRCX-0 的分支版本：更快、更輕，並整合「星遇同頻」。
 
 [English](README.md) | [Français](README.fr-FR.md) | [简体中文](README.zh-CN.md) | 繁體中文 | [日本語](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
-[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/Map1en/VRCX-0/releases/latest)
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/releases)
-[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
+[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases)
+[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 [![Discord](https://img.shields.io/discord/1494343220467994644?style=flat&logo=discord&logoColor=white&label=discord&color=5865f2&labelColor=1f2328)](https://discord.gg/fehKP3SVPN)
 <br>
-[![CI](https://img.shields.io/github/actions/workflow/status/Map1en/VRCX-0/ci.yml?branch=master&label=ci&style=flat&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/VRChatCN-Kipfel/VRCX-0-Galaxies/ci.yml?branch=vrcc&label=ci&style=flat&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c566a?style=flat&labelColor=1f2328)](LICENSE)
 
-[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 
 Windows · macOS · Linux
 
@@ -27,6 +27,11 @@ VRChat 桌面輔助工具：查看好友上線狀態與所在位置、記錄遇�
 
 VRCX-0 是 VRCX 的完全重寫版本，由 VRCX 前任維護者之一開發。以 Rust 重建，更快、更輕，多年累積的資料依然流暢。
 
+本倉庫是 **VRCX-0-Galaxies**，由 [CN-Kipfel](https://github.com/VRChatCN-Kipfel)
+社群維護，屬於 VRCX-0 的下游版本。我們在上游基礎上整合了「星遇同频」（vrcc.cc）
+——中文 VRChat 社群的世界評分與榜單站點，直接做進客戶端——並自建了帶
+Authenticode 程式碼簽章的發布流程。除此之外與上游 VRCX-0 保持一致。
+
 ## 主要特點
 
 - **多年紀錄依然流暢** — VRCX 明顯變卡的資料量，VRCX-0 依然流暢；老電腦、NAS 級小主機也能執行
@@ -37,6 +42,7 @@ VRCX-0 是 VRCX 的完全重寫版本，由 VRCX 前任維護者之一開發。�
 
 ### VRCX-0 獨有
 
+- **星遇同频（vrcc.cc）** — 中文 VRChat 社群的世界評分與榜單站點，直接做進客戶端：不連接也能看地圖榜、給世界打半星評分、查和誰在同一個房間待過，側欄帶未讀角標
 - **AI 助手** — 洞察你的 VRChat 社交：常和誰一起玩、和誰漸行漸遠、何時最容易遇到好友；接入你常用的 AI 服務即可使用
 - **活動** — 依時間軸回顧每次去過的世界、同房的人與當時的截圖；還能看到常遇見的路人
 - **側欄模式** — 以窄側欄隨時留意好友動態；Windows、macOS 支援貼邊自動隱藏
@@ -73,7 +79,7 @@ VRCX 的其他功能，VRCX-0 同樣具備。
 
 ## 安裝
 
-在 [最新 Release](https://github.com/Map1en/VRCX-0/releases/latest) 下載對應平台的檔案：
+在 [最新 Release](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest) 下載對應平台的檔案：
 
 | 平台                | 檔案                                       |
 | ------------------- | ------------------------------------------ |
@@ -91,7 +97,7 @@ macOS 首次啟動若被系統阻擋，請前往 **系統設定 → 隱私權與
 ## 回饋與交流
 
 - 交流與提問：[Discord](https://discord.gg/fehKP3SVPN)
-- 問題回報與功能建議：[GitHub Issues](https://github.com/Map1en/VRCX-0/issues)
+- 問題回報與功能建議：[GitHub Issues](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/issues)
 - 開發 blog：[blog.vrcx-0.dev](https://blog.vrcx-0.dev/zh/)
 
 ## 從原始碼建置
@@ -102,7 +108,7 @@ macOS 首次啟動若被系統阻擋，請前往 **系統設定 → 隱私權與
 Windows 使用者還需安裝 **Visual Studio Build Tools**，並勾選 **“使用 C++ 的桌面開發”**。
 
 ```bash
-git clone https://github.com/Map1en/VRCX-0
+git clone https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies
 cd VRCX-0
 
 npm install
@@ -124,6 +130,11 @@ npm run tauri:build -- --no-sign --no-bundle
 
 VRCX-0 採用 GNU General Public License v3.0（GPLv3）授權。
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0?ref=badge_large)
+部分檔案同時以 Mozilla Public License 2.0（MPL-2.0）提供。這些檔案帶有
+`SPDX-License-Identifier: MPL-2.0` 標記，你可以任選其一使用。MPL-2.0 檔案
+未附加 Exhibit B 條款，因此仍可與 GPL-3.0 組合。完整條款見 [NOTICE](NOTICE)，
+MPL 正文見 [LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt)。
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies?ref=badge_large)
 
 VRCX-0 未獲 VRChat Inc. 認可或背書。VRChat 及所有相關標誌均為 VRChat Inc. 的商標或註冊商標。

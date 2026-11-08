@@ -1,21 +1,21 @@
 <div align="center">
 
-# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0
+# <img src="images/VRCX-0.png" alt="VRCX-0 Logo" width="25"> VRCX-0-Galaxies
 
-### もっと速く、もっと軽い VRCX。
+### VRCX-0 のフォーク版：より速く、より軽く、星遇同频を統合。
 
 [English](README.md) | [Français](README.fr-FR.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md) | 日本語 | [한국어](README.ko-KR.md)
 
-[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/Map1en/VRCX-0/releases/latest)
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/releases)
-[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Release](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/version.json&style=flat&color=4c566a&labelColor=1f2328&logo=github&logoColor=white)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
+[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/downloads.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases)
+[![Windows installer size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/windows-installer-size.json&style=flat&label=installer&color=4c566a&labelColor=1f2328&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmZiI%2BPHBhdGggZD0iTTIuNCAyLjRoOC41djguNUgyLjR6TTEzLjEgMi40SDIxLjZ2OC41aC04LjV6TTIuNCAxMy4xaDguNVYyMS42SDIuNHpNMTMuMSAxMy4xSDIxLjZWMjEuNmgtOC41eiIvPjwvc3ZnPg%3D%3D)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 [![Discord](https://img.shields.io/discord/1494343220467994644?style=flat&logo=discord&logoColor=white&label=discord&color=5865f2&labelColor=1f2328)](https://discord.gg/fehKP3SVPN)
 <br>
-[![CI](https://img.shields.io/github/actions/workflow/status/Map1en/VRCX-0/ci.yml?branch=master&label=ci&style=flat&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Map1en/VRCX-0/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/Map1en/VRCX-0/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/VRChatCN-Kipfel/VRCX-0-Galaxies/ci.yml?branch=vrcc&label=ci&style=flat&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/VRChatCN-Kipfel/VRCX-0-Galaxies/badge-data/coverage.json&style=flat&color=4c566a&labelColor=1f2328)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c566a?style=flat&labelColor=1f2328)](LICENSE)
 
-[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/Map1en/VRCX-0/releases/latest)
+[![Download](https://img.shields.io/badge/Download%20VRCX--0-4340a2?style=for-the-badge)](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest)
 
 Windows · macOS · Linux
 
@@ -27,6 +27,12 @@ VRChat のためのデスクトップツール。フレンドのオンライン�
 
 VRCX-0 は、元 VRCX メンテナーの一人がゼロから書き直した VRCX です。Rust で再構築し、より速く、より軽く。何年分の記録があっても快適なままです。
 
+このリポジトリは **VRCX-0-Galaxies** で、[CN-Kipfel](https://github.com/VRChatCN-Kipfel)
+コミュニティが保守する VRCX-0 のダウンストリーム版です。上流に加えて、中国語圏
+VRChat コミュニティのワールド評価・ランキングサイト「星遇同频」（vrcc.cc）を
+アプリに統合し、Authenticode コード署名付きの独自リリースパイプラインを用意して
+います。それ以外は上流の VRCX-0 と同じです。
+
 ## 主な特徴
 
 - **何年分の記録でも快適** — VRCX が重くなるデータ量でも、VRCX-0 なら軽快。低スペック PC や NAS クラスの小型 PC でも動作
@@ -37,6 +43,7 @@ VRCX-0 は、元 VRCX メンテナーの一人がゼロから書き直した VRC
 
 ### VRCX-0 だけの機能
 
+- **星遇同频（vrcc.cc）** — 中国語圏 VRChat コミュニティのワールド評価・ランキングサイトをアプリに統合。未接続でもマップランキングを閲覧でき、ワールドに半星単位で評価、同じ部屋に居合わせた相手も確認できる。サイドバーに未読バッジ付き
 - **AI アシスタント** — VRChat での交流をひも解く。よく遊ぶ相手、疎遠になりつつある相手、フレンドに会いやすい時間帯まで。普段使いの AI サービスをつなぐだけ
 - **アクティビティ** — 訪れたワールド、一緒にいた人、そのときのスクリーンショットをタイムラインで振り返り。よく見かける人もひと目で
 - **サイドバーモード** — 細いサイドバーでフレンドの動きをいつでもチェック。Windows・macOS では画面端で自動的に隠せます
@@ -73,7 +80,7 @@ VRCX のそのほかの機能も、VRCX-0 にそのまま揃っています。
 
 ## インストール
 
-[最新リリース](https://github.com/Map1en/VRCX-0/releases/latest) から、お使いのプラットフォーム向けのファイルをダウンロードしてください。
+[最新リリース](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/releases/latest) から、お使いのプラットフォーム向けのファイルをダウンロードしてください。
 
 | プラットフォーム        | ファイル                                       |
 | ----------------------- | ---------------------------------------------- |
@@ -91,7 +98,7 @@ macOS で初回起動がブロックされた場合は、**システム設定 �
 ## フィードバック
 
 - 質問・交流：[Discord](https://discord.gg/fehKP3SVPN)
-- 不具合報告・機能リクエスト：[GitHub Issues](https://github.com/Map1en/VRCX-0/issues)
+- 不具合報告・機能リクエスト：[GitHub Issues](https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies/issues)
 - 開発ブログ：[blog.vrcx-0.dev](https://blog.vrcx-0.dev/ja/)
 
 ## ソースからビルド
@@ -102,7 +109,7 @@ macOS で初回起動がブロックされた場合は、**システム設定 �
 Windows の場合は、**Visual Studio Build Tools** をインストールし、**「C++ によるデスクトップ開発」** を選択してください。
 
 ```bash
-git clone https://github.com/Map1en/VRCX-0
+git clone https://github.com/VRChatCN-Kipfel/VRCX-0-Galaxies
 cd VRCX-0
 
 npm install
@@ -124,6 +131,12 @@ npm run tauri:build -- --no-sign --no-bundle
 
 VRCX-0 は GNU General Public License v3.0（GPLv3）の下で公開されています。
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FMap1en%2FVRCX-0?ref=badge_large)
+一部のファイルは Mozilla Public License 2.0（MPL-2.0）でも提供されます。該当
+ファイルには `SPDX-License-Identifier: MPL-2.0` の表記があり、どちらのライセンスでも
+利用できます。MPL-2.0 のファイルには Exhibit B 条項がないため、GPL-3.0 との
+組み合わせが可能です。詳細は [NOTICE](NOTICE)、MPL 本文は
+[LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt) を参照してください。
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FVRChatCN-Kipfel%2FVRCX-0-Galaxies?ref=badge_large)
 
 VRCX-0 は VRChat Inc. の公認を受けたものではありません。VRChat および関連するすべての名称・ロゴは VRChat Inc. の商標または登録商標です。
