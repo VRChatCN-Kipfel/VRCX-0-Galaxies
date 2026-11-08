@@ -23,6 +23,36 @@ const token = process.env.GH_TOKEN ?? '';
 const repo = process.env.GITHUB_REPOSITORY ?? '';
 const releaseId = process.argv[2] ?? '';
 
+/**
+ * 证书安装引导，永远排在 notes 最前面。
+ *
+ * Windows 安装包由组织自建 CA 签名，而系统不预置这条链：不装证书双击安装包会显示
+ * 「未知发布者」。所以必须在用户看到下载列表之前先说清楚，否则很容易被当成下到
+ * 假包了。
+ *
+ * 文案只在这里维护。不要直接去 GitHub 页面上改——下一次发布会把 body 整个重生成，
+ * 手改的内容会消失。
+ */
+const CERT_SECTION_MARK = '### 🔐 先装证书';
+
+/** 详细提交段落的识别标记，用来保证重复运行不会叠出第二份。 */
+const DETAILS_MARK = '<summary>详细提交';
+
+const CERT_SECTION = [
+    '### 🔐 先装证书，再装 VRCX-0-Galaxies',
+    '',
+    '**[⬇️ 下载证书包.zip](https://github.com/VRChatCN-Kipfel/.github/archive/refs/heads/certificates.zip)** → 解压 → **双击 `setup.bat`**',
+    '',
+    '> CN-Kipfel 发布的 Windows 安装包由组织自建 CA 签名。Windows 不预置这条证书链，',
+    '> 没装证书时双击安装包会显示「**未知发布者**」——不是包有问题，是缺证书。',
+    '>',
+    '> 脚本只写当前用户，**不需要管理员权限**。安装过程中 Windows 会弹一次确认框，',
+    '> 那是系统对「写入受信任根」的保护，点「是」。',
+    '>',
+    '> 装完签名显示为 `Forked about VRCX-0 short Code Signing`，整条链可验证，并带',
+    '> DigiCert 时间戳——证书到期后已发布的旧包依然有效。'
+].join('\n');
+
 type FetchInit = Parameters<typeof fetch>[1];
 
 type ReleasePayload = { id: number; body?: string | null };
@@ -118,6 +148,19 @@ if (!token || !repo || !releaseId) {
         const body = String(release.body ?? '').trimEnd();
         let next = body;
 
+        // 1.5) 证书安装引导：放在 notes 最前面。
+        //
+        // Windows 安装包由组织自建 CA 签名，而系统不预置这条链，不装证书双击就会
+        // 显示「未知发布者」。这一步必须在用户看到下载列表之前讲清楚，否则很容
+        // 易被当成「下到假包了」。文案在这里维护，不要在 GitHub 页面上手改——下一
+        // 次发布就会被 generate-notes 覆盖。
+        if (!next.includes(CERT_SECTION_MARK)) {
+            next = `${CERT_SECTION}\n\n${next}`;
+            console.log('certificate preamble: inserted');
+        } else {
+            console.log('certificate preamble: already present, left as is');
+        }
+
         // 2) 相关 issue：notes 里的变更引用了 PR。GitHub 的格式是
         //    "in https://github.com/o/r/pull/123"，老格式可能写成 "in #123"，两种都收。
         const prNumbers = [
@@ -197,8 +240,13 @@ if (!token || !repo || !releaseId) {
         //    注意 head 不能用 tag 名：draft 阶段 release 的 tag 还没落地成 git ref，
         //    compare/v2.32.0...v2.33.0 会 404。这里优先用本次运行的 commit SHA
         //    （GITHUB_SHA），只有它缺席时才退回 notes 里写的 tag。
+        //
+        //    幂等：body 里已经有「详细提交」折叠块时直接跳过。否则同一个 draft 被
+        //    跑两次（比如本地手动补跑），就会叠出第二份 250 条清单。
         const range = parseCompareRange(body);
-        if (!range) {
+        if (body.includes(DETAILS_MARK)) {
+            console.log('detailed commits: already present, left as is');
+        } else if (!range) {
             console.log(
                 'no compare link found in release notes; skipping detailed commits'
             );
