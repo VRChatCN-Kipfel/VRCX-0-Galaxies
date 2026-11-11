@@ -93,7 +93,7 @@ export function VrccMutualsPanel({
                     看到「重新连接一次」只会困惑。 */}
                 {mutualsError && (
                     <div className="text-[11px] leading-relaxed">
-                        {t('vrcc.mutuals.needs_scope')}
+                        {t('vrcc.scope.needs', { scope: 'mutuals' })}
                     </div>
                 )}
             </div>

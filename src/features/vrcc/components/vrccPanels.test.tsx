@@ -218,7 +218,7 @@ describe('VrccCrossingsPanel', () => {
     it('缺权限时说「不可用」并引导重连，不给重试按钮', () => {
         renderCrossings(null, { error: 'scope', needsScope: true });
         expect(screen.getByText('vrcc.crossings.unavailable')).toBeTruthy();
-        expect(screen.getByText('vrcc.crossings.needs_scope')).toBeTruthy();
+        expect(screen.getByText('vrcc.scope.needs')).toBeTruthy();
         expect(screen.queryByText('vrcc.crossings.retry')).toBeNull();
     });
 

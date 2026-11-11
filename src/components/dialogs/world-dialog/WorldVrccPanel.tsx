@@ -217,7 +217,7 @@ export function WorldVrccPanel({ worldId }: { worldId: string }) {
                     case 'needsReauth':
                         return 'dialog.world.vrcc.unknown_reauth';
                     case 'missingScope':
-                        return 'dialog.world.vrcc.unknown_scope';
+                        return 'vrcc.scope.needs';
                     case 'transport':
                         return 'dialog.world.vrcc.unknown_network';
                     // 限流和「还在生成」都不是故障，让玩家等一下就好。
@@ -234,7 +234,10 @@ export function WorldVrccPanel({ worldId }: { worldId: string }) {
             return (
                 <VrccOffBoardState
                     title={t('dialog.world.vrcc.unknown_title')}
-                    hint={t(hintKey)}
+                    hint={t(
+                        hintKey,
+                        kind === 'missingScope' ? { scope: 'maps' } : undefined
+                    )}
                 />
             );
         }
@@ -451,7 +454,7 @@ export function WorldVrccPanel({ worldId }: { worldId: string }) {
                         // 「令牌是加权限之前签发的」，重连一次就好——直接说清楚，
                         // 比给一个点了必然 403 的控件有用。
                         <span className="text-muted-foreground text-xs">
-                            {t('dialog.world.vrcc.rate_needs_scope')}
+                            {t('vrcc.scope.needs', { scope: 'maps.rate' })}
                         </span>
                     ) : null}
                 </div>
@@ -667,7 +670,7 @@ function VoteButtons({
                     isMine
                         ? t('dialog.world.vrcc.vote_own_hint')
                         : !canVote
-                          ? t('dialog.world.vrcc.vote_needs_scope')
+                          ? t('vrcc.scope.needs', { scope: 'maps.write' })
                           : undefined
                 }
             >

@@ -169,7 +169,7 @@ export function VrccCrossingsPanel({
                     不能混用——让网络问题的人去重连，他只会照做然后更困惑。 */}
                 <div className="text-[11px] leading-relaxed">
                     {crossingsNeedsScope
-                        ? t('vrcc.crossings.needs_scope')
+                        ? t('vrcc.scope.needs', { scope: 'crossings' })
                         : crossingsError}
                 </div>
                 {!crossingsNeedsScope && (
@@ -228,7 +228,7 @@ export function VrccCrossingsPanel({
             {crossingsError && (
                 <div className="text-muted-foreground px-1 text-xs">
                     {crossingsNeedsScope
-                        ? t('vrcc.crossings.needs_scope')
+                        ? t('vrcc.scope.needs', { scope: 'crossings' })
                         : t('vrcc.crossings.stale_hint')}
                 </div>
             )}

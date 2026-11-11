@@ -882,7 +882,6 @@
         "mutuals": {
             "need_connect": "连接星遇同频后，这里会显示互相连上的星友",
             "empty": "还没有互相连上的星友",
-            "needs_scope": "「互相连上」需要 mutuals 权限，重新连接一次即可（开发版标识拿不到这项）。",
             "unnamed": "未命名",
             "unavailable": "这一项需要额外权限，当前客户端还没开通",
             "rate_mine": "我给 TA 的分",
@@ -930,7 +929,6 @@
             "stale_hint": "显示的是上一次的列表，这次刷新失败了。",
             "need_connect": "连接星遇同频账号后，就能看到和你擦肩而过的人。",
             "unavailable": "这个账号暂时用不了星轨相交。",
-            "needs_scope": "这项功能需要 crossings 权限。重新连接时勾选它。",
             "empty": "还没有擦肩记录。在同一个 VRChat 房间里遇到过的星友会出现在这里。",
             "count": "{count} 条擦肩记录",
             "quota": "今天还能连 {left} / {max} 颗",
@@ -1037,6 +1035,9 @@
         "open_link": {
             "opened": "已在浏览器打开",
             "failed": "打不开浏览器，请手动打开页面。"
+        },
+        "scope": {
+            "needs": "需要 {scope} 权限，请再次重新连接$t(vrcc.title)账户，或确认当前「我的」页面中持有权限包含 {scope} 权限。"
         }
     },
     "nav_menu": {
@@ -5017,12 +5018,10 @@
                 "rate_submitting": "提交中…",
                 "rate_delete": "删除评分",
                 "rate_failed": "提交失败，请稍后再试。",
-                "rate_needs_scope": "打分需要重新连接一次星遇同频账户。",
                 "words_placeholder": "写一句短评（可选，30 字以内）",
                 "vote_up": "这条短评有帮助",
                 "vote_down": "这条短评没有帮助",
                 "vote_own_hint": "不能给自己的短评投票。",
-                "vote_needs_scope": "投票需要重新连接一次星遇同频账户。",
                 "pending_title": "已投稿，等待审核",
                 "pending_hint": "星遇同频审核通过后，这张图就会出现在地图榜上。",
                 "syncing_title": "已上榜，数据同步中",
@@ -5032,7 +5031,6 @@
                 "unknown_title": "无法确认状态",
                 "unknown_hint": "查不到你的投稿状态，请稍后重试。",
                 "unknown_reauth": "登录已失效，请重新连接星遇同频。",
-                "unknown_scope": "缺少查看地图的权限，请重新连接时勾选同意。",
                 "unknown_network": "网络连接失败，请检查网络后重试。",
                 "unknown_throttled": "请求太频繁，请稍后再试。今天的次数用完后会在北京时间零点重置。",
                 "unknown_notready": "这一轮还在生成，稍后再看。"

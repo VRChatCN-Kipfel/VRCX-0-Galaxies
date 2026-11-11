@@ -591,9 +591,7 @@ describe('WorldVrccPanel', () => {
         });
         renderWithClient(<WorldVrccPanel worldId="wrld_test" />);
 
-        expect(
-            await screen.findByText('dialog.world.vrcc.rate_needs_scope')
-        ).toBeTruthy();
+        expect(await screen.findByText('vrcc.scope.needs')).toBeTruthy();
         // 不该出现打分控件（只有排序切换那一个 radiogroup 也没有）
         expect(screen.queryAllByRole('radio').length).toBe(0);
     });

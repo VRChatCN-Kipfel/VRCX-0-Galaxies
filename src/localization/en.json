@@ -882,7 +882,6 @@
         "mutuals": {
             "need_connect": "Connect to Orbitune to see who you are mutually linked with",
             "empty": "No mutual links yet",
-            "needs_scope": "Mutual links need the mutuals permission; reconnect once to get it (development builds can't).",
             "unnamed": "Unnamed",
             "unavailable": "This needs an extra permission this client does not have",
             "rate_mine": "My rating for them",
@@ -930,7 +929,6 @@
             "stale_hint": "Showing the last loaded list; refreshing failed.",
             "need_connect": "Connect your star account to see who you crossed paths with.",
             "unavailable": "Crossings is not available for this account yet.",
-            "needs_scope": "This feature needs the crossings permission. Reconnect and allow it when asked.",
             "empty": "No crossings yet. People you meet in the same VRChat world show up here.",
             "count_one": "{count} crossing",
             "count_other": "{count} crossings",
@@ -1038,6 +1036,9 @@
         "open_link": {
             "opened": "Opened in your browser",
             "failed": "Could not open the browser. Please open the page yourself."
+        },
+        "scope": {
+            "needs": "The {scope} permission is required. Reconnect your $t(vrcc.title) account, or check that the permissions currently held on the Me tab include {scope}."
         }
     },
     "nav_menu": {
@@ -5028,12 +5029,10 @@
                 "rate_submitting": "Submitting…",
                 "rate_delete": "Delete rating",
                 "rate_failed": "Could not submit. Try again later.",
-                "rate_needs_scope": "Rating needs reconnecting your VRCC account once.",
                 "words_placeholder": "Write a short comment (optional, 30 characters)",
                 "vote_up": "This comment was helpful",
                 "vote_down": "This comment was not helpful",
                 "vote_own_hint": "You cannot vote on your own comment.",
-                "vote_needs_scope": "Voting needs reconnecting your VRCC account once.",
                 "pending_title": "Submitted, awaiting review",
                 "pending_hint": "This world will appear on the VRCC board once it passes review.",
                 "syncing_title": "Listed, data still syncing",
@@ -5043,7 +5042,6 @@
                 "unknown_title": "Status unavailable",
                 "unknown_hint": "Your submission status could not be read. Try again later.",
                 "unknown_reauth": "Your sign-in has expired. Reconnect VRCC.",
-                "unknown_scope": "Permission to read maps is missing. Reconnect and accept it.",
                 "unknown_network": "The network request failed. Check your connection.",
                 "unknown_throttled": "Too many requests — try again later. The daily quota resets at midnight Beijing time.",
                 "unknown_notready": "This round is still being generated. Check back shortly."
