@@ -8,7 +8,7 @@ import {
     ExternalLink,
     RefreshCw
 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { VrccStars } from '@/components/vrcc/VrccStars';
@@ -80,6 +80,14 @@ export function VrccMapsPanel({
     // 换排序后整个列表换掉了，页码可能越界；夹一次比在每个排序回调里
     // 各自重置更省心，也覆盖「服务器这次回的条数比上次少」这种情况。
     const safePage = Math.min(page, pageCount - 1);
+
+    // 换排序就是换了一份列表，页码要回到第 1 页——夹紧只覆盖「页码越界」，
+    // 覆盖不了「本周榜也有 5 页、于是停在第 3 页」这种跨排序沿用。
+    // `sort` 是 props，跟着它走而不是在每个排序回调里各写一遍 setPage(0)：
+    // 调用方将来从别处改排序时也不会漏。
+    useEffect(() => {
+        setPage(0);
+    }, [sort]);
     const pageRows = maps.slice(
         safePage * PAGE_SIZE,
         (safePage + 1) * PAGE_SIZE

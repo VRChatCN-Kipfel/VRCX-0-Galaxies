@@ -2,7 +2,7 @@
 
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -357,6 +357,43 @@ describe('VrccMapsPanel', () => {
             />
         );
     }
+
+    it('换排序后回到第 1 页，不沿用上一份列表的页码', () => {
+        // 25 条 = 2 页。两个排序用的是同一批数据，所以「沿用页码」不会
+        // 因为页数不够而被夹紧掩盖掉——这正是这个 bug 藏起来的方式。
+        const many = {
+            ...board,
+            maps: Array.from({ length: 25 }, (_, index) => ({
+                world: `wrld_${index}`,
+                name: `M${index}`,
+                rank: index + 1,
+                week: 1
+            }))
+        };
+        const panel = (sort: 'top' | 'week') => (
+            <VrccMapsPanel
+                boards={{ ...many, sort }}
+                sort={sort}
+                sortSupported
+                onSortChange={() => {}}
+                onRefresh={() => {}}
+                onOpenWorld={() => {}}
+            />
+        );
+        const activePage = (container: HTMLElement) =>
+            container.querySelector('[aria-current="page"]')?.textContent;
+
+        const { container, rerender } = render(panel('top'));
+        expect(activePage(container)).toBe('1');
+
+        fireEvent.click(screen.getByLabelText('table.pagination.next'));
+        expect(activePage(container)).toBe('2');
+
+        // 换排序 = 换了一份列表。页码跟过去的话，第 2 页展示的是新排序的
+        // 第 21–25 名，和玩家刚点的「总榜第 2 页」毫无关系。
+        rerender(panel('week'));
+        expect(activePage(container)).toBe('1');
+    });
 
     it('本周榜按列表位置编号，不显示总榜名次', () => {
         // 本周榜只按本周的打分排，`rank` 还是总榜名次。
