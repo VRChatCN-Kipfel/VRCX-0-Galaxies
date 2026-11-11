@@ -3,6 +3,8 @@
 import {
     ChevronLeft,
     ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
     ExternalLink,
     RefreshCw
 } from 'lucide-react';
@@ -18,6 +20,7 @@ import {
     ToggleGroupSeparator
 } from '@/ui/shadcn/toggle-group';
 
+import { buildPageItems } from '../boardPages';
 import { useOpenExternalLink } from '../useOpenExternalLink';
 import { useVrccRowVisibility } from '../useVrccRowVisibility';
 import { useVrccWorldCovers } from '../useVrccWorldCovers';
@@ -307,31 +310,85 @@ export function VrccMapsPanel({
             )}
             {/* 本地翻页：一次已取满，点这些按钮不再发请求。 */}
             {pageCount > 1 && (
-                <div className="mt-2 flex shrink-0 items-center justify-center gap-2">
+                <nav className="mt-2 flex shrink-0 items-center justify-center gap-0.5">
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2"
+                        className="size-6 p-0"
+                        disabled={safePage === 0}
+                        aria-label={t('table.pagination.page_number', {
+                            page: 1
+                        })}
+                        onClick={() => setPage(0)}
+                    >
+                        <ChevronsLeft className="size-3.5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="size-6 p-0"
                         disabled={safePage === 0}
                         aria-label={t('table.pagination.previous')}
                         onClick={() => setPage(safePage - 1)}
                     >
-                        <ChevronLeft className="size-4" />
+                        <ChevronLeft className="size-3.5" />
                     </Button>
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                        {safePage + 1} / {pageCount}
-                    </span>
+                    {buildPageItems(safePage + 1, pageCount).map((item) =>
+                        item.kind === 'gap' ? (
+                            <span
+                                key={item.key}
+                                aria-hidden="true"
+                                className="text-muted-foreground w-4 text-center text-xs"
+                            >
+                                …
+                            </span>
+                        ) : (
+                            <Button
+                                key={item.page}
+                                variant={
+                                    item.page === safePage + 1
+                                        ? 'secondary'
+                                        : 'ghost'
+                                }
+                                size="sm"
+                                className="h-6 min-w-6 px-1 text-xs tabular-nums"
+                                aria-current={
+                                    item.page === safePage + 1
+                                        ? 'page'
+                                        : undefined
+                                }
+                                aria-label={t('table.pagination.page_number', {
+                                    page: item.page
+                                })}
+                                onClick={() => setPage(item.page - 1)}
+                            >
+                                {item.page}
+                            </Button>
+                        )
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2"
+                        className="size-6 p-0"
                         disabled={safePage >= pageCount - 1}
                         aria-label={t('table.pagination.next')}
                         onClick={() => setPage(safePage + 1)}
                     >
-                        <ChevronRight className="size-4" />
+                        <ChevronRight className="size-3.5" />
                     </Button>
-                </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="size-6 p-0"
+                        disabled={safePage >= pageCount - 1}
+                        aria-label={t('table.pagination.page_number', {
+                            page: pageCount
+                        })}
+                        onClick={() => setPage(pageCount - 1)}
+                    >
+                        <ChevronsRight className="size-3.5" />
+                    </Button>
+                </nav>
             )}
         </div>
     );
