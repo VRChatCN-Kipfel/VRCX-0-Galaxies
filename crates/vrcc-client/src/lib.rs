@@ -27,19 +27,25 @@
 //! 这里，由调用方注入——本 crate 不认识 `OwnerId`，也不认识任何 Tauri 类型。
 
 pub mod client;
+pub mod poll;
 pub mod session;
 pub mod throttle;
 
 pub use client::{
     QuotaBucket, RateHeaders, ServerQuota, VrccClient, VrccClientState, VrccError, VrccLocalUsage,
 };
+pub use poll::{
+    decide, install, VrccAuthIdentity, VrccAuthObserver, VrccPollAction, VrccPollBinding,
+    VrccPollRuntime, VrccPollSpawn, VrccPollStop,
+};
 pub use session::{VrccSession, VrccSessionSnapshot};
 pub use throttle::{
     backoff_for, now_millis, RateLimiter, DEVICE_CODE_DAILY_LIMIT, NOTIFICATIONS_MIN_GAP,
     PERSONAL_DAILY_LIMIT, WINDOW_LIMIT,
 };
-pub use vrcx_0_vrcc_contracts::{
-    is_dev_client, resolve_client_id, ErrorDetail, ErrorLayer, HttpDetail, LocalThrottle,
-    TransportKind, VRCC_API_BASE, VRCC_APP_NAME, VRCC_BUILD_CLIENT, VRCC_DEFAULT_CLIENT,
-    VRCC_DEV_CLIENT,
-};
+/// 契约层的全部类型在这里再导出一遍。
+///
+/// 外部消费者只依赖 `vrcx-0-vrcc-client` 一个包就该够用，不必为了拿到
+/// `VrccBoardSort` 这种枚举再去加一条 `vrcx-0-vrcc-contracts` 依赖——虽然
+/// 多加一行也无妨，但「一个包能不能自己站住」是可以被外部最直接感知到的信号。
+pub use vrcx_0_vrcc_contracts::*;

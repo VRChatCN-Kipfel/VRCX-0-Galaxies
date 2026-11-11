@@ -357,6 +357,47 @@ fn shared_application_contracts_are_infrastructure_free() {
 }
 
 #[test]
+fn vrcc_client_crates_can_stand_alone() {
+    // 这两个 crate 是仓库里唯一真正自足的部分：manifest 写 MPL-2.0，依赖闭包
+    // 里不该出现任何本仓库的 GPL-only crate。外部消费者拿到 MPL 授权后要能只
+    // 依赖 `vrcx-0-vrcc-client` 就构建出来——这条一旦破了，授权就等于没给。
+    //
+    // 破法通常极小：曾经就是为了一行 `with_remote_dns` 把 `vrcx-0-core` 拖进了
+    // 整棵依赖树。所以这里盯直接依赖，不看别的。
+    let allowed = ["vrcx-0-vrcc-client", "vrcx-0-vrcc-contracts"];
+    for package in allowed {
+        for dependency in normal_dependency_names(package) {
+            assert!(
+                !dependency.starts_with("vrcx-0-") || allowed.contains(&dependency.as_str()),
+                "{package} depends on workspace crate {dependency}; the MPL crates must not \
+                 pull in GPL-only crates from this repository"
+            );
+        }
+    }
+
+    // 依赖清单之外还有一条路：源码里直接 `use` 一个 GPL crate 的路径。上面那条
+    // 测试只在依赖真的写进 manifest 时才会红，所以这里再兜一次源码。
+    for root in ["crates/vrcc-client/src", "crates/vrcc-contracts/src"] {
+        for path in rust_sources_below(root) {
+            let source = std::fs::read_to_string(&path).expect("read vrcc source");
+            for forbidden in [
+                "vrcx_0_core",
+                "vrcx_0_contracts",
+                "vrcx_0_runtime_event",
+                "vrcx_0_application",
+                "vrcx_0_integrations",
+            ] {
+                assert!(
+                    !source.contains(forbidden),
+                    "vrcc source references workspace GPL crate {forbidden}: {}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn application_crates_do_not_depend_on_outbound_implementations() {
     let forbidden_dependencies = [
         "vrcx-0-persistence",
