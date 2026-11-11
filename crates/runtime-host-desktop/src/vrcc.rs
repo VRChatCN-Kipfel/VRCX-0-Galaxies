@@ -16,10 +16,10 @@ use vrcx_0_contracts::vrcc::{
     VrccStickers, VrccToday, VrccUnread, VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult,
     VrccWristSummary,
 };
-use vrcx_0_integrations::vrcc::{resolve_client_id, VrccError};
 use vrcx_0_outbound_adapters::LocalVrccTokenStore;
 use vrcx_0_persistence::config::ConfigRepository;
 use vrcx_0_persistence::DatabaseService;
+use vrcx_0_vrcc_client::{resolve_client_id, VrccError};
 
 /// 把本地加密仓库适配成应用层端口。
 ///

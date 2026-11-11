@@ -26,12 +26,19 @@ pub mod realtime;
 pub mod social_aggregates;
 pub mod telemetry;
 mod translation;
-pub mod vrcc;
 pub mod vrchat_api;
 pub mod vrchat_login;
 pub mod vrchat_requests;
 mod web;
 pub mod world_collections;
+
+/// 星遇同频契约的再导出。
+///
+/// 类型本体住在独立 crate [`vrcx_0_vrcc_contracts`]，整包 MPL-2.0、依赖闭包
+/// 里没有任何本仓库的 GPL crate，外部消费者可以单独取用。这里保留
+/// `vrcx_0_contracts::vrcc::…` 这条路径，是因为仓库内已有几十处引用，
+/// 一次性改写成新 crate 只会把这次搬家的 diff 撑大。
+pub use vrcx_0_vrcc_contracts as vrcc;
 
 pub use avatar::{AvatarTagOutput, AvatarTimeSpentOutput, AvatarUsageRow, AvatarWearSegment};
 pub use community_theme::{

@@ -14,3 +14,4 @@ thiserror = { workspace = true }
 url = { workspace = true }
 vrcx-0-core = { path = "../core" }
 vrcx-0-runtime-event = { path = "../runtime-event" }
+vrcx-0-vrcc-contracts = { path = "../vrcc-contracts" }

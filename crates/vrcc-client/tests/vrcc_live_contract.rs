@@ -26,8 +26,8 @@
 
 use std::sync::Arc;
 
-use vrcx_0_contracts::vrcc::VrccBoardSort;
-use vrcx_0_integrations::vrcc::VrccClient;
+use vrcx_0_vrcc_client::VrccClient;
+use vrcx_0_vrcc_contracts::VrccBoardSort;
 
 /// 真跑线上测试的总开关。没设成 `1` 时所有用例直接返回。
 const LIVE_ENV: &str = "VRCC_LIVE";
@@ -56,7 +56,7 @@ fn client() -> VrccClient {
         .or_else(|_| std::env::var("https_proxy"))
         .ok();
     VrccClient::new(
-        vrcx_0_integrations::vrcc::VRCC_DEV_CLIENT,
+        vrcx_0_vrcc_client::VRCC_DEV_CLIENT,
         Arc::new(|| None),
         proxy.as_deref(),
     )
@@ -66,15 +66,12 @@ fn client() -> VrccClient {
 ///
 /// 区分方式：传输层失败算没网；其余（尤其是 `Decode`，说明拿到了响应但
 /// 结构不对）算契约问题，必须让测试失败——那才是这个文件要抓的东西。
-fn is_offline(error: &vrcx_0_integrations::vrcc::VrccError) -> bool {
+fn is_offline(error: &vrcx_0_vrcc_client::VrccError) -> bool {
     // 按层级判断，不按具体变体：`Decode` 现在也归 `Transport` 层，
     // 但它意味着「拿到了 2xx 却不是 JSON」，属于必须暴露的问题，
     // 所以这里额外排除掉。
-    error.layer == vrcx_0_integrations::vrcc::ErrorLayer::Transport
-        && !matches!(
-            error.detail,
-            vrcx_0_integrations::vrcc::ErrorDetail::Decode(_)
-        )
+    error.layer == vrcx_0_vrcc_client::ErrorLayer::Transport
+        && !matches!(error.detail, vrcx_0_vrcc_client::ErrorDetail::Decode(_))
 }
 
 macro_rules! skip_if_offline {

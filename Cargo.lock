@@ -9473,6 +9473,7 @@ dependencies = [
  "url",
  "vrcx-0-core",
  "vrcx-0-runtime-event",
+ "vrcx-0-vrcc-contracts",
 ]
 
 [[package]]
@@ -9714,6 +9715,7 @@ dependencies = [
  "vrcx-0-media",
  "vrcx-0-persistence",
  "vrcx-0-platform",
+ "vrcx-0-vrcc-client",
  "vrcx-0-vrchat-client",
  "walkdir",
  "zip",
@@ -9828,6 +9830,7 @@ dependencies = [
  "vrcx-0-overlay-runtime",
  "vrcx-0-persistence",
  "vrcx-0-platform",
+ "vrcx-0-vrcc-client",
  "vrcx-0-vrchat-client",
 ]
 
@@ -9839,6 +9842,29 @@ dependencies = [
  "slint",
  "slint-build",
  "specta",
+]
+
+[[package]]
+name = "vrcx-0-vrcc-client"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "vrcx-0-vrcc-contracts",
+]
+
+[[package]]
+name = "vrcx-0-vrcc-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

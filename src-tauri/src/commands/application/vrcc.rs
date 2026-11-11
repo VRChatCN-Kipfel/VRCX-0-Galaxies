@@ -5,7 +5,7 @@
 //! 星遇同频（vrcc.cc）的命令层。
 //!
 //! 每个命令只做「取运行时 → 调服务 → 错误映射」，业务在
-//! `vrcx_0_application::vrcc`，网络在 `vrcx_0_integrations::vrcc`。
+//! `vrcx_0_application::vrcc`，网络在 `vrcx_0_vrcc_client`。
 //!
 //! 设备授权是两步：`begin` 拿码，`poll` 按返回的 `interval` 反复问。
 //! 中间态（`device_code`）留在前端，不落盘。

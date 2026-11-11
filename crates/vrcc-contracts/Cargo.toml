@@ -1,0 +1,13 @@
+[package]
+name = "vrcx-0-vrcc-contracts"
+version = "0.1.0"
+edition = "2021"
+# 这个 crate 是给外部消费者复用的：整包 MPL-2.0，不跟着工作区的 GPL-3.0-only。
+license = "MPL-2.0"
+description = "星遇同频（vrcc.cc）开放接口的线上数据契约"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+specta = { workspace = true }
+thiserror = { workspace = true }

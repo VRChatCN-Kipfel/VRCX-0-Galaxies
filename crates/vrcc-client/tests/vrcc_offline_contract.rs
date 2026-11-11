@@ -15,7 +15,7 @@
 //! 三种都要能解析。官方的规则是「v1 只做加法、弃用字段至少留 60 天」，
 //! 这里钉住的就是客户端这一侧：新字段当可选、不依赖弃用字段。
 
-use vrcx_0_contracts::vrcc::{
+use vrcx_0_vrcc_contracts::{
     VrccAnnouncements, VrccBoard, VrccErrorBody, VrccMutuals, VrccMyMap, VrccNotes,
     VrccRecentNotifications, VrccToday, VrccTokenResponse, VrccUnread,
 };
@@ -246,7 +246,7 @@ fn a_malformed_hot_comment_does_not_break_the_whole_board() {
 /// 把 `hide` 当 `verify` 会向不该看到的人暴露「这里有星轨相交」这个事实。
 #[test]
 fn crossings_parse_and_the_why_reasons_classify_correctly() {
-    use vrcx_0_contracts::vrcc::{VrccCrossingWhy, VrccCrossings};
+    use vrcx_0_vrcc_contracts::{VrccCrossingWhy, VrccCrossings};
 
     // 正常一条：有擦肩记录，还没连线。
     // `group` 用官方枚举串（`G`/`W`/`Z`/`L`/`A`），`me` 用官方 `{star, vrc}`。
@@ -363,7 +363,7 @@ fn crossings_parse_and_the_why_reasons_classify_correctly() {
 /// 界面就只能说出「有这个人」，其余全靠猜。
 #[test]
 fn crossing_cards_keep_the_fields_the_star_card_table_never_lists() {
-    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+    use vrcx_0_vrcc_contracts::VrccCrossingCards;
 
     let cards: VrccCrossingCards = parse(
         r#"{"cards":[
@@ -405,7 +405,7 @@ fn crossing_cards_keep_the_fields_the_star_card_table_never_lists() {
 /// 按分隔符拆会把正常世界名拆坏。
 #[test]
 fn crossing_cards_carry_the_pair_section_the_docs_never_mention() {
-    use vrcx_0_contracts::vrcc::VrccCrossingCards;
+    use vrcx_0_vrcc_contracts::VrccCrossingCards;
 
     let cards: VrccCrossingCards = parse(
         r#"{"cards":[

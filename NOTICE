@@ -14,5 +14,18 @@ These files are marked individually and do not form a self-contained
 component. In particular the frontend files depend on VRCX-0 internals that
 remain GPL-3.0-only.
 
+Two exceptions are self-contained and can be consumed on their own, without
+any GPL-3.0-only code from this repository:
+
+  crates/vrcc-contracts   published as crate `vrcx-0-vrcc-contracts`
+  crates/vrcc-client      published as crate `vrcx-0-vrcc-client`
+
+Their Cargo manifests declare `license = "MPL-2.0"` and their dependency
+closures contain only permissively licensed third-party crates (serde,
+serde_json, specta, thiserror, reqwest, tokio, tracing). No other crate in
+this workspace is a member of their closure, so a downstream consumer needs
+nothing from VRCX-0 to build them.
+
 Exhibit B ("Incompatible With Secondary Licenses") is deliberately not
 attached to any of them, so the MPL-2.0 files remain combinable with GPL-3.0.
+

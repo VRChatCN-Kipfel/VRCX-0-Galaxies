@@ -16,6 +16,7 @@
 //! - 带每天次数的接口回答 `RateLimit-*`（1.11.0 起），用它代替本地猜的用量；
 //! - 某一份额度当天用完，只停那一份，不让别的接口跟着退避。
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -23,8 +24,8 @@ use std::time::{Duration, Instant};
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use vrcx_0_contracts::vrcc::resolve_client_id;
-use vrcx_0_contracts::vrcc::{
+use vrcx_0_vrcc_contracts::resolve_client_id;
+use vrcx_0_vrcc_contracts::{
     ErrorDetail, ErrorLayer, HttpDetail, LocalThrottle, TransportKind, VrccAnnouncements,
     VrccBoard, VrccBoardSort, VrccCrossingCards, VrccCrossings, VrccDeviceCode, VrccErrorBody,
     VrccMapDetail, VrccMapPage, VrccMutuals, VrccMyBoard, VrccMyBoardSort, VrccMyMap,
@@ -32,9 +33,20 @@ use vrcx_0_contracts::vrcc::{
     VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccTokenResponse, VrccUnread,
     VrccVote, VrccVoteKind, VrccVoteResult, VRCC_API_BASE, VRCC_SITE_ORIGIN,
 };
-use vrcx_0_core::proxy::with_remote_dns;
 
 use super::throttle::{backoff_for, RateLimiter, MAX_BACKOFF, NOTIFICATIONS_MIN_GAP};
+
+/// 让 `socks5://` 走代理端 DNS（`socks5h://`），其余代理协议原样返回。
+///
+/// **这一份是从仓库的 `vrcx-0-core::proxy` 内联过来的 9 行。** 那个 crate 是
+/// GPL-3.0-only，为本文件的一条 `use` 拖进整棵 GPL 依赖树，会让这个 MPL 包
+/// 对外部消费者彻底失去意义。语义与原实现逐字一致，原位置的单测仍在。
+fn rewrite_remote_dns(proxy_url: &str) -> Cow<'_, str> {
+    match proxy_url.strip_prefix("socks5://") {
+        Some(authority) => Cow::Owned(format!("socks5h://{authority}")),
+        None => Cow::Borrowed(proxy_url),
+    }
+}
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(25);
@@ -52,10 +64,10 @@ const MAX_ACQUIRE_WAIT: Duration = Duration::from_secs(10);
 
 /// 客户端错误。定义在契约层（应用层要按它分类，不能反过来依赖网络层），
 /// 这里只做转出，保持既有调用点不变。
-pub use vrcx_0_contracts::vrcc::VrccError;
+pub use vrcx_0_vrcc_contracts::VrccError;
 
 /// 官方限制 POST 正文最大 2 KB。
-const MAX_BODY_BYTES: usize = vrcx_0_contracts::vrcc::VRCC_MAX_BODY_BYTES;
+const MAX_BODY_BYTES: usize = vrcx_0_vrcc_contracts::VRCC_MAX_BODY_BYTES;
 
 /// `GET /maps?ids=` 一次最多查几张。超过官方就回 `400 bad_request`。
 const MAX_BATCH_WORLDS: usize = 20;
@@ -312,7 +324,7 @@ impl VrccClient {
     /// 自己 `build()` 一个不带代理的客户端，结果请求发不出去，界面上表现为
     /// 「接口暂时不可用」——看起来像服务挂了，其实是本地网络。
     ///
-    /// 代理的构造方式照 `llm.rs` 的既有做法：`Proxy::all(with_remote_dns(url))`，
+    /// 代理的构造方式照宿主 `llm.rs` 的既有做法：`Proxy::all(rewrite_remote_dns(url))`，
     /// `socks5://` 会被改写成 `socks5h://` 让 DNS 也走代理。
     pub fn new(
         client_id: impl Into<String>,
@@ -323,7 +335,7 @@ impl VrccClient {
             .connect_timeout(CONNECT_TIMEOUT)
             .read_timeout(READ_TIMEOUT);
         match proxy_url.map(str::trim).filter(|url| !url.is_empty()) {
-            Some(proxy_url) => match reqwest::Proxy::all(with_remote_dns(proxy_url).as_ref()) {
+            Some(proxy_url) => match reqwest::Proxy::all(rewrite_remote_dns(proxy_url).as_ref()) {
                 Ok(proxy) => {
                     builder = builder.proxy(proxy);
                 }
@@ -1632,7 +1644,7 @@ fn encode_query_value(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vrcx_0_contracts::vrcc::{is_dev_client, VRCC_BUILD_CLIENT, VRCC_DEV_CLIENT};
+    use vrcx_0_vrcc_contracts::{is_dev_client, VRCC_BUILD_CLIENT, VRCC_DEV_CLIENT};
 
     /// 服务器拒绝（拿到了响应，状态码不是 2xx）。
     fn http_error(status: u16, error: &str) -> VrccError {
@@ -1927,7 +1939,7 @@ mod tests {
     /// 显式地要；`dev-` 要了敏感权限会连码都拿不到。
     #[test]
     fn device_auth_scope_depends_on_the_client_kind() {
-        use vrcx_0_contracts::vrcc::{
+        use vrcx_0_vrcc_contracts::{
             device_auth_scope, VRCC_DEVICE_AUTH_SCOPE, VRCC_DEV_DEVICE_AUTH_SCOPE,
         };
         assert_eq!(
@@ -1949,7 +1961,7 @@ mod tests {
 
     #[test]
     fn scope_grants_reads_the_token_scope() {
-        use vrcx_0_contracts::vrcc::scope_grants;
+        use vrcx_0_vrcc_contracts::scope_grants;
         assert!(!scope_grants(Some("profile"), "notifications"));
         assert!(scope_grants(
             Some("profile notifications maps"),
@@ -1966,7 +1978,7 @@ mod tests {
     /// 缺哪些权限，决定界面说的是「重新连一次可以多要一项」还是「连接已失效」。
     #[test]
     fn missing_scopes_lists_only_what_is_actually_missing() {
-        use vrcx_0_contracts::vrcc::missing_scopes;
+        use vrcx_0_vrcc_contracts::missing_scopes;
         // 够：什么都不缺。
         assert!(missing_scopes(Some("profile notifications maps"), "profile maps").is_empty());
         // 多出来的权限不触发任何结论。
@@ -2164,7 +2176,7 @@ mod tests {
 
     #[test]
     fn recent_notification_urls_are_relative_and_get_prefixed() {
-        use vrcx_0_contracts::vrcc::VrccRecentNotificationItem;
+        use vrcx_0_vrcc_contracts::VrccRecentNotificationItem;
         // 官方 recent 的 url 是相对路径（以 /match/ 开头）。
         let item = VrccRecentNotificationItem {
             url: Some("/match/?tab=inbox".to_string()),

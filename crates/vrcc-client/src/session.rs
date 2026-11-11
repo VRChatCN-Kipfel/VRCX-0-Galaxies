@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use vrcx_0_contracts::vrcc::{is_dev_client, VrccConnectionSnapshot, VrccCredentialState};
+use vrcx_0_vrcc_contracts::{is_dev_client, VrccConnectionSnapshot, VrccCredentialState};
 
 use super::client::VrccClient;
 

@@ -3,7 +3,7 @@
 //! 星遇同频网络端口的适配器。
 //!
 //! **为什么需要这一层**：应用层（`vrcx_0_application::vrcc`）要编排业务，
-//! 但协议细节在 `vrcx_0_integrations::vrcc`。架构测试
+//! 但协议细节在 `vrcx_0_vrcc_client`。架构测试
 //! `application_crates_do_not_depend_on_outbound_implementations` 明确禁止
 //! 应用层依赖出向实现，所以应用层只声明 [`VrccRemote`] 端口，实现放在这里。
 //!
@@ -19,7 +19,7 @@ use vrcx_0_contracts::vrcc::{
     VrccNotifications, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus,
     VrccStickers, VrccToday, VrccTokenResponse, VrccUnread, VrccVote, VrccVoteKind, VrccVoteResult,
 };
-use vrcx_0_integrations::vrcc::{now_millis, VrccSession, WINDOW_LIMIT};
+use vrcx_0_vrcc_client::{now_millis, VrccSession, WINDOW_LIMIT};
 
 /// 星遇同频网络端口的实现。
 ///
@@ -41,7 +41,7 @@ impl VrccRemoteAdapter {
     }
 
     /// 按当前会话造一个客户端。每个请求一次，确保用的是当前令牌。
-    fn client(&self) -> vrcx_0_integrations::vrcc::VrccClient {
+    fn client(&self) -> vrcx_0_vrcc_client::VrccClient {
         self.session.client()
     }
 }

@@ -17,6 +17,15 @@
 //! `cards[].seen` 被移除（相交的具体时间不提供，判断新旧用 `fresh`），
 //! `pair` 写进了文档。此前 `pair` 是按「可能会变、缺了就不显示」实现的。
 //!
+//! # 为什么单独成 crate
+//!
+//! 这里的每个类型都是**官方接口线上的形状**，和 VRCX-0 内部怎么组织无关。
+//! 放在 `vrcx-0-contracts` 里时，外部消费者即使拿到 MPL 授权也编不过——
+//! 那个 crate 还带着仓库内 GPL-only 的依赖（`vrcx-0-core`、
+//! `vrcx-0-runtime-event`）。整包搬到独立 crate 后，依赖闭包只剩
+//! serde / serde_json / specta / thiserror 这几个宽松许可的公开库，
+//! `cargo tree` 里不再出现任何本仓库的 GPL crate。
+//!
 //! [`星轨相交` 文档问题]: https://github.com/vrcc-cc/xingyu-tongpin-api/issues/1
 
 use serde::{Deserialize, Serialize};
@@ -145,9 +154,9 @@ pub enum ErrorLayer {
 /// `is_timeout` / `is_body`），不是对错误文案做字符串匹配。
 ///
 /// **注意 `is_dns` 的盲区**：走 SOCKS5 代理时代理串会被改写成 `socks5h://`
-/// （见 `vrcx_0_core::proxy::with_remote_dns`），域名由代理那边解析。
-/// 那种情况下本机根本不做 DNS 查询，解析失败会表现为 `Connect` 而不是 `Dns`。
-/// 所以看到 `Connect` 时不能断言「不是 DNS 问题」。
+/// （`vrcx-0-vrcc-client` 的 `rewrite_remote_dns` 就做这一件事），域名由代理
+/// 那边解析。那种情况下本机根本不做 DNS 查询，解析失败会表现为 `Connect`
+/// 而不是 `Dns`。所以看到 `Connect` 时不能断言「不是 DNS 问题」。
 ///
 /// 另外：RST、端口拒绝、运营商封锁在操作系统层面表现一致，都是建连失败，
 /// 这里无法进一步区分，也不会假装能区分。
@@ -372,8 +381,8 @@ pub const VRCC_APP_NAME: &str = "VRCX-0-Galaxies";
 /// `option_env!` 而不是 `env!`：源码树里默认没有正式标识，这必须是合法状态，
 /// 不是构建错误。cargo 会因这个变量的变化而重编本 crate，不需要额外声明。
 ///
-/// 走的是和 [`crate::telemetry`] 里 `VRCX_0_TELEMETRY_ENDPOINT` 同一套约定——
-/// 构建期注入、源码里不留真实值。
+/// 走的是和仓库里 `VRCX_0_TELEMETRY_ENDPOINT` 同一套约定——构建期注入、
+/// 源码里不留真实值。
 ///
 /// **不要**把它改成字面量，也不要写进 `.cargo/config.toml`（那个文件是入库的）。
 pub const VRCC_BUILD_CLIENT: &str = match option_env!("VRCC_CLIENT_ID") {

@@ -27,6 +27,7 @@ vrcx-0-application-core = { path = "../application-core" }
 vrcx-0-application-realtime = { path = "../application-realtime" }
 vrcx-0-core = { path = "../core" }
 vrcx-0-integrations = { path = "../integrations" }
+vrcx-0-vrcc-client = { path = "../vrcc-client" }
 vrcx-0-media = { path = "../media" }
 vrcx-0-persistence = { path = "../persistence" }
 vrcx-0-platform = { path = "../platform" }
