@@ -59,6 +59,28 @@ jobs:
                       exit 1
                   fi
 
+            # 正式包必须在编译期带上官方发放的 `X-Client`。
+            #
+            # 拿不到它时 `resolve_client_id` 回落到 `dev-VRCX-0-Galaxies`，而官方
+            # 只给 `dev-` 三个普通权限：敏感权限（crossings、mutuals、maps.rate、
+            # maps.write）连 `device/code` 都回 `403 scope_unreviewed`。这个失败
+            # 不会报错，只会安静地少功能，所以必须在打包前拦下来。
+            #
+            # 只校验形状、不打印值：它是仓库 secret，进一次日志就该轮换。
+            - name: Validate vrcc client id secret
+              env:
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
+              run: |
+                  if [[ -z "$VRCC_CLIENT_ID" ]]; then
+                      echo "VRCC_CLIENT_ID repository secret is required for release builds." >&2
+                      exit 1
+                  fi
+                  if [[ ! "$VRCC_CLIENT_ID" =~ ^app_[0-9a-f]{16}$ ]]; then
+                      echo "VRCC_CLIENT_ID must look like app_ followed by 16 lowercase hex characters." >&2
+                      exit 1
+                  fi
+                  echo "vrcc client id secret is present and well formed"
+
     package:
         name: ${{ matrix.label }}
         needs: prepare
@@ -141,6 +163,10 @@ jobs:
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
                   TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
                   VRCX_0_WEBKIT_BUILD_TARGET: ${{ matrix.webkit_build_target }}
+                  # `option_env!` 在编译期读取；cargo 会把它的值算进指纹，
+                  # 所以命中缓存时也会正确地重编（实测：同一 target 目录，
+                  # 设/清变量各重编一次，产物里的字符串跟着变）。
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
               run: |
                   override_config="${RUNNER_TEMP}/tauri-release-override.json"
                   if [[ "${{ needs.prepare.outputs.channel }}" == "beta" ]]; then
@@ -175,6 +201,33 @@ jobs:
                   else
                       ${{ matrix.build_command }}
                   fi
+
+            # 编译期注入是「静默失败」的：secret 没生效、`option_env!` 拼错、
+            # 或者哪天有人改回 `VRCC_DEV_CLIENT`，构建依旧成功，只是发出去
+            # 的包少掉全部敏感权限功能。所以打完包必须直接查产物里的字符串。
+            #
+            # 断言的是「注入值在二进制里」，不是「没有 dev 字样」：`dev-` 那串
+            # 是回落分支的常量，正常产物里本来就带着它。
+            - name: Verify vrcc client id reached the binary
+              env:
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
+                  RUST_TARGET: ${{ matrix.rust_target }}
+              run: |
+                  if [[ -n "$RUST_TARGET" ]]; then
+                      binary="target/${RUST_TARGET}/release/vrcx-0"
+                  else
+                      binary="target/release/vrcx-0"
+                  fi
+                  if [[ ! -f "$binary" ]]; then
+                      echo "Built binary not found at $binary" >&2
+                      exit 1
+                  fi
+                  if ! LC_ALL=C grep -a -q -F -- "$VRCC_CLIENT_ID" "$binary"; then
+                      echo "Injected VRCC_CLIENT_ID is missing from $binary." >&2
+                      echo "The build would ship the dev-VRCX-0-Galaxies fallback; refusing to publish." >&2
+                      exit 1
+                  fi
+                  echo "vrcc client id is embedded in $binary"
 
             - name: Prepare Linux release and updater assets
               if: runner.os == 'Linux'
@@ -380,7 +433,24 @@ jobs:
               env:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
               run: npm run tauri:build -- --bundles nsis
+
+            - name: Verify vrcc client id reached the installer
+              env:
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
+              run: |
+                  binary="target/release/vrcx-0.exe"
+                  if [[ ! -f "$binary" ]]; then
+                      echo "Built binary not found at $binary" >&2
+                      exit 1
+                  fi
+                  if ! LC_ALL=C grep -a -q -F -- "$VRCC_CLIENT_ID" "$binary"; then
+                      echo "Injected VRCC_CLIENT_ID is missing from $binary." >&2
+                      echo "The build would ship the dev-VRCX-0-Galaxies fallback; refusing to publish." >&2
+                      exit 1
+                  fi
+                  echo "vrcc client id is embedded in $binary"
 
             - name: Prepare Windows release and updater assets
               run: |

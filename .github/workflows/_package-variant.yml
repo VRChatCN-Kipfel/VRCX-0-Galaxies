@@ -182,6 +182,7 @@ jobs:
                   PACKAGE_VARIANT: ${{ inputs.variant }}
                   VRCX_0_BUILD_LABEL: ${{ inputs.variant }}
                   VRCX_0_BUILD_BADGE: ${{ needs.prepare.outputs.display_name }} ${{ needs.prepare.outputs.timestamp }}
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
               run: |
                   args=(
                       --config "${{ steps.config.outputs.config }}"
@@ -193,6 +194,30 @@ jobs:
                   fi
                   npm run "$BUILD_SCRIPT" -- "${args[@]}"
 
+            # 编译期注入失败是静默的：secret 没传进来时构建照样成功，只是发出去的
+            # 包少掉全部敏感权限功能。因此在这里直接查产物里的字符串。
+            - name: Verify vrcc client id reached the binary
+              if: runner.os == 'Windows'
+              env:
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
+                  PACKAGE_VARIANT: ${{ inputs.variant }}
+              run: |
+                  if [[ "$PACKAGE_VARIANT" == "preview" ]]; then
+                      binary="target/debug/vrcx-0.exe"
+                  else
+                      binary="target/release/vrcx-0.exe"
+                  fi
+                  if [[ ! -f "$binary" ]]; then
+                      echo "Built binary not found at $binary" >&2
+                      exit 1
+                  fi
+                  if ! LC_ALL=C grep -a -q -F -- "$VRCC_CLIENT_ID" "$binary"; then
+                      echo "Injected VRCC_CLIENT_ID is missing from $binary." >&2
+                      echo "The build would ship the dev-VRCX-0-Galaxies fallback; refusing to package." >&2
+                      exit 1
+                  fi
+                  echo "vrcc client id is embedded in $binary"
+
             - name: Build Linux AppImage
               if: runner.os == 'Linux'
               env:
@@ -200,6 +225,7 @@ jobs:
                   VRCX_0_BUILD_LABEL: ${{ inputs.variant }}
                   VRCX_0_BUILD_BADGE: ${{ needs.prepare.outputs.display_name }} ${{ needs.prepare.outputs.timestamp }}
                   VRCX_0_WEBKIT_BUILD_TARGET: safari17.4
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
               run: |
                   npm run "$BUILD_SCRIPT" -- \
                       --config "${{ steps.config.outputs.config }}" \
@@ -212,6 +238,7 @@ jobs:
                   VRCX_0_BUILD_LABEL: ${{ inputs.variant }}
                   VRCX_0_BUILD_BADGE: ${{ needs.prepare.outputs.display_name }} ${{ needs.prepare.outputs.timestamp }}
                   VRCX_0_WEBKIT_BUILD_TARGET: safari18.2
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
               run: |
                   npm run "$BUILD_SCRIPT" -- \
                       --target "${{ matrix.rust_target }}" \
