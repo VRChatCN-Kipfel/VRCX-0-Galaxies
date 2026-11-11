@@ -310,7 +310,7 @@ export function VrccMapsPanel({
             )}
             {/* 本地翻页：一次已取满，点这些按钮不再发请求。 */}
             {pageCount > 1 && (
-                <nav className="mt-2 flex shrink-0 items-center justify-center gap-0.5">
+                <nav className="mt-2 flex shrink-0 items-center justify-end gap-0.5">
                     <Button
                         variant="ghost"
                         size="sm"
