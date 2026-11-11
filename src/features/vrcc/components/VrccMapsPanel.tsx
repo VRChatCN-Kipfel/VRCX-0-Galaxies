@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { ExternalLink, RefreshCw } from 'lucide-react';
-import { Fragment, useMemo } from 'react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    ExternalLink,
+    RefreshCw
+} from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { VrccStars } from '@/components/vrcc/VrccStars';
@@ -21,6 +26,9 @@ import { vrccCoverUrl } from '../vrccCover';
 import { VrccCover } from './VrccCover';
 
 const SORTS: readonly VrccBoardSort[] = ['top', 'week', 'new'];
+
+/** 一页多少行。榜单一次取 100 条（接口上限），本地按这个数切页。 */
+const PAGE_SIZE = 20;
 
 function isBoardSort(value: unknown): value is VrccBoardSort {
     return SORTS.includes(value as VrccBoardSort);
@@ -57,6 +65,22 @@ export function VrccMapsPanel({
     // 榜单每行右侧那个「去网页看」：点下去要有即时反馈，否则玩家会重复点。
     const { open: openLink, pending: openLinkPending } = useOpenExternalLink();
     const maps = boards?.maps ?? [];
+
+    /**
+     * 一次取满 100 条、本地分页。
+     *
+     * `/boards/maps` 的 `limit` 上限就是 100，翻页不再发请求；将来切到
+     * `/me/board`（没有 limit，一次给全量）时这套切片原样可用。
+     */
+    const [page, setPage] = useState(0);
+    const pageCount = Math.max(1, Math.ceil(maps.length / PAGE_SIZE));
+    // 换排序后整个列表换掉了，页码可能越界；夹一次比在每个排序回调里
+    // 各自重置更省心，也覆盖「服务器这次回的条数比上次少」这种情况。
+    const safePage = Math.min(page, pageCount - 1);
+    const pageRows = maps.slice(
+        safePage * PAGE_SIZE,
+        (safePage + 1) * PAGE_SIZE
+    );
     const min = boards?.min;
 
     // 封面：VRChat 的记录（清楚）优先，没有就退到星遇的小图；
@@ -147,11 +171,13 @@ export function VrccMapsPanel({
                         className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[268px]"
                     />
                     <ul className="divide-y">
-                        {maps.map((map, index) => {
+                        {pageRows.map((map, index) => {
                             // 本周榜只按本周的打分排，`rank` 却还是总榜名次：
                             // 本周的名次就是在列表里的位置，和网页「本周」一样。
                             const place =
-                                sort === 'week' ? index + 1 : map.rank;
+                                sort === 'week'
+                                    ? safePage * PAGE_SIZE + index + 1
+                                    : map.rank;
                             return (
                                 <li
                                     key={map.world}
@@ -277,6 +303,34 @@ export function VrccMapsPanel({
                             );
                         })}
                     </ul>
+                </div>
+            )}
+            {/* 本地翻页：一次已取满，点这些按钮不再发请求。 */}
+            {pageCount > 1 && (
+                <div className="mt-2 flex shrink-0 items-center justify-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={safePage === 0}
+                        aria-label={t('table.pagination.previous')}
+                        onClick={() => setPage(safePage - 1)}
+                    >
+                        <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                        {safePage + 1} / {pageCount}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={safePage >= pageCount - 1}
+                        aria-label={t('table.pagination.next')}
+                        onClick={() => setPage(safePage + 1)}
+                    >
+                        <ChevronRight className="size-4" />
+                    </Button>
                 </div>
             )}
         </div>

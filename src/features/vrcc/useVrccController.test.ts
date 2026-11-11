@@ -621,11 +621,11 @@ describe('useVrccController', () => {
     it('切换地图榜排序', async () => {
         const { result } = renderHook(() => useVrccController());
         await waitFor(() => expect(result.current.boards).not.toBeNull());
-        expect(mocks.boards).toHaveBeenCalledWith(20, 'top');
+        expect(mocks.boards).toHaveBeenCalledWith(100, 'top');
 
         act(() => result.current.setBoardSort('week'));
         await waitFor(() => expect(result.current.boardSort).toBe('week'));
-        expect(mocks.boards).toHaveBeenCalledWith(20, 'week');
+        expect(mocks.boards).toHaveBeenCalledWith(100, 'week');
         expect(result.current.boardSortSupported).toBe(true);
 
         // 一分钟内切回总榜，直接用手上的，不再请求。

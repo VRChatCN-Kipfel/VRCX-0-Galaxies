@@ -353,7 +353,8 @@ export function useVrccController() {
                 patch({ boards: cached.board, boardSort: sort });
                 return;
             }
-            const boards = await vrccApi.boards(20, sort);
+            // 100 是接口允许的上限。一次取满，面板在本地分页——翻页不再发请求。
+            const boards = await vrccApi.boards(100, sort);
             if (sort !== 'top' && boards.sort == null) {
                 boardCache.current.top = { board: boards, at: Date.now() };
                 boardSortRef.current = 'top';
