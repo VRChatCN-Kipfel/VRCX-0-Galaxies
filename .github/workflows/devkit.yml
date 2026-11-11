@@ -19,5 +19,7 @@ jobs:
         name: Package Dev Kit
         if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
         uses: ./.github/workflows/_package-variant.yml
+        # 同 preview.yml：可复用工作流不继承 secret，漏了就会静默回落 dev 标识。
+        secrets: inherit
         with:
             variant: devkit

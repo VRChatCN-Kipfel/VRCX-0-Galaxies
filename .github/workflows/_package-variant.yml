@@ -194,30 +194,6 @@ jobs:
                   fi
                   npm run "$BUILD_SCRIPT" -- "${args[@]}"
 
-            # 编译期注入失败是静默的：secret 没传进来时构建照样成功，只是发出去的
-            # 包少掉全部敏感权限功能。因此在这里直接查产物里的字符串。
-            - name: Verify vrcc client id reached the binary
-              if: runner.os == 'Windows'
-              env:
-                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
-                  PACKAGE_VARIANT: ${{ inputs.variant }}
-              run: |
-                  if [[ "$PACKAGE_VARIANT" == "preview" ]]; then
-                      binary="target/debug/vrcx-0.exe"
-                  else
-                      binary="target/release/vrcx-0.exe"
-                  fi
-                  if [[ ! -f "$binary" ]]; then
-                      echo "Built binary not found at $binary" >&2
-                      exit 1
-                  fi
-                  if ! LC_ALL=C grep -a -q -F -- "$VRCC_CLIENT_ID" "$binary"; then
-                      echo "Injected VRCC_CLIENT_ID is missing from $binary." >&2
-                      echo "The build would ship the dev-VRCX-0-Galaxies fallback; refusing to package." >&2
-                      exit 1
-                  fi
-                  echo "vrcc client id is embedded in $binary"
-
             - name: Build Linux AppImage
               if: runner.os == 'Linux'
               env:
@@ -244,6 +220,41 @@ jobs:
                       --target "${{ matrix.rust_target }}" \
                       --config "${{ steps.config.outputs.config }}" \
                       --bundles dmg
+
+            # 编译期注入失败是静默的：secret 没传进来时构建照样成功，只是发出去的
+            # 包少掉全部敏感权限功能。所以在收集产物之前直接查二进制里的字符串。
+            # 三个平台都查——只查 Windows 等于给另外两个平台留了同一个缺口。
+            - name: Verify vrcc client id reached the binary
+              env:
+                  VRCC_CLIENT_ID: ${{ secrets.VRCC_CLIENT_ID }}
+                  PACKAGE_VARIANT: ${{ inputs.variant }}
+                  RUST_TARGET: ${{ matrix.rust_target }}
+              run: |
+                  case "${{ runner.os }}" in
+                      Windows)
+                          if [[ "$PACKAGE_VARIANT" == "preview" ]]; then
+                              binary="target/debug/vrcx-0.exe"
+                          else
+                              binary="target/release/vrcx-0.exe"
+                          fi
+                          ;;
+                      macOS)
+                          binary="target/${RUST_TARGET}/release/vrcx-0"
+                          ;;
+                      *)
+                          binary="target/release/vrcx-0"
+                          ;;
+                  esac
+                  if [[ ! -f "$binary" ]]; then
+                      echo "Built binary not found at $binary" >&2
+                      exit 1
+                  fi
+                  if ! LC_ALL=C grep -a -q -F -- "$VRCC_CLIENT_ID" "$binary"; then
+                      echo "Injected VRCC_CLIENT_ID is missing from $binary." >&2
+                      echo "The build would ship the dev-VRCX-0-Galaxies fallback; refusing to package." >&2
+                      exit 1
+                  fi
+                  echo "vrcc client id is embedded in $binary"
 
             - id: collect
               name: Collect package artifact

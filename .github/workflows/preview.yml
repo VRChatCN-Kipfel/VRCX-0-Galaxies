@@ -14,5 +14,8 @@ jobs:
     package:
         name: Package Preview
         uses: ./.github/workflows/_package-variant.yml
+        # 可复用工作流不会自动继承 secret；漏掉这一行时 `VRCC_CLIENT_ID` 是空串，
+        # 产物会静默回落到 dev 标识（敏感权限全丢）。
+        secrets: inherit
         with:
             variant: preview
