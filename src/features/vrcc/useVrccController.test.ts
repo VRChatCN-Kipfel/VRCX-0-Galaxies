@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
     connection: vi.fn(),
     usage: vi.fn(),
     boards: vi.fn(),
+    models: vi.fn(),
+    model: vi.fn(),
     status: vi.fn(),
     announcements: vi.fn(),
     unread: vi.fn(),
@@ -62,6 +64,8 @@ vi.mock('@/platform/tauri/bindings', () => ({
         appVrccConnection: mocks.connection,
         appVrccUsage: mocks.usage,
         appVrccBoards: mocks.boards,
+        appVrccModels: mocks.models,
+        appVrccModel: mocks.model,
         appVrccStatus: mocks.status,
         appVrccAnnouncements: mocks.announcements,
         appVrccUnread: mocks.unread,
@@ -139,6 +143,16 @@ beforeEach(() => {
         })
     );
     mocks.status.mockResolvedValue({ at: 1, state: 'ok' });
+    // 模型榜：默认给一个空榜。它和地图榜是**两条独立调用**，只设 `boards`
+    // 会让这条返回 `undefined`，而那和「旧服务器回 null」在断言上看起来一样。
+    mocks.models.mockImplementation((_limit: number, sort: string | null) =>
+        Promise.resolve({
+            board: 'models',
+            sort: sort ?? 'top',
+            models: [],
+            at: 1
+        })
+    );
     mocks.announcements.mockResolvedValue({ stop: null, posts: [] });
     mocks.unread.mockResolvedValue({ inbox: 1, cross: 0, chats: 2, notes: 0 });
     mocks.notes.mockResolvedValue({ notes: [] });

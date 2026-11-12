@@ -800,6 +800,7 @@
         "reconnect_hint": "Reconnect from the \"Me\" tab",
         "missing_scope": "This needs the {scope} permission; reconnect once to get it",
         "tab": {
+            "models": "Models",
             "maps": "Map board",
             "notifications": "Notifications",
             "me": "Me",
@@ -816,6 +817,19 @@
                 "new": "New"
             },
             "week_count": "This week {count}"
+        },
+        "models": {
+            "hint": "One vote a day per model",
+            "empty": "No models on the board yet",
+            "unavailable": "This server has no model board yet",
+            "likes": "likes",
+            "week_count": "{count} this week",
+            "open": "Open on Xingyu Tongpin",
+            "sort": {
+                "top": "All time",
+                "week": "This week",
+                "new": "New"
+            }
         },
         "current_map": {
             "label": "Your current map",

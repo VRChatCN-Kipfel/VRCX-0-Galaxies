@@ -800,6 +800,7 @@
         "reconnect_hint": "去「我的」重新連線",
         "missing_scope": "這一項需要 {scope} 權限，重新連線一次即可",
         "tab": {
+            "models": "模型榜",
             "maps": "地圖榜",
             "notifications": "提醒",
             "me": "我的",
@@ -816,6 +817,19 @@
                 "new": "新上榜"
             },
             "week_count": "本週 {count}"
+        },
+        "models": {
+            "hint": "每個模型每天一票",
+            "empty": "暫無模型榜資料",
+            "unavailable": "這台伺服器還沒有模型榜",
+            "likes": "喜歡",
+            "week_count": "本週 {count}",
+            "open": "在星遇同頻開啟",
+            "sort": {
+                "top": "總榜",
+                "week": "本週",
+                "new": "新上榜"
+            }
         },
         "current_map": {
             "label": "你所在的地圖",
