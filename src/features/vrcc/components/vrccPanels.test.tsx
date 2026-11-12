@@ -600,6 +600,38 @@ describe('VrccMapsPanel', () => {
         expect(container).toBeTruthy();
     });
 
+    it('teen 被服务器停掉以后不渲染标记、也不崩', () => {
+        // `teen` 已被官方弃用，2026-12-26 起不再返回。这条钉住那一天的行为：
+        // 字段缺席 → 归一化成 null → 绿色小苗不渲染，其余照常。
+        render(
+            <VrccMapsPanel
+                boards={fromMyBoard({
+                    min: 1,
+                    maps: [
+                        {
+                            world: 'wrld_a',
+                            name: '孤',
+                            // 服务器不再给 `teen`
+                            intro: '介绍还在'
+                        }
+                    ]
+                })}
+                sort="top"
+                sortSupported
+                query=""
+                onSortChange={() => {}}
+                onQueryChange={() => {}}
+                onRefresh={() => {}}
+                onOpenWorld={() => {}}
+            />
+        );
+
+        expect(screen.queryByLabelText('vrcc.maps.teen')).toBeNull();
+        // 同一行的其它东西不受影响。
+        expect(screen.getByText('孤')).toBeTruthy();
+        expect(screen.getByText('介绍还在')).toBeTruthy();
+    });
+
     it('公开榜不渲染「青少年可进」标记（那个字段只有玩家视角给）', () => {
         renderMaps('top');
         expect(screen.queryByLabelText('vrcc.maps.teen')).toBeNull();

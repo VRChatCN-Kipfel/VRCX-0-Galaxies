@@ -417,6 +417,18 @@ export function VrccMapsPanel({
                                                     <span className="min-w-0 truncate text-sm font-medium">
                                                         {map.name ?? map.world}
                                                     </span>
+                                                    {/*
+                                                     * 「青少年可进」的绿色小苗。
+                                                     *
+                                                     * `teen` 已被官方弃用，**2026-12-26 起
+                                                     * 服务器不再返回**。到期后 `map.teen`
+                                                     * 变成 `null`，这里就不再渲染——不需要
+                                                     * 改代码。
+                                                     *
+                                                     * 所以**别给它加兜底**：拿不到就是拿不到，
+                                                     * 补一个占位或默认值只会让一个本来就要
+                                                     * 下线的标记在界面上留得更久。
+                                                     */}
                                                     {map.teen === true && (
                                                         <Sprout
                                                             className="size-3 shrink-0 text-emerald-500 opacity-40"
