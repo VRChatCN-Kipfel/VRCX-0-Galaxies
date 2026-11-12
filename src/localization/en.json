@@ -5485,7 +5485,8 @@
                 "grade_2": "Second Class",
                 "grade_3": "First Class",
                 "grade_4": "Polaris",
-                "grade_unknown": "Unranked"
+                "grade_unknown": "Unranked",
+                "rooms_source": "Some rooms come from the VRCC club page; their player counts are not live"
             }
         },
         "favorite": {

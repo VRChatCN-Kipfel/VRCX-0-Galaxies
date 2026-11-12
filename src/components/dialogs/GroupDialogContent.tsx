@@ -31,6 +31,7 @@ export function GroupDialogContent({
         activeInstances,
         detail,
         group,
+        hasClubInstances,
         labels,
         previousInstances,
         setPreviousInstances,
@@ -44,6 +45,7 @@ export function GroupDialogContent({
                 detail,
                 actionStatus,
                 activeInstances,
+                hasClubInstances,
                 previousInstances
             }}
             groupView={viewState}

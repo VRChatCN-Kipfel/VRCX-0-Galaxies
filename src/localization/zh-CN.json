@@ -5474,7 +5474,8 @@
                 "grade_2": "二等星",
                 "grade_3": "一等星",
                 "grade_4": "北极星",
-                "grade_unknown": "未分级"
+                "grade_unknown": "未分级",
+                "rooms_source": "部分房间来自星遇同频社团的公开列表，它们的人数不是实时的"
             }
         },
         "favorite": {

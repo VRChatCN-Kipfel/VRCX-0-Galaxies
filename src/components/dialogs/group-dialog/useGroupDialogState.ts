@@ -25,6 +25,7 @@ import { useRuntimeStore } from '@/state/runtimeStore';
 
 import type { GroupActionStatus } from './groupDialogTypes';
 import { buildGroupDialogViewState } from './groupDialogViewState';
+import { useGroupClubInstanceRecords } from './useGroupClubInstanceRecords';
 import { useGroupDialogActiveInstances } from './useGroupDialogActiveInstances';
 import { useGroupOwnerProfile } from './useGroupOwnerProfile';
 
@@ -111,10 +112,28 @@ export function useGroupDialogState({
         groupId: normalizedGroupId,
         endpoint: currentEndpoint
     });
+    // 星遇同频社团的公开房间，投影成群组实例记录。
+    //
+    // **必须在 `useGroupDialogActiveInstances` 之前算出来**，因为好友是按
+    // location 塞进**已经存在**的行的（见下面合成处的注释）。
+    const clubInstanceRecords = useGroupClubInstanceRecords(group);
     const { activeInstances, rawActiveInstances } =
         useGroupDialogActiveInstances({
             groupId: normalizedGroupId,
-            groupInstances,
+            // 星遇同频社团的公开房间**并入**群组实例一起过管道，不能事后追加。
+            //
+            // VRCX 自己拉群组实例走 `users/{me}/instances/groups/{group}`，
+            // 只返回「我作为成员能看到的」——自己没加入的公开群组一个房都拿
+            // 不到。星遇补的是那一块。但好友是本地 presence 来的，由
+            // `mergeGroupInstances` 按 location 塞进**已经存在**的行；如果社团
+            // 房间在它之后才追加，那一行永远不会有人，好友头像和好友数全丢。
+            //
+            // **顺序：星遇在前，VRChat 在后。**
+            // `mergeGroupInstances` 用 `Object.assign(existing, …, seed)` 合并
+            // 同 location 的行，后写的 `seed` 覆盖先写的值。VRChat 给的是
+            // 权威数据（实时、带好友、带玩家列表），星遇只是它拿不到时的补位，
+            // 所以 VRChat 那一份必须排在后面，冲突时才压得住星遇的快照。
+            groupInstances: [...clubInstanceRecords, ...groupInstances],
             friendsById,
             currentUserSnapshot,
             currentLocation
@@ -719,6 +738,11 @@ export function useGroupDialogState({
         detail,
         actionStatus,
         activeInstances,
+        // 房间里有没有来自星遇社团的。合并去重之后只有行自己知道来源，
+        // 所以在这里算好传给渲染层，避免那里再猜一遍。
+        hasClubInstances: activeInstances.some(
+            (instance) => instance.fromVrccClub === true
+        ),
         previousInstances,
         setPreviousInstances,
         viewState,

@@ -169,4 +169,184 @@ describe('groupInstances', () => {
         });
         expect(rows[0].users.map((user) => user.id)).toEqual(['usr_first']);
     });
+
+    /**
+     * 星遇同频那份房间（`clubRoomsToInstanceRows` 造出来的行）也能吃到好友。
+     *
+     * 这条钉住的是**两个数据源能不能接上**：VRCX 自己拉群组实例走
+     * `users/{me}/instances/groups/{group}`，自己没加入的公开群组一个房都
+     * 拿不到，那条路是空的；星遇补进来的房只是「这里有一局」，**不含任何
+     * 玩家**。
+     *
+     * 而好友是本地 presence 来的：`mergeGroupInstances` 先按群组实例建行，
+     * 再遍历好友名单、按 location 把人塞进**已经存在**的行。所以只要星遇
+     * 那行的 location 拼得和 presence 的 tag 一样，好友头像和好友数就会自动
+     * 对上——这一条就是验证那个「一样」。
+     */
+    it('matches friends onto club-provided rooms by location', () => {
+        // 实测 `ONLYFR.5576` 的两个房，location 形状原样照抄。
+        const clubRoomLocation =
+            'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:05026~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)';
+        const otherClubRoomLocation =
+            'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:96056~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)';
+
+        const rows = mergeGroupInstances(
+            [
+                {
+                    id: '05026~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)',
+                    location: clubRoomLocation,
+                    worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+                    userCount: 37,
+                    // 星遇不给玩家列表，所以这里必须是空的。
+                    users: []
+                },
+                {
+                    id: '96056~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)',
+                    location: otherClubRoomLocation,
+                    worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+                    userCount: 2,
+                    users: []
+                }
+            ],
+            {
+                groupId: 'grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2',
+                currentLocation: '',
+                currentUserSnapshot: null,
+                friendsById: {
+                    usr_in_club_room: {
+                        id: 'usr_in_club_room',
+                        displayName: '在星夜吧的朋友',
+                        $presence: onlinePresence(clubRoomLocation)
+                    },
+                    usr_elsewhere: {
+                        id: 'usr_elsewhere',
+                        displayName: '别的图',
+                        $presence: onlinePresence(
+                            'wrld_other:1~group(grp_other)'
+                        )
+                    }
+                }
+            }
+        );
+
+        // 两条房都还在（好友 presence **不会**凭空造行，也不会吞掉行）。
+        expect(rows).toHaveLength(2);
+
+        const clubRow = rows.find((row) => row.location === clubRoomLocation);
+        const otherRow = rows.find(
+            (row) => row.location === otherClubRoomLocation
+        );
+        expect(clubRow).toBeTruthy();
+        expect(otherRow).toBeTruthy();
+
+        // 好友落到了星遇那一行。
+        expect(clubRow?.users.map((user) => user.id)).toEqual([
+            'usr_in_club_room'
+        ]);
+        expect(clubRow?.friendCount).toBeGreaterThan(0);
+
+        // 另一局**没有好友，但也不是 0**。
+        //
+        // `mergeGroupInstances` 的兜底是 `friendCount || users.length`，而
+        // 星遇造的行把 `userCount`（37 / 2 那种**总人数**）写进了
+        // `friendCount` 的种子（`Number(seed.friendCount || seed.userCount)`）。
+        // 所以这一局的好友数是 2——是一个**错的**数字，只是恰好没有好友
+        // 时会漏出来。这条断言把现状钉住，不假装它是对的。
+        expect(otherRow?.users).toEqual([]);
+        expect(otherRow?.friendCount).toBe(2);
+    });
+
+    /**
+     * 同一个 location 两边都有时，**VRChat 那一份是权威**。
+     *
+     * 这条钉住的是调用方的**传参顺序**：`mergeGroupInstances` 用
+     * `Object.assign(existing, embeddedInstance, seed, …)` 合并，后写的 `seed`
+     * 覆盖先写的值。所以 `useGroupDialogState` 必须把星遇的房间排在前面、
+     * VRChat 的排在后面——冲突时 VRChat 压得住星遇的快照。
+     *
+     * 顺序反过来的话人数、容量、世界名会全部变成星遇那个**非实时**的值，
+     * 而玩家列表和好友数仍然是 VRChat 的，同一行里两套数据互相矛盾。
+     */
+    it('lets the authoritative source win when both sides describe one instance', () => {
+        const location =
+            'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:05026~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)';
+
+        // 星遇那一份：快照人数 37、上限 32、没有地图名。
+        const fromClub = {
+            id: '05026~group(grp_f0b1a7b9)~region(jp)',
+            location,
+            worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+            userCount: 37,
+            capacity: 32,
+            users: [],
+            friendCount: 0
+        };
+        // VRChat 那一份：实时 39、上限 40、带地图名。
+        const fromVrchat = {
+            id: '05026~group(grp_f0b1a7b9)~region(jp)',
+            location,
+            worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+            userCount: 39,
+            capacity: 40,
+            worldName: '星夜吧',
+            users: [],
+            friendCount: 0
+        };
+
+        // 调用方约定的顺序：星遇在前。
+        const rows = mergeGroupInstances([fromClub, fromVrchat], {
+            groupId: 'grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2',
+            currentLocation: '',
+            currentUserSnapshot: null,
+            friendsById: {}
+        });
+
+        expect(rows).toHaveLength(1);
+        // 人数、上限、世界名三样都是 VRChat 的，不是星遇那个快照。
+        expect(rows[0].userCount).toBe(39);
+        expect(rows[0].capacity).toBe(40);
+        expect(rows[0].worldName).toBe('星夜吧');
+    });
+
+    /**
+     * 反过来传就会翻车——把这一点也钉住，免得以后有人「顺手」把顺序调回去。
+     *
+     * 这不是在测试一个**应该**支持的行为，而是记录 `Object.assign` 的语义：
+     * 谁在后面谁赢。知道它会怎么坏，才知道顺序为什么不能改。
+     */
+    it('loses to the club snapshot if the order is reversed', () => {
+        const location =
+            'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:05026~group(grp_f0b1a7b9)~region(jp)';
+
+        const rows = mergeGroupInstances(
+            [
+                {
+                    id: 'a',
+                    location,
+                    userCount: 39,
+                    capacity: 40,
+                    worldName: '星夜吧',
+                    users: []
+                },
+                {
+                    id: 'a',
+                    location,
+                    userCount: 37,
+                    capacity: 32,
+                    users: [],
+                    friendCount: 0
+                }
+            ],
+            {
+                groupId: 'grp_f0b1a7b9',
+                currentLocation: '',
+                currentUserSnapshot: null,
+                friendsById: {}
+            }
+        );
+
+        // 星遇排在后面就压住了 VRChat —— 这就是不能这么传的原因。
+        expect(rows[0].userCount).toBe(37);
+        expect(rows[0].capacity).toBe(32);
+    });
 });
