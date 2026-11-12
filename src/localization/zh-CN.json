@@ -5463,6 +5463,18 @@
                 "join_state_invite": "仅限邀请",
                 "join_state_closed": "关闭",
                 "allow_join_prompt": "在群组房间中提示玩家加入群组"
+            },
+            "vrcc": {
+                "club": "星遇同频社团",
+                "open_page": "社团页",
+                "members": "{count} 人",
+                "here": "{count} 颗星挂着",
+                "source": "数据来源于 VRC 中文社区所属平台「星遇同频」，非 VRChat 官方",
+                "grade_1": "三等星",
+                "grade_2": "二等星",
+                "grade_3": "一等星",
+                "grade_4": "北极星",
+                "grade_unknown": "未分级"
             }
         },
         "favorite": {

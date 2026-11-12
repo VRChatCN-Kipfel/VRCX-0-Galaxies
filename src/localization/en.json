@@ -5474,6 +5474,18 @@
                 "join_state_invite": "Invite Only",
                 "join_state_closed": "Closed",
                 "allow_join_prompt": "Prompt people in group instances to join"
+            },
+            "vrcc": {
+                "club": "VRCC Club",
+                "open_page": "Club page",
+                "members": "{count} members",
+                "here": "{count} stars attached",
+                "source": "Data from VRCC, a VRChat Chinese community platform — not official VRChat",
+                "grade_1": "Third Class",
+                "grade_2": "Second Class",
+                "grade_3": "First Class",
+                "grade_4": "Polaris",
+                "grade_unknown": "Unranked"
             }
         },
         "favorite": {
