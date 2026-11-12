@@ -221,7 +221,6 @@ export function GroupDialogTabPanels({
         groupEventsStatus,
         groupTitle,
         groupUrl,
-        hasClubInstances,
         joinState,
         members,
         memberStatus,
@@ -320,7 +319,6 @@ export function GroupDialogTabPanels({
                     <GroupDialogInstances
                         activeInstances={activeInstances}
                         currentUserId={currentUserId}
-                        hasClubRooms={hasClubInstances}
                     />
                 </GroupOverviewSection>
 

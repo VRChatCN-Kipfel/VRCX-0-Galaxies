@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { GroupInstanceRecord } from '@/domain/entities/group';
 import { onlinePresence, travelingPresence } from '@/test/presenceFixtures';
 
 import {
@@ -167,7 +168,15 @@ describe('groupInstances', () => {
             friendCount: 4,
             ref: explicitRef
         });
-        expect(rows[0].users.map((user) => user.id)).toEqual(['usr_first']);
+        // 两份 `users` **取并集**。
+        //
+        // 改动前这里只留 `usr_first`（`users: existing.users`），第二份的人
+        // 被静默丢掉。同源重复本不该出现，真出现了也不该靠「谁先到」来决定
+        // 谁能留下——并集只会变多不会变少。
+        expect(rows[0].users.map((user) => user.id).sort()).toEqual([
+            'usr_first',
+            'usr_second'
+        ]);
     });
 
     /**
@@ -309,12 +318,69 @@ describe('groupInstances', () => {
     });
 
     /**
-     * 反过来传就会翻车——把这一点也钉住，免得以后有人「顺手」把顺序调回去。
+     * 同一个 location 两边都有时，**VRChat 那一份是权威**，而且**与顺序无关**。
      *
-     * 这不是在测试一个**应该**支持的行为，而是记录 `Object.assign` 的语义：
-     * 谁在后面谁赢。知道它会怎么坏，才知道顺序为什么不能改。
+     * 这条钉住的是权威规则本身，不是「谁排在后面」。权威来自数据自己声明的
+     * `origin`，所以下面的两个顺序必须给出**同一个结果**——这正是这次
+     * 改造的目的：不再靠调用方的数组顺序隐式决定谁赢。
      */
-    it('loses to the club snapshot if the order is reversed', () => {
+    it('lets the authoritative source win no matter which side comes first', () => {
+        const location =
+            'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:05026~group(grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2)~groupAccessType(public)~region(jp)';
+
+        // 星遇那一份：快照人数 37、上限 32、没有地图名。
+        const fromClub: GroupInstanceRecord = {
+            id: '05026~group(grp_f0b1a7b9)~region(jp)',
+            location,
+            worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+            userCount: 37,
+            capacity: 32,
+            users: [],
+            friendCount: 0,
+            origin: 'vrcc'
+        };
+        // VRChat 那一份：实时 39、上限 40、带地图名。
+        const fromVrchat: GroupInstanceRecord = {
+            id: '05026~group(grp_f0b1a7b9)~region(jp)',
+            location,
+            worldId: 'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5',
+            userCount: 39,
+            capacity: 40,
+            worldName: '星夜吧',
+            users: [],
+            friendCount: 0,
+            origin: 'vrchat'
+        };
+
+        const options = {
+            groupId: 'grp_f0b1a7b9-6237-491b-ad63-2cd88a60edf2',
+            currentLocation: '',
+            currentUserSnapshot: null,
+            friendsById: {}
+        };
+
+        for (const [label, order] of [
+            ['星遇在前', [fromClub, fromVrchat]],
+            ['星遇在后', [fromVrchat, fromClub]]
+        ] as const) {
+            const rows = mergeGroupInstances([...order], options);
+            expect(rows, label).toHaveLength(1);
+            // 人数、上限、世界名三样全是 VRChat 的。
+            expect(rows[0].userCount, label).toBe(39);
+            expect(rows[0].capacity, label).toBe(40);
+            expect(rows[0].worldName, label).toBe('星夜吧');
+            // 这一局归 VRChat，不是「只有星遇知道」。
+            expect(rows[0].origin, label).toBe('vrchat');
+        }
+    });
+
+    /**
+     * VRChat 没给值的字段，星遇可以把它补上。
+     *
+     * 权威只体现在**冲突**上：VRChat 说了就听它的，没说的地方社团那份仍然是
+     * 有用信息，不该一起丢掉。
+     */
+    it('still lets the club fill fields VRChat left empty', () => {
         const location =
             'wrld_410b9d63-4b7f-4fce-a580-f4d05dcdffd5:05026~group(grp_f0b1a7b9)~region(jp)';
 
@@ -325,16 +391,18 @@ describe('groupInstances', () => {
                     location,
                     userCount: 39,
                     capacity: 40,
-                    worldName: '星夜吧',
-                    users: []
+                    // VRChat 这份没给地图名。
+                    users: [],
+                    origin: 'vrchat'
                 },
                 {
                     id: 'a',
                     location,
                     userCount: 37,
-                    capacity: 32,
+                    worldName: '星夜吧',
                     users: [],
-                    friendCount: 0
+                    friendCount: 0,
+                    origin: 'vrcc'
                 }
             ],
             {
@@ -345,8 +413,79 @@ describe('groupInstances', () => {
             }
         );
 
-        // 星遇排在后面就压住了 VRChat —— 这就是不能这么传的原因。
-        expect(rows[0].userCount).toBe(37);
-        expect(rows[0].capacity).toBe(32);
+        // 人数听 VRChat 的……
+        expect(rows[0].userCount).toBe(39);
+        // ……但地图名 VRChat 没给，社团那份补进来。
+        expect(rows[0].worldName).toBe('星夜吧');
+        // 这一局最后是 VRChat 在说话。
+        expect(rows[0].origin).toBe('vrchat');
+    });
+
+    /**
+     * 如果 VRChat 压根没有这一局，那它就是**只有星遇知道**的房间。
+     *
+     * `origin` 保持 `'vrcc'`，界面据此在那一条卡片里挂来源说明；
+     * 一旦 VRChat 也报了同一局（上一条），它就变成 `'vrchat'`，说明消失。
+     */
+    it('keeps the club origin when only the club knows about the room', () => {
+        const rows = mergeGroupInstances(
+            [
+                {
+                    id: 'a',
+                    location: 'wrld_x:05026~group(grp_f0b1a7b9)~region(jp)',
+                    userCount: 37,
+                    capacity: 40,
+                    users: [],
+                    friendCount: 0,
+                    origin: 'vrcc'
+                }
+            ],
+            {
+                groupId: 'grp_f0b1a7b9',
+                currentLocation: '',
+                currentUserSnapshot: null,
+                friendsById: {}
+            }
+        );
+
+        expect(rows[0].origin).toBe('vrcc');
+    });
+
+    /**
+     * 认不出的来源落进 `'unknown'`，排名最低，压不过 VRChat。
+     *
+     * 这条钉住「宽容」的边界：上游将来传了个没见过的来源名，不该崩、也不该
+     * 让它冒充权威数据。
+     */
+    it('parks an unrecognised origin at unknown and lets vrchat win', () => {
+        const location = 'wrld_x:05026~group(grp_f0b1a7b9)~region(jp)';
+        const rows = mergeGroupInstances(
+            [
+                {
+                    id: 'a',
+                    location,
+                    userCount: 39,
+                    capacity: 40,
+                    users: [],
+                    origin: 'vrchat'
+                },
+                {
+                    id: 'a',
+                    location,
+                    userCount: 37,
+                    users: [],
+                    origin: 'some-new-provider' as never
+                }
+            ],
+            {
+                groupId: 'grp_f0b1a7b9',
+                currentLocation: '',
+                currentUserSnapshot: null,
+                friendsById: {}
+            }
+        );
+
+        expect(rows[0].userCount).toBe(39);
+        expect(rows[0].origin).toBe('vrchat');
     });
 });

@@ -100,7 +100,7 @@ export function useGroupClubInstanceRecords(
             groupId: row.groupId,
             group: row.group,
             // 带上来源标记：合并去重之后，只有行自己知道它是从哪来的。
-            fromVrccClub: true
+            origin: 'vrcc'
         })
     );
 }

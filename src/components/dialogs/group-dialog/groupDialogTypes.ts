@@ -58,13 +58,6 @@ export type GroupDialogResource = {
     detail: string;
     actionStatus: GroupActionStatus;
     activeInstances?: GroupDialogInstanceRow[];
-    /**
-     * 房间里有没有来自星遇同频社团的。
-     *
-     * 合并去重之后，只有行自己知道来源（`fromVrccClub`），而渲染层拿到的
-     * 是合并后的列表——所以这个判断在 state 里算好传下来，免得渲染层再猜。
-     */
-    hasClubInstances?: boolean;
     previousInstances?: GroupPreviousInstanceRow[];
 };
 
@@ -102,8 +95,6 @@ export type GroupDialogControls = {
 
 export type GroupDialogTabModel = {
     activeInstances: GroupDialogInstanceRow[];
-    /** 房间列表里有没有来自星遇同频社团的（决定要不要显示来源说明）。 */
-    hasClubInstances: boolean;
     activeTab: string;
     announcement?: GroupAnnouncementRecord;
     bannerUrl: string;

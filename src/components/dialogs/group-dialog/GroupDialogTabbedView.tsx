@@ -93,7 +93,6 @@ export function GroupDialogTabbedView({
         detail,
         actionStatus,
         activeInstances = [],
-        hasClubInstances = false,
         previousInstances = []
     } = groupResource;
     const {
@@ -723,7 +722,6 @@ export function GroupDialogTabbedView({
     };
     const tabModel: GroupDialogTabModel = {
         activeInstances,
-        hasClubInstances,
         activeTab,
         announcement,
         bannerUrl,

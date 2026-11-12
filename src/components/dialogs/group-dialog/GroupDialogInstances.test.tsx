@@ -47,19 +47,6 @@ describe('GroupDialogInstances', () => {
             screen.getByTestId('rows').querySelectorAll('li')
         ).map((node) => node.getAttribute('data-location'));
         expect(items).toEqual(['wrld_a:1', 'wrld_b:2']);
-        expect(screen.queryByText('dialog.group.vrcc.rooms_source')).toBeNull();
-    });
-
-    it('列表里混有社团房间时才多一行来源说明', () => {
-        render(
-            <GroupDialogInstances
-                activeInstances={[row('wrld_a:1')]}
-                currentUserId="usr_me"
-                hasClubRooms
-            />
-        );
-
-        expect(screen.getByText('dialog.group.vrcc.rooms_source')).toBeTruthy();
     });
 
     it('空列表也能渲染', () => {

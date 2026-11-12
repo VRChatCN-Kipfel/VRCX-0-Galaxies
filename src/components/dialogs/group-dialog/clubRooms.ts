@@ -150,7 +150,7 @@ export function clubRoomsToInstanceRows(
             group: { id: groupId },
             // 标记来源，供上层统计「列表里有没有社团房间」。放在行上而不是
             // 另开一个集合：合并去重之后，只有行自己知道它是从哪来的。
-            fromVrccClub: true
+            origin: 'vrcc'
         });
     }
 

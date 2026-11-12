@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { useTranslation } from 'react-i18next';
-
 import type { GroupDialogInstanceRow } from '@/domain/entities/group';
 
 import { GroupInstanceRows } from './GroupInstanceRows';
@@ -20,34 +18,23 @@ import { GroupInstanceRows } from './GroupInstanceRows';
  * 那几行永远是空的，好友头像和好友数全丢。合并挪到上游之后，这个组件只负责
  * 渲染。
  *
- * ## 来源说明
+ * ## 来源说明在**每一条**房间里
  *
- * `hasClubRooms` 由上游算好传进来——判断「这里面有没有来自社团的房间」
- * 需要知道社团那份担当了什么，本组件看不到。有就多一行说明：房间来自另一个
- * 平台，人数不是实时的，得让玩家知道。
+ * 那句话跟着行自己的 `origin` 走，由 `GroupInstanceRows` 渲染，不在这
+ * 里做列表级总结——一个列表里可能混着 VRChat 的实时房间和星遇的社团房间，
+ * 底部一句话说不清哪几条不是实时的。
  */
 export function GroupDialogInstances({
     activeInstances,
-    currentUserId,
-    hasClubRooms = false
+    currentUserId
 }: {
     activeInstances: GroupDialogInstanceRow[];
     currentUserId: string | null;
-    hasClubRooms?: boolean;
 }) {
-    const { t } = useTranslation();
-
     return (
-        <>
-            <GroupInstanceRows
-                instances={activeInstances}
-                currentUserId={currentUserId}
-            />
-            {hasClubRooms ? (
-                <div className="text-muted-foreground/70 mt-1.5 text-[10px] leading-tight">
-                    {t('dialog.group.vrcc.rooms_source')}
-                </div>
-            ) : null}
-        </>
+        <GroupInstanceRows
+            instances={activeInstances}
+            currentUserId={currentUserId}
+        />
     );
 }
