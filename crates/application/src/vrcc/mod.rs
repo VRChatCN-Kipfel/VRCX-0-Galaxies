@@ -15,10 +15,10 @@ use vrcx_0_contracts::vrcc::{
     device_auth_scope, is_dev_client, missing_scopes, ErrorDetail, ErrorLayer, TransportKind,
     VrccAnnouncements, VrccBoard, VrccBoardSort, VrccConnectionSnapshot, VrccCredentialState,
     VrccCrossingCards, VrccCrossings, VrccDeviceCode, VrccError, VrccGuidanceState, VrccMapPage,
-    VrccMutuals, VrccMyBoard, VrccMyBoardSort, VrccMyMap, VrccMyMapPage, VrccNotes,
-    VrccNotifications, VrccRatedMaps, VrccRatingText, VrccRecentNotifications, VrccStatus,
-    VrccStickers, VrccToday, VrccTokenResponse, VrccUnread, VrccUsageSnapshot, VrccVote,
-    VrccVoteKind, VrccVoteResult, VrccWristSummary,
+    VrccModelBoard, VrccModelDetail, VrccMutuals, VrccMyBoard, VrccMyBoardSort, VrccMyMap,
+    VrccMyMapPage, VrccNotes, VrccNotifications, VrccRatedMaps, VrccRatingText,
+    VrccRecentNotifications, VrccStatus, VrccStickers, VrccToday, VrccTokenResponse, VrccUnread,
+    VrccUsageSnapshot, VrccVote, VrccVoteKind, VrccVoteResult, VrccWristSummary,
 };
 
 /// 服务器回答 `me/unread` 是 `404 not_found`（还没更新到 1.13.0）之后，
@@ -111,6 +111,14 @@ pub struct VrccLocalUsage {
 pub trait VrccRemote: Send + Sync {
     // -- 开放数据（不需要连接） -------------------------------------------
     fn boards<'a>(&'a self, limit: u32, sort: VrccBoardSort) -> VrccFuture<'a, VrccBoard>;
+    /// 模型榜（1.17.0 起）。和 [`Self::boards`] 同一套 `sort` 语义。
+    fn models_board<'a>(
+        &'a self,
+        limit: u32,
+        sort: VrccBoardSort,
+    ) -> VrccFuture<'a, VrccModelBoard>;
+    /// 单个模型。不在榜上时服务器回 `404 not_found`，这里转成 `None`。
+    fn model<'a>(&'a self, id: i64) -> VrccFuture<'a, Option<VrccModelDetail>>;
     fn maps<'a>(&'a self, worlds: &'a [String]) -> VrccFuture<'a, VrccBoard>;
     fn status<'a>(&'a self) -> VrccFuture<'a, VrccStatus>;
     fn fetch_site_asset<'a>(&'a self, path: &'a str) -> VrccFuture<'a, Vec<u8>>;
@@ -420,6 +428,12 @@ pub struct VrccService {
     /// 用户在这个窗口里点刷新不该看到错误，也不该干等一分钟。官方说开放
     /// 数据最多 5 分钟更新一次，旧的那份完全够用。
     boards_cache: Arc<RwLock<HashMap<VrccBoardSort, (u32, VrccBoard)>>>,
+    /// 最近一次成功拉到的模型榜，按排序方式分别记一份。
+    ///
+    /// 和 [`Self::boards_cache`] 同一个理由：`models` 的 `min_gap` 也是 60 秒，
+    /// 窗口内点刷新不该报错、也不该干等。两个榜单各自一份、不共用——
+    /// 它们的资源不同，共用会让「刚看完地图榜就看不到模型榜」。
+    models_cache: Arc<RwLock<HashMap<VrccBoardSort, (u32, VrccModelBoard)>>>,
 }
 
 /// 从仓库恢复会话，并给出「这个账号处在哪一档」。
@@ -513,6 +527,7 @@ impl VrccService {
             boards: Arc::new(RwLock::new(HashMap::new())),
             unread: Arc::new(RwLock::new(UnreadCache::default())),
             boards_cache: Arc::new(RwLock::new(HashMap::new())),
+            models_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -659,6 +674,21 @@ impl VrccService {
         (*cached_limit == limit).then(|| board.clone())
     }
 
+    /// 记下这一份模型榜，供限流窗口内复用。
+    fn remember_models(&self, limit: u32, sort: VrccBoardSort, board: &VrccModelBoard) {
+        let Ok(mut cache) = self.models_cache.write() else {
+            return;
+        };
+        cache.insert(sort, (limit, board.clone()));
+    }
+
+    /// 取上次那份模型榜。条件同 [`Self::cached_board`]：排序和条数都一样才给。
+    fn cached_models(&self, limit: u32, sort: VrccBoardSort) -> Option<VrccModelBoard> {
+        let cache = self.models_cache.read().ok()?;
+        let (cached_limit, board) = cache.get(&sort)?;
+        (*cached_limit == limit).then(|| board.clone())
+    }
+
     pub fn client_id(&self) -> String {
         self.remote.client_id()
     }
@@ -793,6 +823,45 @@ impl VrccService {
     /// 服务状态。
     pub async fn status(&self) -> std::result::Result<VrccStatus, VrccError> {
         self.remote.status().await
+    }
+
+    /// 模型榜（`GET /boards/models`，1.17.0 起）。不需要连接。
+    ///
+    /// 和 [`Self::boards`] 同一套降级：限流窗口内点刷新时把上次那份还给玩家，
+    /// 而不是弹一句「请求太频繁」。官方说这个榜也最多 5 分钟更新一次。
+    ///
+    /// **旧服务器没有这个接口**（`404 not_found`）时返回 `None`，和
+    /// [`Self::announcements`] / [`Self::stickers`] 一样：这是「这台服务器还
+    /// 没有模型榜」，不是故障，界面据此显示成空的即可。
+    ///
+    /// **不碰腕表缓存**：腕表显示的是「当前所在地图的名次」，和 BOOTH 模型
+    /// 无关，混进来只会把地图名次覆盖掉。
+    pub async fn models_board(
+        &self,
+        limit: u32,
+        sort: VrccBoardSort,
+    ) -> std::result::Result<Option<VrccModelBoard>, VrccError> {
+        match self.remote.models_board(limit, sort).await {
+            Ok(board) => {
+                self.remember_models(limit, sort, &board);
+                Ok(Some(board))
+            }
+            Err(error) if error.is_local_gap() => match self.cached_models(limit, sort) {
+                Some(board) => Ok(Some(board)),
+                None => Err(error),
+            },
+            Err(error) if error.is_not_found() => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// 单个模型（`GET /models/{id}`）。不需要连接。
+    ///
+    /// 不在榜上时 `None`——那是正常状态，不是故障。这条不接「限流回旧值」：
+    /// 单条查询没有可回退的缓存，拿别的模型的答案冒充这一条会直接显示错的
+    /// 名字和封面。
+    pub async fn model(&self, id: i64) -> std::result::Result<Option<VrccModelDetail>, VrccError> {
+        self.remote.model(id).await
     }
 
     /// 批量查地图（`GET /maps?ids=`）。

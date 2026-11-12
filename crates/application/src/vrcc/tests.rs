@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use vrcx_0_contracts::vrcc::{
-    HttpDetail, LocalThrottle, VrccBoardMap, VrccCrossingCards, VrccCrossingStar, VrccCrossings,
-    VrccUnread,
+    HttpDetail, LocalThrottle, VrccBoardMap, VrccBoardModel, VrccCrossingCards, VrccCrossingStar,
+    VrccCrossings, VrccModelBoard, VrccModelDetail, VrccUnread,
 };
 // ---------------------------------------------------------------------------
 // 造错误的几个便捷函数
@@ -175,6 +175,10 @@ struct FakeRemote {
     /// 记录两个星轨接口收到的 `mark`。
     crossings_mark: Mutex<Option<bool>>,
     cards_mark: Mutex<Option<bool>>,
+    /// `models_board` 的返回；`None` 时按「旧服务器没这个接口」处理。
+    models: Mutex<Option<VrccModelBoard>>,
+    /// 记录 `models_board` 收到的 `(limit, sort)`。
+    models_calls: Mutex<Vec<(u32, VrccBoardSort)>>,
 }
 
 impl FakeRemote {
@@ -229,11 +233,51 @@ impl FakeRemote {
     fn take_error(&self) -> Option<VrccError> {
         self.next_error.lock().unwrap().take()
     }
+
+    /// 预设模型榜的返回。
+    fn set_models(&self, board: VrccModelBoard) {
+        *self.models.lock().unwrap() = Some(board);
+    }
 }
 
 impl VrccRemote for FakeRemote {
     fn boards<'a>(&'a self, _limit: u32, _sort: VrccBoardSort) -> VrccFuture<'a, VrccBoard> {
         Box::pin(async move { Err(transport("fake")) })
+    }
+
+    /// 模型榜：记下调用参数，返回预设值（没预设就当旧服务器没这个接口）。
+    ///
+    /// `next_error` 同样生效：测试「限流窗口内回退缓存」需要它。
+    fn models_board<'a>(
+        &'a self,
+        limit: u32,
+        sort: VrccBoardSort,
+    ) -> VrccFuture<'a, VrccModelBoard> {
+        self.models_calls.lock().unwrap().push((limit, sort));
+        Box::pin(async move {
+            if let Some(error) = self.take_error() {
+                return Err(error);
+            }
+            match self.models.lock().unwrap().clone() {
+                Some(board) => Ok(board),
+                // 没有预设：模拟旧服务器，回答 `404 not_found`。
+                None => Err(VrccError::new(
+                    ErrorLayer::Server,
+                    ErrorDetail::Http(HttpDetail {
+                        status: 404,
+                        error: "not_found".to_string(),
+                        need: None,
+                        why: None,
+                        retry_after: None,
+                        op: Some("models"),
+                    }),
+                )),
+            }
+        })
+    }
+
+    fn model<'a>(&'a self, _id: i64) -> VrccFuture<'a, Option<VrccModelDetail>> {
+        Box::pin(async move { Ok(None) })
     }
     fn maps<'a>(&'a self, _worlds: &'a [String]) -> VrccFuture<'a, VrccBoard> {
         Box::pin(async move { Err(transport("fake")) })
@@ -1686,4 +1730,117 @@ async fn crossing_cards_falls_back_to_none_on_old_servers() {
         .expect("应返回星卡");
     assert_eq!(cards.left, Some(3));
     assert_eq!(*remote.cards_mark.lock().unwrap(), Some(true));
+}
+
+// ---------------------------------------------------------------------------
+// 模型榜（1.17.0 起）
+// ---------------------------------------------------------------------------
+
+/// 旧服务器上没有 `boards/models`：`404 not_found` 收成 `None`，不是错误。
+///
+/// 这和一个真实存在的故障必须分开：地图榜还在，模型榜只是还没上线，
+/// 把它抛成错误会让整个页面顶上挂一条红横幅。
+#[tokio::test]
+async fn model_board_missing_on_old_server_returns_none() {
+    let store = Arc::new(MemoryStore::default());
+    let remote = FakeRemote::new();
+    let service = VrccService::new(store, remote.clone());
+
+    // `FakeRemote` 没预设时回 404 not_found。
+    let board = service
+        .models_board(20, VrccBoardSort::Top)
+        .await
+        .expect("旧服务器不该被当成故障");
+    assert!(board.is_none());
+    assert_eq!(
+        *remote.models_calls.lock().unwrap(),
+        vec![(20, VrccBoardSort::Top)]
+    );
+}
+
+/// 拿到榜单时原样返回，字段照契约读出来。
+#[tokio::test]
+async fn model_board_returns_the_board_it_received() {
+    let store = Arc::new(MemoryStore::default());
+    let remote = FakeRemote::new();
+    remote.set_models(VrccModelBoard {
+        board: Some("models".to_string()),
+        sort: Some("top".to_string()),
+        models: vec![VrccBoardModel {
+            id: 8962830,
+            name: "オリジナル3Dモデル「星」".to_string(),
+            short: Some("星".to_string()),
+            likes: 42,
+            rank: Some(1),
+            ..Default::default()
+        }],
+        at: Some(1),
+        ..Default::default()
+    });
+    let service = VrccService::new(store, remote.clone());
+
+    let board = service
+        .models_board(20, VrccBoardSort::Top)
+        .await
+        .expect("应成功")
+        .expect("应返回榜单");
+    assert_eq!(board.models.len(), 1);
+    assert_eq!(board.models[0].display_name(), "星");
+    assert_eq!(board.models[0].likes, 42);
+}
+
+/// 限流窗口内再问：把上次那份还给玩家，而不是报「请求太频繁」。
+///
+/// 缓存命中要求**排序和条数都一样**：请求 50 条却拿到 20 条的旧数据，界面
+/// 会以为这就是全部内容。
+#[tokio::test]
+async fn model_board_falls_back_to_cache_when_locally_throttled() {
+    let store = Arc::new(MemoryStore::default());
+    let remote = FakeRemote::new();
+    remote.set_models(VrccModelBoard {
+        board: Some("models".to_string()),
+        models: vec![VrccBoardModel {
+            id: 1,
+            name: "モデル".to_string(),
+            likes: 7,
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+    let service = VrccService::new(store, remote.clone());
+
+    // 第一次：真的拿到，并进缓存。
+    let first = service
+        .models_board(20, VrccBoardSort::Top)
+        .await
+        .expect("应成功")
+        .expect("应返回榜单");
+    assert_eq!(first.models.len(), 1);
+
+    // 第二次：本地限流拦下（`is_local_gap`），服务层拿缓存顶上。
+    remote.set_error(throttled_locally(30, LocalThrottle::Gap));
+    let second = service
+        .models_board(20, VrccBoardSort::Top)
+        .await
+        .expect("限流窗口内不该报错，应回退到缓存")
+        .expect("缓存里有这一份");
+    assert_eq!(second.models.len(), 1);
+    assert_eq!(second.models[0].id, 1);
+
+    // 条数不同就不给：请求 50 条却拿到 20 条的旧数据会误导界面。
+    // `set_error` 取一次就清空，所以要重新设一次限流。
+    remote.set_error(throttled_locally(30, LocalThrottle::Gap));
+    let mismatch = service.models_board(50, VrccBoardSort::Top).await;
+    assert!(mismatch.is_err(), "条数不一致时不能拿旧数据冒充");
+}
+
+/// `model()` 不在榜上时是 `None`，不是故障。
+#[tokio::test]
+async fn model_lookup_returns_none_when_not_listed() {
+    let store = Arc::new(MemoryStore::default());
+    let remote = FakeRemote::new();
+    let service = VrccService::new(store, remote.clone());
+
+    let detail: Option<VrccModelDetail> = service.model(8962830).await.expect("不该失败");
+    assert!(detail.is_none());
 }
