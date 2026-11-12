@@ -5458,7 +5458,6 @@
             "vrcc": {
                 "club": "星遇同頻社團",
                 "open_page": "社團頁",
-                "members": "{count} 人",
                 "here": "{count} 顆星掛著",
                 "source": "資料來源於 VRC 中文社群所屬平台「星遇同頻」，非 VRChat 官方",
                 "grade_1": "三等星",
@@ -5466,7 +5465,9 @@
                 "grade_3": "一等星",
                 "grade_4": "北極星",
                 "grade_unknown": "未分級",
-                "rooms_source": "本條目來源於【星遇同頻】社團公開房間列表，它的資訊不是即時的"
+                "rooms_source": "本條目來源於【星遇同頻】社團公開房間列表，它的資訊不是即時的",
+                "likes": "{count} 個讚",
+                "followed": "已關注"
             }
         },
         "favorite": {

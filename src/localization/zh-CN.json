@@ -5467,7 +5467,6 @@
             "vrcc": {
                 "club": "星遇同频社团",
                 "open_page": "社团页",
-                "members": "{count} 人",
                 "here": "{count} 颗星挂着",
                 "source": "数据来源于 VRC 中文社区所属平台「星遇同频」，非 VRChat 官方",
                 "grade_1": "三等星",
@@ -5475,7 +5474,9 @@
                 "grade_3": "一等星",
                 "grade_4": "北极星",
                 "grade_unknown": "未分级",
-                "rooms_source": "本条目来源于【星遇同频】社团公开房间列表，它的信息不是实时的"
+                "rooms_source": "本条目来源于【星遇同频】社团公开房间列表，它的信息不是实时的",
+                "likes": "{count} 个赞",
+                "followed": "已关注"
             }
         },
         "favorite": {

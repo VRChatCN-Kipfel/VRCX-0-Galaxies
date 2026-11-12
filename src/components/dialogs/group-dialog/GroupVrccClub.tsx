@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLinkIcon, SparklesIcon, UsersRoundIcon } from 'lucide-react';
+import {
+    ExternalLinkIcon,
+    SparklesIcon,
+    ThumbsUpIcon,
+    UserCheckIcon
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { queryKeys } from '@/lib/entityQueryCache';
 import {
     clubCodeForGroup,
     vrccPublicClubQueryOptions
 } from '@/repositories/vrccClubRepository';
+import { fetchVrccScopeGrants } from '@/repositories/vrccMapRepository';
 import { openExternalLink } from '@/services/shellIntegrationService';
 
 /**
@@ -137,6 +144,32 @@ export function GroupVrccClub({
         enabled: Boolean(code)
     });
 
+    // 令牌里有没有 `clubs`（点赞数、关注状态只有带令牌那条给）。
+    // **必须在提前 return 之前调用**：写在后面会让 Hook 顺序随渲染路径变化。
+    const scopeQuery = useQuery({
+        queryKey: queryKeys.vrccScope('clubs'),
+        queryFn: () => fetchVrccScopeGrants('clubs'),
+        staleTime: 60 * 1000,
+        retry: 0,
+        refetchOnWindowFocus: false
+    });
+
+    const detailQuery = useQuery({
+        queryKey: ['group', 'vrcc-club-detail', code] as const,
+        queryFn: async () => {
+            const { commands } = await import('@/platform/tauri/bindings');
+            return commands.appVrccMyClub(code);
+        },
+        // 公开页已经答 404（没入驻）时没必要再问带令牌的。
+        enabled:
+            Boolean(code) &&
+            scopeQuery.data === true &&
+            Boolean(query.data?.club),
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
+        retry: 0
+    });
+
     if (!code || !query.data) {
         return null;
     }
@@ -159,9 +192,12 @@ export function GroupVrccClub({
     const gradeStyle = grade === null ? UNKNOWN_STYLE : GRADE_STYLES[grade];
 
     const lede = club.lede?.trim() || '';
-    const members = typeof club.members === 'number' ? club.members : null;
     const here = typeof club.here === 'number' ? club.here : 0;
     const tags = Array.isArray(club.tags) ? club.tags.filter(Boolean) : [];
+    // 点赞数与关注状态只有 `/me/clubs/{code}` 给；拿不到就整行不显示。
+    const detail = detailQuery.data?.club;
+    const likes = typeof detail?.likes === 'number' ? detail.likes : null;
+    const followed = detail?.followed === true;
     // 没图标时退回首字（只给成员看的社团没有图）。
     const initial = Array.from(name)[0] ?? '?';
 
@@ -235,31 +271,33 @@ export function GroupVrccClub({
                     ))}
                 </div>
             ) : null}
-            {/* `members` 是 VRChat 群组人数，`here` 是**挂着这个社团的星有
-                几颗**——两个数完全不同，所以分开列，不做加法也不放同一格。
-
-                `here` 靠右：它是这一块唯一带「多少人跟我一样挂着」意味的数字，
-                贴右边缘和上面右对齐的评级徽章成一条线。**数字本身用正常前景色**
-                ——压成灰字会让它看起来像附注，而「13 颗星挂着」正是这张卡想
-                让人看到的东西之一。 */}
-            <div className="text-foreground mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] tabular-nums">
-                {members !== null ? (
-                    <span className="inline-flex items-center gap-1">
-                        <UsersRoundIcon className="text-muted-foreground size-3" />
-                        {t('dialog.group.vrcc.members', { count: members })}
-                    </span>
-                ) : (
-                    <span />
-                )}
-                {here > 0 ? (
-                    <span className="inline-flex items-center gap-1">
-                        <SparklesIcon className="text-muted-foreground size-3" />
-                        <span className="text-foreground">
-                            {t('dialog.group.vrcc.here', { count: here })}
+            {/* 关注贴左、点赞贴右，同一行；挂星数在下一行右对齐，
+                和上面的评级徽章、点赞数连成右边缘一条线。
+                三项都是**只读**——接口侧没有任何社团写入口，点了也发不出去。 */}
+            {followed || likes !== null ? (
+                <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-[11px] tabular-nums">
+                    {followed ? (
+                        <span className="text-muted-foreground inline-flex items-center gap-1">
+                            <UserCheckIcon className="size-3" />
+                            {t('dialog.group.vrcc.followed')}
                         </span>
-                    </span>
-                ) : null}
-            </div>
+                    ) : (
+                        <span />
+                    )}
+                    {likes !== null ? (
+                        <span className="inline-flex items-center gap-1">
+                            {t('dialog.group.vrcc.likes', { count: likes })}
+                            <ThumbsUpIcon className="text-muted-foreground size-3" />
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
+            {here > 0 ? (
+                <div className="text-foreground mt-1 flex items-center justify-end gap-1 text-[11px] tabular-nums">
+                    {t('dialog.group.vrcc.here', { count: here })}
+                    <SparklesIcon className="text-muted-foreground size-3" />
+                </div>
+            ) : null}
             <div className="border-border/60 mt-2 flex min-w-0 items-center justify-between gap-2 border-t pt-1.5">
                 <span className="text-muted-foreground/70 min-w-0 flex-1 truncate text-[10px] leading-tight">
                     {t('dialog.group.vrcc.source')}

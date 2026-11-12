@@ -5478,7 +5478,6 @@
             "vrcc": {
                 "club": "VRCC Club",
                 "open_page": "Club page",
-                "members": "{count} members",
                 "here": "{count} stars attached",
                 "source": "Data from VRCC, a VRChat Chinese community platform — not official VRChat",
                 "grade_1": "Third Class",
@@ -5486,7 +5485,9 @@
                 "grade_3": "First Class",
                 "grade_4": "Polaris",
                 "grade_unknown": "Unranked",
-                "rooms_source": "This room comes from the VRCC club room list; its details are not live"
+                "rooms_source": "This room comes from the VRCC club room list; its details are not live",
+                "likes": "{count} likes",
+                "followed": "Following"
             }
         },
         "favorite": {

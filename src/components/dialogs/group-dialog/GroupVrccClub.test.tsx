@@ -14,11 +14,17 @@ import {
 import { GroupVrccClub } from './GroupVrccClub';
 
 const mocks = vi.hoisted(() => ({
-    appVrccClub: vi.fn()
+    appVrccClub: vi.fn(),
+    appVrccConnection: vi.fn(),
+    appVrccMyClub: vi.fn()
 }));
 
 vi.mock('@/platform/tauri/bindings', () => ({
-    commands: { appVrccClub: mocks.appVrccClub }
+    commands: {
+        appVrccClub: mocks.appVrccClub,
+        appVrccConnection: mocks.appVrccConnection,
+        appVrccMyClub: mocks.appVrccMyClub
+    }
 }));
 
 vi.mock('@/services/shellIntegrationService', () => ({
@@ -88,6 +94,13 @@ describe('GroupVrccClub', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // 默认：已连接、令牌有 `clubs`，带令牌那条能拿到点赞与关注。
+        mocks.appVrccConnection.mockResolvedValue({
+            scope: 'profile maps clubs'
+        });
+        mocks.appVrccMyClub.mockResolvedValue({
+            club: { likes: 6, followed: true }
+        });
     });
 
     it('把社团渲染成左栏一块卡片', async () => {
@@ -102,15 +115,37 @@ describe('GroupVrccClub', () => {
         // **不渲染群组名**：它就贴在群组详情左栏，正上方已经写着一遍。
         expect(await screen.findByText('dialog.group.vrcc.club')).toBeTruthy();
         expect(screen.queryByText('中文kipfel厅')).toBeNull();
-        // 评级、一句话、人数、挂着几颗星都在。
+        // 评级、一句话、挂着几颗星、标签、来源声明都在。
         expect(screen.getByText('北极星')).toBeTruthy();
         expect(screen.getByText(clubResponse.club.lede)).toBeTruthy();
-        expect(screen.getByText('dialog.group.vrcc.members:6871')).toBeTruthy();
         expect(screen.getByText('dialog.group.vrcc.here:13')).toBeTruthy();
-        // 标签与来源声明也在。
         expect(screen.getByText('聊天')).toBeTruthy();
         expect(screen.getByText('dialog.group.vrcc.source')).toBeTruthy();
+        // 点赞与关注：只读展示，数据来自带令牌那条。
+        expect(
+            await screen.findByText('dialog.group.vrcc.likes:6')
+        ).toBeTruthy();
+        expect(screen.getByText('dialog.group.vrcc.followed')).toBeTruthy();
+        // 群组人数不显示——VRChat 群组详情已经有权威值。
+        expect(screen.queryByText('dialog.group.vrcc.members:6871')).toBeNull();
         expect(mocks.appVrccClub).toHaveBeenCalledWith('KIPFEL.2104');
+    });
+
+    it('没有 clubs 权限时不问带令牌那一条，点赞与关注都不显示', async () => {
+        mocks.appVrccClub.mockResolvedValue(clubResponse);
+        mocks.appVrccConnection.mockResolvedValue({ scope: 'profile maps' });
+
+        renderWithQuery(
+            <GroupVrccClub
+                group={{ shortCode: 'KIPFEL', discriminator: '2104' }}
+            />
+        );
+
+        expect(await screen.findByText('北极星')).toBeTruthy();
+        await Promise.resolve();
+        expect(mocks.appVrccMyClub).not.toHaveBeenCalled();
+        expect(screen.queryByText('dialog.group.vrcc.likes:6')).toBeNull();
+        expect(screen.queryByText('dialog.group.vrcc.followed')).toBeNull();
     });
 
     it('不渲染横幅：横幅在 19rem 的左栏里只挤占空间', async () => {
