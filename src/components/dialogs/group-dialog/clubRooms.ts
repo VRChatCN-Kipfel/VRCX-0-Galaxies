@@ -3,33 +3,9 @@
 import type { GroupDialogInstanceRow } from '@/domain/entities/group';
 
 /**
- * 从星遇同频的社团房间（`/me/clubs/{code}` 的 `rooms[]`）造出群组详情能直接
- * 渲染的实例行。
- *
- * ## 为什么需要这个
- *
- * VRCX 自己拉群组房间走 `users/{me}/instances/groups/{group}`——它只返回
- * **当前玩家作为成员能看到的实例**。所以打开一个自己没加入的公开群组时，
- * 「房间列表」永远是「没有房间」。
- *
- * 实测 `星夜吧｜STAR NIGHT`（`ONLYFR.5576`）就是这种：VRCX 一个房都拿不到，
- * 而星遇给了两个公开房，还带完整启动链接：
- *
- * ```text
- * https://vrchat.com/home/launch?worldId=wrld_410b9d63-…&instanceId=05026~group(grp_f0b1a7b9-…)~groupAccessType(public)~region(jp)
- * ```
- *
- * 所以这里做的**不是补一份已有的数据，而是补 VRCX 拿不到的那一份**。
- *
- * ## 造出来的行会**进入 `mergeGroupInstances` 的输入**
- *
- * 这一点很关键：好友是本地 presence 来的，由 `mergeGroupInstances` 按
- * location 塞进**已经存在**的行。所以这些行必须在它之前就存在，否则好友
- * 永远落不上去。
- *
- * 因此 `friendCount` 显式给 **0**：`mergeGroupInstances` 建行时的兜底是
- * `Number(seed.friendCount || seed.userCount)`，而这里的 `userCount` 是
- * **总人数**（37 / 2 那种）。给了真值就会把「37 人」当成「37 个好友」。
+ * 星遇同频社团的公开房间（`/me/clubs/{code}` 的 `rooms[]`）。VRCX 自己拉群组
+ * 实例只返回「我作为成员能看到的」，自己没加入的公开群组一个房都拿不到，
+ * 星遇补的是那一块。
  */
 export type VrccClubRoom = {
     map?: string | null;
@@ -46,14 +22,10 @@ type LaunchTarget = {
 };
 
 /**
- * 从启动链接里拆出 `worldId` 与 `instanceId`，再拼成 VRCX 的 location 串。
+ * 从启动链接里拆出 `worldId` 与 `instanceId`，拼成 VRCX 的 location 串
+ * （`wrld_x:instanceId`，`parseLocation` 直接吃）。
  *
- * VRCX 内部的 location 就是 `wrld_x:12345~region(jp)` 这种形状，
- * `parseLocation` 直接吃它。星遇给的是 VRChat 官方 launch 链接，两者之间
- * 只差一个「把 query 参数拼回去」。
- *
- * **拆不出来就返回 `null`**，不要拿半个 location 去渲染——那会变成一条
- * 点不开的空行。
+ * 拆不出来就返回 `null`——半个 location 会变成一条点不开的空行。
  */
 export function launchLinkToLocation(link: string): LaunchTarget | null {
     const trimmed = link.trim();
