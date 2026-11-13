@@ -146,6 +146,43 @@ describe('GroupVrccClub', () => {
         expect(mocks.appVrccMyClub).not.toHaveBeenCalled();
         expect(screen.queryByText('dialog.group.vrcc.likes:6')).toBeNull();
         expect(screen.queryByText('dialog.group.vrcc.followed')).toBeNull();
+        // **也不该显示「未关注」**：拿不到数据不等于没关注，那是编造信息。
+        expect(screen.queryByText('dialog.group.vrcc.not_followed')).toBeNull();
+    });
+
+    it('明确未关注时才显示「未关注」，拿不到数据时不显示', async () => {
+        mocks.appVrccClub.mockResolvedValue(clubResponse);
+
+        // ① 接口明确说没关注。
+        mocks.appVrccMyClub.mockResolvedValue({
+            club: { likes: 6, followed: false }
+        });
+        renderWithQuery(
+            <GroupVrccClub
+                group={{ shortCode: 'KIPFEL', discriminator: '2104' }}
+            />
+        );
+        expect(
+            await screen.findByText('dialog.group.vrcc.not_followed')
+        ).toBeTruthy();
+        expect(screen.queryByText('dialog.group.vrcc.followed')).toBeNull();
+        cleanup();
+
+        // ② 接口没给这个字段（拿不到）→ 两态都不显示。
+        mocks.appVrccConnection.mockResolvedValue({
+            scope: 'profile maps clubs'
+        });
+        mocks.appVrccMyClub.mockResolvedValue({ club: { likes: 6 } });
+        renderWithQuery(
+            <GroupVrccClub
+                group={{ shortCode: 'KIPFEL', discriminator: '2104' }}
+            />
+        );
+        expect(
+            await screen.findByText('dialog.group.vrcc.likes:6')
+        ).toBeTruthy();
+        expect(screen.queryByText('dialog.group.vrcc.not_followed')).toBeNull();
+        expect(screen.queryByText('dialog.group.vrcc.followed')).toBeNull();
     });
 
     it('不渲染横幅：横幅在 19rem 的左栏里只挤占空间', async () => {

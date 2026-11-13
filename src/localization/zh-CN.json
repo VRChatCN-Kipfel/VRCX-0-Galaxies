@@ -5480,7 +5480,8 @@
                 "notice": {
                     "title": "星遇社团公告",
                     "expired": "已失效"
-                }
+                },
+                "not_followed": "未关注"
             }
         },
         "favorite": {

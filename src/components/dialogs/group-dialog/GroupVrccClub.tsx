@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import {
+    CircleIcon,
     ExternalLinkIcon,
     SparklesIcon,
     ThumbsUpIcon,
@@ -194,10 +195,15 @@ export function GroupVrccClub({
     const lede = club.lede?.trim() || '';
     const here = typeof club.here === 'number' ? club.here : 0;
     const tags = Array.isArray(club.tags) ? club.tags.filter(Boolean) : [];
-    // 点赞数与关注状态只有 `/me/clubs/{code}` 给；拿不到就整行不显示。
+    // 点赞数与关注状态只有 `/me/clubs/{code}` 给。
+    //
+    // **关注是三态，不是布尔**：`true` 已关注、`false` 明确未关注、`null`
+    // 根本拿不到（没连接 / 没 `clubs` 权限 / 请求失败）。把 `null` 当成
+    // 「未关注」是在编造信息——所以那种情况整格不显示。
     const detail = detailQuery.data?.club;
     const likes = typeof detail?.likes === 'number' ? detail.likes : null;
-    const followed = detail?.followed === true;
+    const followed =
+        typeof detail?.followed === 'boolean' ? detail.followed : null;
     // 没图标时退回首字（只给成员看的社团没有图）。
     const initial = Array.from(name)[0] ?? '?';
 
@@ -274,12 +280,17 @@ export function GroupVrccClub({
             {/* 关注贴左、点赞贴右，同一行；挂星数在下一行右对齐，
                 和上面的评级徽章、点赞数连成右边缘一条线。
                 三项都是**只读**——接口侧没有任何社团写入口，点了也发不出去。 */}
-            {followed || likes !== null ? (
+            {followed !== null || likes !== null ? (
                 <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-[11px] tabular-nums">
-                    {followed ? (
+                    {followed === true ? (
                         <span className="text-muted-foreground inline-flex items-center gap-1">
                             <UserCheckIcon className="size-3" />
                             {t('dialog.group.vrcc.followed')}
+                        </span>
+                    ) : followed === false ? (
+                        <span className="text-muted-foreground/70 inline-flex items-center gap-1">
+                            <CircleIcon className="size-3" />
+                            {t('dialog.group.vrcc.not_followed')}
                         </span>
                     ) : (
                         <span />

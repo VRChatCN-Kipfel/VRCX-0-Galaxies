@@ -5491,7 +5491,8 @@
                 "notice": {
                     "title": "VRCC club notice",
                     "expired": "Expired"
-                }
+                },
+                "not_followed": "Not following"
             }
         },
         "favorite": {

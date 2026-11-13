@@ -5471,7 +5471,8 @@
                 "notice": {
                     "title": "星遇社團公告",
                     "expired": "已失效"
-                }
+                },
+                "not_followed": "未關注"
             }
         },
         "favorite": {
