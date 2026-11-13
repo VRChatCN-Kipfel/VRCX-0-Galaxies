@@ -958,6 +958,15 @@ export function useVrccController() {
     const setTab = useCallback(
         (tab: VrccTab) => {
             patch({ tab });
+            // 模型榜是开放数据，不需要连接，所以这一句**必须在下面那道
+            // `connected` 检查之前**：未连接的玩家也会切到模型榜，那时同样
+            // 该走缓存，而不是又发一次请求。
+            //
+            // 只有「切回这一页」时才复用：60 秒内看过的直接用，超过就当没有。
+            // 手动刷新和切排序各自有入口，不受这里影响。
+            if (tab === 'models') {
+                void refreshModels(modelSortRef.current, true);
+            }
             if (!state.connection?.connected) return;
             if (tab === 'notifications') {
                 refreshRecent(true).catch(() => {
@@ -995,6 +1004,7 @@ export function useVrccController() {
         [
             patch,
             refreshCrossings,
+            refreshModels,
             refreshMutuals,
             refreshRecent,
             refreshUnread,

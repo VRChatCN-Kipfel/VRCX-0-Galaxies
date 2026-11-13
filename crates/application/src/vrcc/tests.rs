@@ -179,6 +179,10 @@ struct FakeRemote {
     models: Mutex<Option<VrccModelBoard>>,
     /// 记录 `models_board` 收到的 `(limit, sort)`。
     models_calls: Mutex<Vec<(u32, VrccBoardSort)>>,
+    /// `model()` 的返回；`None` 时按「不在榜上」处理。
+    model_detail: Mutex<Option<VrccModelDetail>>,
+    /// 记录 `model()` 收到的 id，用来验证缓存是否真的省掉了请求。
+    model_calls: Mutex<Vec<i64>>,
 }
 
 impl FakeRemote {
@@ -238,6 +242,11 @@ impl FakeRemote {
     fn set_models(&self, board: VrccModelBoard) {
         *self.models.lock().unwrap() = Some(board);
     }
+
+    /// 预设单模型详情的返回。
+    fn set_model_detail(&self, detail: VrccModelDetail) {
+        *self.model_detail.lock().unwrap() = Some(detail);
+    }
 }
 
 impl VrccRemote for FakeRemote {
@@ -276,8 +285,10 @@ impl VrccRemote for FakeRemote {
         })
     }
 
-    fn model<'a>(&'a self, _id: i64) -> VrccFuture<'a, Option<VrccModelDetail>> {
-        Box::pin(async move { Ok(None) })
+    /// 单模型：记下这一次 id，返回预设详情（没预设就是「不在榜上」）。
+    fn model<'a>(&'a self, id: i64) -> VrccFuture<'a, Option<VrccModelDetail>> {
+        self.model_calls.lock().unwrap().push(id);
+        Box::pin(async move { Ok(self.model_detail.lock().unwrap().clone()) })
     }
     fn maps<'a>(&'a self, _worlds: &'a [String]) -> VrccFuture<'a, VrccBoard> {
         Box::pin(async move { Err(transport("fake")) })
@@ -1843,4 +1854,54 @@ async fn model_lookup_returns_none_when_not_listed() {
 
     let detail: Option<VrccModelDetail> = service.model(8962830).await.expect("不该失败");
     assert!(detail.is_none());
+}
+
+/// 单模型详情要进缓存：反复点开同一条不该反复请求。
+///
+/// 玩家常做的动作就是「点开、关掉、再点开」。每次都走一次网络，手感是
+/// 「慢」而不是「快」；官方也说这些信息最多 5 分钟才更新一次。
+#[tokio::test]
+async fn model_detail_is_cached_between_calls() {
+    let store = Arc::new(MemoryStore::default());
+    let remote = FakeRemote::new();
+    let service = VrccService::new(store, remote.clone());
+
+    // 第一次：真的去问。
+    let first = service.model(4242).await.expect("should not fail");
+    assert!(first.is_none(), "FakeRemote 默认返回「不在榜上」");
+    assert_eq!(remote.model_calls.lock().unwrap().len(), 1);
+
+    // 不在榜上**不缓存**：下架和重新上架都会发生，把「没有」记住会让
+    // 玩家以为它消失了。所以第二次仍然要问。
+    let second = service.model(4242).await.expect("should not fail");
+    assert!(second.is_none());
+    assert_eq!(
+        remote.model_calls.lock().unwrap().len(),
+        2,
+        "404 不该被缓存"
+    );
+
+    // 设置一份真实详情，再问一次：这次会拿到并进缓存。
+    remote.set_model_detail(VrccModelDetail {
+        model: Some(VrccBoardModel {
+            id: 4242,
+            name: "モデル".to_string(),
+            likes: 9,
+            ..Default::default()
+        }),
+        hots: vec![],
+        at: Some(1),
+    });
+    let third = service.model(4242).await.expect("should not fail");
+    assert!(third.is_some());
+    let calls_after_third = remote.model_calls.lock().unwrap().len();
+
+    // 第四次：命中缓存，请求次数不该再涨。
+    let fourth = service.model(4242).await.expect("should not fail");
+    assert!(fourth.is_some());
+    assert_eq!(
+        remote.model_calls.lock().unwrap().len(),
+        calls_after_third,
+        "缓存命中时不该再发请求"
+    );
 }

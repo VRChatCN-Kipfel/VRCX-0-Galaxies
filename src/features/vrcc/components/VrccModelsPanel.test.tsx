@@ -353,4 +353,60 @@ describe('VrccModelsPanel', () => {
         expect(screen.getByText('vrcc.models.empty')).toBeTruthy();
         expect(screen.queryByText('vrcc.models.unavailable')).toBeNull();
     });
+
+    it('重复打开同一个模型不会重新请求', async () => {
+        // 点开 → 关掉 → 再点开是很常见的动作。每次都走 IPC 会先转一下圈，
+        // 手感是「慢」。第二、三次必须直接命中缓存。
+        apiModel.mockResolvedValue({
+            model: null,
+            at: 1,
+            hots: [{ text: '表情很多', by: '某位彩蛋猎人', up: 3 }]
+        });
+
+        renderPanel({
+            models: board([model({ id: 30, short: '缓存', page: null })])
+        });
+
+        const openRow = () =>
+            screen.getByRole('button', {
+                name: 'vrcc.models.comments: 缓存'
+            });
+
+        await userEvent.click(openRow());
+        expect(await screen.findByText('表情很多')).toBeTruthy();
+        expect(apiModel).toHaveBeenCalledTimes(1);
+
+        // 关掉再开：Esc 走 `onOpenChange(false)`，即关闭。
+        await userEvent.keyboard('{Escape}');
+        await userEvent.click(openRow());
+
+        expect(screen.getByText('表情很多')).toBeTruthy();
+        expect(apiModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('不在榜上的结果不缓存：下次还要重新问', async () => {
+        // 下架和重新上架都会发生。把「没有」记住，玩家会以为它消失了。
+        apiModel.mockResolvedValue(null);
+
+        renderPanel({
+            models: board([model({ id: 31, short: '下架', page: null })])
+        });
+
+        const openRow = () =>
+            screen.getByRole('button', {
+                name: 'vrcc.models.comments: 下架'
+            });
+
+        await userEvent.click(openRow());
+        expect(
+            await screen.findByText('vrcc.models.comments_gone')
+        ).toBeTruthy();
+        expect(apiModel).toHaveBeenCalledTimes(1);
+
+        await userEvent.keyboard('{Escape}');
+        await userEvent.click(openRow());
+        await screen.findByText('vrcc.models.comments_gone');
+
+        expect(apiModel).toHaveBeenCalledTimes(2);
+    });
 });

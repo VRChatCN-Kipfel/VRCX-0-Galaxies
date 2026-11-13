@@ -434,7 +434,27 @@ pub struct VrccService {
     /// 窗口内点刷新不该报错、也不该干等。两个榜单各自一份、不共用——
     /// 它们的资源不同，共用会让「刚看完地图榜就看不到模型榜」。
     models_cache: Arc<RwLock<HashMap<VrccBoardSort, (u32, VrccModelBoard)>>>,
+    /// 按 BOOTH 商品编号缓存的单个模型详情（含热评）。
+    ///
+    /// 单独一份，不用 `models_cache` 里那行顶上：行里没有热评，而热评正是
+    /// 对话框要显示的东西。官方说信息最多 5 分钟更新一次，所以同一张卡在
+    /// 几分钟内反复点开不该重新请求——玩家常常点开、关掉、再点开同一条。
+    ///
+    /// 值里带时间戳：热评会变，缓存不能永久有效。
+    model_details: Arc<RwLock<HashMap<i64, (Instant, VrccModelDetail)>>>,
 }
+
+/// 单个模型详情的本地缓存时长。
+///
+/// 官方说明信息最多 5 分钟更新一次，取 5 分钟正好卡在「服务器可能已经变了」
+/// 和「玩家反复点开同一条不必重新请求」之间。
+const MODEL_DETAIL_TTL: Duration = Duration::from_secs(300);
+
+/// 单模型缓存最多留几份，防止长时间浏览把内存堆起来。
+///
+/// 一页 20 行，翻十页也就 200 个；超过就整体清空而不是做 LRU——这个量的
+/// 字典重建一次的开销远小于维护一套淘汰链表的复杂度。
+const MODEL_DETAIL_CACHE_MAX: usize = 200;
 
 /// 从仓库恢复会话，并给出「这个账号处在哪一档」。
 ///
@@ -528,6 +548,7 @@ impl VrccService {
             unread: Arc::new(RwLock::new(UnreadCache::default())),
             boards_cache: Arc::new(RwLock::new(HashMap::new())),
             models_cache: Arc::new(RwLock::new(HashMap::new())),
+            model_details: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -687,6 +708,25 @@ impl VrccService {
         let cache = self.models_cache.read().ok()?;
         let (cached_limit, board) = cache.get(&sort)?;
         (*cached_limit == limit).then(|| board.clone())
+    }
+
+    /// 取缓存里的单模型详情；过期就当成没有。
+    fn cached_model_detail(&self, id: i64) -> Option<VrccModelDetail> {
+        let cache = self.model_details.read().ok()?;
+        let (at, detail) = cache.get(&id)?;
+        (at.elapsed() < MODEL_DETAIL_TTL).then(|| detail.clone())
+    }
+
+    /// 记下一份单模型详情，顺便在超量时清空。
+    fn remember_model_detail(&self, id: i64, detail: &VrccModelDetail) {
+        let Ok(mut cache) = self.model_details.write() else {
+            return;
+        };
+        // 超过上限就整体清空：这个量级下重建一次比维护 LRU 便宜得多。
+        if cache.len() >= MODEL_DETAIL_CACHE_MAX {
+            cache.clear();
+        }
+        cache.insert(id, (Instant::now(), detail.clone()));
     }
 
     pub fn client_id(&self) -> String {
@@ -857,11 +897,31 @@ impl VrccService {
 
     /// 单个模型（`GET /models/{id}`）。不需要连接。
     ///
-    /// 不在榜上时 `None`——那是正常状态，不是故障。这条不接「限流回旧值」：
-    /// 单条查询没有可回退的缓存，拿别的模型的答案冒充这一条会直接显示错的
-    /// 名字和封面。
+    /// 不在榜上时 `None`——那是正常状态，不是故障。
+    ///
+    /// **带本地缓存**：官方说信息最多 5 分钟更新一次，而玩家常常点开、关掉、
+    /// 再点开同一条。每次都发请求既慢又白占额度。缓存按 BOOTH 编号存，
+    /// 过期就重新问；`None`（不在榜上）**不缓存**——下架和重新上架都是
+    /// 会发生的事，把「没有」记住 5 分钟会让玩家以为它消失了。
     pub async fn model(&self, id: i64) -> std::result::Result<Option<VrccModelDetail>, VrccError> {
-        self.remote.model(id).await
+        if id <= 0 {
+            return Ok(None);
+        }
+
+        // 先看缓存。读锁用完立刻释放，不要在持锁期间 await。
+        if let Some(cached) = self.cached_model_detail(id) {
+            return Ok(Some(cached));
+        }
+
+        match self.remote.model(id).await {
+            Ok(Some(detail)) => {
+                self.remember_model_detail(id, &detail);
+                Ok(Some(detail))
+            }
+            // 不在榜上：不缓存，下次还要重新问。
+            Ok(None) => Ok(None),
+            Err(error) => Err(error),
+        }
     }
 
     /// 批量查地图（`GET /maps?ids=`）。

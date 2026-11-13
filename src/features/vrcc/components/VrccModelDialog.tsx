@@ -26,6 +26,28 @@ type ModelRow = NonNullable<VrccModelBoard['models']>[number];
 const SITE = 'https://vrcc.cc';
 
 /**
+ * 会话内的小缓存：BOOTH 编号 → 详情。
+ *
+ * 后端也有缓存（5 分钟），这一层不是重复——它省掉的是**一次 IPC 往返加一次
+ * 可能的状态流转**。玩家点开、关掉、再点开同一条是很常见的动作，每次都先
+ * 转一下圈再出内容，手感是「慢」而不是「快」。
+ *
+ * 只缓存成功的那份。`null`（不在榜上）不缓存：下架和重新上架都会发生，
+ * 把「没有」记住会让玩家以为它消失了。
+ */
+const detailCache = new Map<number, VrccModelDetail>();
+const DETAIL_CACHE_MAX = 100;
+
+function readModelDetailCache(id: number): VrccModelDetail | null {
+    return detailCache.get(id) ?? null;
+}
+
+function writeModelDetailCache(id: number, detail: VrccModelDetail): void {
+    if (detailCache.size >= DETAIL_CACHE_MAX) detailCache.clear();
+    detailCache.set(id, detail);
+}
+
+/**
  * 模型评论对话框。
  *
  * ## 数据来源与边界
@@ -63,6 +85,16 @@ export function VrccModelDialog({
 
     useEffect(() => {
         let alive = true;
+
+        // 先在本地缓存里找：玩家常常点开、关掉、再点开同一条，
+        // 那不该每次都转圈等一下。
+        const hit = readModelDetailCache(model.id);
+        if (hit) {
+            setDetail(hit);
+            setState('ready');
+            return;
+        }
+
         setState('loading');
         setDetail(null);
 
@@ -75,6 +107,7 @@ export function VrccModelDialog({
                     setState('gone');
                     return;
                 }
+                writeModelDetailCache(model.id, result);
                 setDetail(result);
                 setState('ready');
             })

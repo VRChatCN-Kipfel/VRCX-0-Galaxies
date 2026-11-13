@@ -20,6 +20,7 @@ import {
 } from '@/ui/shadcn/toggle-group';
 
 import { buildPageItems } from '../boardPages';
+import { useModelCoverReady } from '../useModelCoverCache';
 import { useOpenExternalLink } from '../useOpenExternalLink';
 import { useVrccRowVisibility } from '../useVrccRowVisibility';
 import type { VrccBoardSort, VrccModelBoard } from '../vrccApi';
@@ -211,15 +212,11 @@ export function VrccModelsPanel({
                                         >
                                             {place ?? '—'}
                                         </span>
-                                        {/* 封面。和地图榜一样只在可见时才挂：
-                                            不可视的行连请求都不发。 */}
-                                        <VrccCover
-                                            src={
-                                                visible.has(key)
-                                                    ? (model.img ?? null)
-                                                    : null
-                                            }
-                                            className="size-8 shrink-0 rounded object-cover"
+                                        {/* 封面。缓存的立刻上屏；没缓存的
+                                            等这一行可见才挂，不可视连请求都不发。 */}
+                                        <ModelRowCover
+                                            src={model.img ?? null}
+                                            visible={visible.has(key)}
                                         />
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-sm font-medium">
@@ -371,5 +368,34 @@ export function VrccModelsPanel({
                 />
             )}
         </div>
+    );
+}
+
+/**
+ * 一行里那个 32px 的封面。
+ *
+ * 单独提出来是为了用 [`useModelCoverReady`]：一个 hook 不能写在 `map()` 的
+ * 回调里。它决定这一行现在能不能出图：
+ *
+ * - **缓存过的**：立刻给地址。翻页回来、切排序回来都不用再等一次加载；
+ * - **没缓存的**：等这一行滚进视口再挂，不可视时完全不发请求。
+ *
+ * 判据不是「可见」而是「可见 **或** 已知可用」：滚出视口又滚回来的行，图
+ * 早就在浏览器缓存里，再等一次可见性判断只会让它闪一下空白。
+ */
+function ModelRowCover({
+    src,
+    visible
+}: {
+    src: string | null;
+    visible: boolean;
+}) {
+    const ready = useModelCoverReady(src);
+    const show = src && (visible || ready);
+    return (
+        <VrccCover
+            src={show ? src : null}
+            className="size-8 shrink-0 rounded object-cover"
+        />
     );
 }
