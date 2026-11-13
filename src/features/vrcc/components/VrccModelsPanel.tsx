@@ -21,12 +21,14 @@ import {
 
 import { buildPageItems } from '../boardPages';
 import { useOpenExternalLink } from '../useOpenExternalLink';
+import { useVrccRowVisibility } from '../useVrccRowVisibility';
 import type { VrccBoardSort, VrccModelBoard } from '../vrccApi';
 import { VrccCover } from './VrccCover';
+import { VrccModelDialog } from './VrccModelDialog';
 
 const SORTS: readonly VrccBoardSort[] = ['top', 'week', 'new'];
 
-/** 一页多少行。榜单一次取 100 条（接口上限），本地按这个数切页。 */
+/** 一页多少行。和地图榜一致：一次取 100 条，本地按 20 条切页。 */
 const PAGE_SIZE = 20;
 
 function isBoardSort(value: unknown): value is VrccBoardSort {
@@ -36,15 +38,33 @@ function isBoardSort(value: unknown): value is VrccBoardSort {
 /**
  * 模型榜（1.17.0 起）。开放数据，不需要连接。
  *
- * 与地图榜的差别只在**一行里放什么**：地图用「均分 + 星级 + 评分人数」，
- * 模型只有「喜欢数」这一种量，所以右侧改成一个大数字 + 本周增量，不再有
- * 星级——给喜欢数画五档星属于编造，官方的喜欢没有上限也没有换算关系。
+ * ## 和地图榜同一套版式
  *
- * 名字优先 `short`（网页显示的那个），没有才退回 BOOTH 原文：键帽、服装这类
- * 商品名常常带一长串日文和括号，整行会被撑爆。
+ * 一行一个模型：名次 + 封面 + 名字/热评 + 右侧喜欢数，单行、`divide-y`、
+ * 悬停才出现外链。两个榜单在同一个页面上下并排，版式必须一致——否则玩家
+ * 每切一次页签都要重新适应「哪里是名次、哪里是数字」。
  *
- * `price` 是 BOOTH 上写的**原文**（带货币符号），不解析成数字：不同店铺的
- * 写法不统一（`¥1,500`、`￥1,500〜`、`無料`），自己解析只会显示错价。
+ * 差别只在量纲：地图是「均分 + 星级 + 评分人数」，模型只有「喜欢数」这一种
+ * 量，所以右侧不画星级（喜欢没有五档换算，画星等于编造），改成一个大数字
+ * 加单位，本周榜再补一行本周新增。
+ *
+ * ## 为什么不再是卡片
+ *
+ * 上一版是两列封面卡片，配 `StarBorder` 星尘描边 + `ShinyText` 流光。
+ * 视觉上更花，代价却很实在：
+ *
+ * - `StarBorder` 是 canvas，前三名每张每帧要跑一遍一百多行的描边绘制，而且
+ *   它的循环条件含 `state.lap >= 0`，**永远不满足停止条件**，一页就是三块
+ *   常驻 60fps 的画布，滚动时和列表重排抢主线程，明显发涩；
+ * - 卡片把一页从 20 条压到 12 条，同样一屏能比较的模型更少了。
+ *
+ * 换回单行后，一页 20 条全是普通 DOM，滚动没有常驻 rAF，也就不再需要那些
+ * 动效。这是「卡顿」的直接原因。
+ *
+ * ## 点一行看评论
+ *
+ * 点整行打开 [`VrccModelDialog`]，显示该模型在星遇同频上的热评。`404`
+ * 表示这个模型已不在榜上，对话框里说明这一点，而不是当成错误。
  */
 export function VrccModelsPanel({
     models,
@@ -63,7 +83,7 @@ export function VrccModelsPanel({
     onRefresh: () => void;
 }) {
     const { t } = useTranslation();
-    const { open } = useOpenExternalLink();
+    const { open, pending: openLinkPending } = useOpenExternalLink();
     const rows = models?.models ?? [];
 
     const [page, setPage] = useState(0);
@@ -72,8 +92,7 @@ export function VrccModelsPanel({
     // 否则会停在空白页上。
     const safePage = Math.min(page, pageCount - 1);
 
-    // 换排序时回到第 1 页。和地图榜同一处理：跟着 `sort` 走，而不是在每个
-    // 排序回调里各写一遍。
+    // 换排序时回到第 1 页。和地图榜同一处理：跟着 `sort` 走。
     useEffect(() => {
         setPage(0);
     }, [sort]);
@@ -84,10 +103,20 @@ export function VrccModelsPanel({
                 safePage * PAGE_SIZE,
                 (safePage + 1) * PAGE_SIZE
             ),
-        // 依赖 `models` 而不是上面那个 `?? []` 出来的 `rows`：后者为空时每次
-        // 渲染都是新数组，会让这个 useMemo 形同虚设。
+        // 依赖 `models` 而不是 `rows`（那个 `?? []` 出来的新数组），
+        // 否则 useMemo 每帧都失效。
         [models, safePage]
     );
+
+    // 正在看评论的那个模型。存整行而不是只存 id：对话框要显示名字和封面，
+    // 手上已经有这一行了，不必为了标题再请求一次。
+    const [opened, setOpened] = useState<
+        NonNullable<VrccModelBoard['models']>[number] | null
+    >(null);
+
+    // 行是否露在视口里。和地图榜一样，用来决定这一行要不要挂封面图：
+    // 20 行里通常只有一屏可见，剩下的先不请求。
+    const { visible, observe } = useVrccRowVisibility();
 
     // 旧服务器上没有这个接口：不转圈。「正在加载」和「这台服务器还没有」
     // 显示同一句转圈，会让玩家一直等一个永远不会来的东西。
@@ -121,7 +150,7 @@ export function VrccModelsPanel({
                 )}
                 {/* 模型榜是「每天投一票」，和地图的「打分」不是一回事，
                     提示文案要分开写，否则玩家会以为这里也能打 1–10 分。 */}
-                {available && (
+                {available && !showEmpty && (
                     <span className="min-w-0 truncate">
                         {t('vrcc.models.hint')}
                     </span>
@@ -145,7 +174,7 @@ export function VrccModelsPanel({
                         : t('vrcc.models.unavailable')}
                 </div>
             ) : (
-                <div className="relative min-h-0 flex-1 overflow-y-auto rounded-xl border">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
                     <ul className="divide-y">
                         {pageRows.map((model, index) => {
                             // 本周榜只按本周的喜欢排，`rank` 仍是总榜名次；
@@ -154,76 +183,100 @@ export function VrccModelsPanel({
                                 sort === 'week'
                                     ? (model.place ??
                                       safePage * PAGE_SIZE + index + 1)
-                                    : model.rank;
+                                    : (model.rank ?? null);
+                            const key = String(model.id);
+                            const name = model.short?.trim() || model.name;
                             return (
                                 <li
                                     key={model.id}
+                                    ref={(element) => observe(element, key)}
                                     className="hover:bg-muted/40 group flex items-center gap-3 px-3 py-2"
                                 >
-                                    <span
-                                        className={
-                                            (place ?? 99) <= 3
-                                                ? 'text-primary w-6 shrink-0 text-right text-sm font-bold tabular-nums'
-                                                : 'text-muted-foreground w-6 shrink-0 text-right text-sm tabular-nums'
-                                        }
+                                    {/* 点整行打开评论对话框：和地图榜「点整行
+                                        打开世界详情」是同一个手势。 */}
+                                    <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                                        onClick={() => setOpened(model)}
+                                        aria-label={`${t(
+                                            'vrcc.models.comments'
+                                        )}: ${name}`}
                                     >
-                                        {place ?? '—'}
-                                    </span>
-                                    {/* 封面直接来自 BOOTH（官方 `img`），不走
-                                        星遇的转发地址，所以这里不做可视区延迟
-                                        加载：域名不同、也没有本地缓存可退。 */}
-                                    <VrccCover
-                                        src={model.img ?? null}
-                                        className="size-10 shrink-0 rounded object-cover"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm font-medium">
-                                            {model.short?.trim() || model.name}
-                                        </div>
-                                        {/* 热评优先：官方说模型榜只给热评一条，
-                                            那是对「这模型好在哪」最有用的一句。 */}
-                                        <div className="text-muted-foreground truncate text-xs">
-                                            {model.hot?.text
-                                                ? `「${model.hot.text}」${
-                                                      model.hot.by
-                                                          ? ` · ${model.hot.by}`
-                                                          : ''
-                                                  }`
-                                                : (model.shop ?? '—')}
-                                        </div>
-                                    </div>
-                                    <div className="flex shrink-0 flex-col items-end gap-0.5">
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-sm font-semibold tabular-nums">
-                                                {model.likes}
-                                            </span>
-                                            <span className="text-muted-foreground text-[10px]">
-                                                {t('vrcc.models.likes')}
-                                            </span>
-                                        </div>
-                                        <div className="text-muted-foreground flex items-center gap-1 text-[10px] tabular-nums">
-                                            {/* 本周榜显示本周几个喜欢，和网页
-                                                「本周 N」一样。 */}
-                                            {sort === 'week' &&
-                                            model.week != null
-                                                ? t('vrcc.models.week_count', {
-                                                      count: model.week
-                                                  })
-                                                : (model.price ?? '')}
-                                        </div>
-                                    </div>
-                                    {/* 外链落到星遇的公开页：这一屏的上下文
-                                        就是榜单，玩家想看的也是「榜上怎么评」。 */}
-                                    {model.page && (
-                                        <button
-                                            type="button"
-                                            onClick={() => open(model.page!)}
-                                            className="text-muted-foreground hover:text-primary shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                            aria-label={t('vrcc.models.open')}
+                                        <span
+                                            className={
+                                                (place ?? 99) <= 3
+                                                    ? 'text-primary w-6 shrink-0 text-right text-sm font-bold tabular-nums'
+                                                    : 'text-muted-foreground w-6 shrink-0 text-right text-sm tabular-nums'
+                                            }
                                         >
-                                            <ExternalLink className="size-3.5" />
-                                        </button>
-                                    )}
+                                            {place ?? '—'}
+                                        </span>
+                                        {/* 封面。和地图榜一样只在可见时才挂：
+                                            不可视的行连请求都不发。 */}
+                                        <VrccCover
+                                            src={
+                                                visible.has(key)
+                                                    ? (model.img ?? null)
+                                                    : null
+                                            }
+                                            className="size-8 shrink-0 rounded object-cover"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-medium">
+                                                {name}
+                                            </div>
+                                            {/* 有热评就显示热评，没有才显示店铺。
+                                            和地图榜「短评优先于作者」同一取向。 */}
+                                            <div className="text-muted-foreground truncate text-xs">
+                                                {model.hot?.text
+                                                    ? `「${model.hot.text}」${
+                                                          model.hot.by
+                                                              ? ` · ${model.hot.by}`
+                                                              : ''
+                                                      }`
+                                                    : (model.shop ?? '—')}
+                                            </div>
+                                        </div>
+                                        {/* 右侧数值列：喜欢数在上，价格/本周在
+                                            下。喜欢数是这个榜唯一的量纲，值得
+                                            占一列，而不是缩进文字里。 */}
+                                        <div className="flex shrink-0 flex-col items-end gap-0.5">
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-sm font-semibold tabular-nums">
+                                                    {model.likes}
+                                                </span>
+                                                <span className="text-muted-foreground text-[10px]">
+                                                    {t('vrcc.models.likes')}
+                                                </span>
+                                            </div>
+                                            <div className="text-muted-foreground flex items-center gap-1 text-[10px] tabular-nums">
+                                                {sort === 'week' &&
+                                                model.week != null
+                                                    ? t(
+                                                          'vrcc.models.week_count',
+                                                          { count: model.week }
+                                                      )
+                                                    : (model.price ?? '')}
+                                            </div>
+                                        </div>
+                                    </button>
+                                    {/* 外链单独留一个：想去 BOOTH 看商品、或去
+                                        星遇看完整页面时用。和「在这里看评论」
+                                        是两件事。 */}
+                                    <button
+                                        type="button"
+                                        disabled={openLinkPending}
+                                        onClick={() =>
+                                            open(
+                                                model.page ??
+                                                    `https://vrcc.cc/models/${model.id}`
+                                            )
+                                        }
+                                        className="text-muted-foreground hover:text-primary shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                        aria-label={t('vrcc.models.open')}
+                                    >
+                                        <ExternalLink className="size-3.5" />
+                                    </button>
                                 </li>
                             );
                         })}
@@ -232,7 +285,7 @@ export function VrccModelsPanel({
             )}
 
             {pageCount > 1 && (
-                <nav className="flex shrink-0 items-center justify-end gap-0.5 pt-2">
+                <nav className="mt-2 flex shrink-0 items-center justify-end gap-0.5">
                     <Button
                         variant="ghost"
                         size="sm"
@@ -309,6 +362,13 @@ export function VrccModelsPanel({
                         <ChevronsRight className="size-3.5" />
                     </Button>
                 </nav>
+            )}
+
+            {opened && (
+                <VrccModelDialog
+                    model={opened}
+                    onClose={() => setOpened(null)}
+                />
             )}
         </div>
     );

@@ -3,7 +3,7 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', async (importOriginal) => {
     const actual = await importOriginal<typeof import('react-i18next')>();
@@ -22,12 +22,72 @@ vi.mock('../useOpenExternalLink', () => ({
     useOpenExternalLink: () => ({ open: openLink, pending: false })
 }));
 
+// 评论对话框会调 `vrccApi.model`。这里整体替换掉 API 层，避免真发 IPC：
+// `commands` 在测试环境里根本不存在，未 mock 时拿到的是 undefined。
+const apiModel = vi.hoisted(() => vi.fn());
+vi.mock('../vrccApi', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../vrccApi')>();
+    return {
+        ...actual,
+        vrccApi: { ...actual.vrccApi, model: apiModel }
+    };
+});
+
 import type { VrccBoardModel, VrccModelBoard } from '../vrccApi';
 import { VrccModelsPanel } from './VrccModelsPanel';
+
+/**
+ * jsdom 没有 `IntersectionObserver`，也没有 `matchMedia`。
+ *
+ * 面板用 `IntersectionObserver` 判断「这一行要不要挂封面图」（和地图榜同一套
+ * `useVrccRowVisibility`），`matchMedia` 则是主题/动效偏好那条链路上的常见
+ * 依赖。缺了会在 effect 里抛 `ReferenceError`。
+ *
+ * 桩只装在本文件里，不动 `src/test/setup.ts`——那是全局的，为 600 多个既有
+ * 测试改它风险太大。`isIntersecting` 恒为 false 是有意的：测试只关心 DOM
+ * 内容，不需要真的触发懒加载。
+ */
+function installDomMotionStubs() {
+    class NoopIntersectionObserver {
+        readonly root = null;
+        readonly rootMargin = '';
+        readonly thresholds: readonly number[] = [];
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+            return [];
+        }
+    }
+    vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
+    vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({
+            matches: false,
+            media: '',
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false
+        }))
+    );
+}
+
+beforeEach(installDomMotionStubs);
+
+beforeEach(() => {
+    // 默认：这个模型不在榜上（后端把 404 收敛成了 null）。
+    // 需要热评的用例自己铺 `mockResolvedValueOnce`。
+    apiModel.mockReset();
+    apiModel.mockResolvedValue(null);
+});
 
 afterEach(() => {
     cleanup();
     openLink.mockClear();
+    vi.unstubAllGlobals();
 });
 
 function model(overrides: Partial<VrccBoardModel> = {}): VrccBoardModel {
@@ -196,19 +256,95 @@ describe('VrccModelsPanel', () => {
         expect(onSortChange).toHaveBeenCalledWith('week');
     });
 
-    it('点外链走 app__open_link，而不是 target=_blank', async () => {
-        // WebView 里 `target=_blank` 什么都不做。
+    it('点整行走 app__open_link 打开外链', async () => {
+        // WebView 里 `target=_blank` 什么都不做，必须走 app__open_link。
         renderPanel({
             models: board([
-                model({ id: 10, page: 'https://vrcc.cc/models/10' })
+                model({
+                    id: 10,
+                    short: '星',
+                    page: 'https://vrcc.cc/models/10'
+                })
             ])
+        });
+
+        // 外链按钮和「点整行看评论」是两个不同的动作：前者去网页，
+        // 后者在客户端里看热评。这里点的是前者。
+        await userEvent.click(
+            screen.getByRole('button', { name: 'vrcc.models.open' })
+        );
+
+        expect(openLink).toHaveBeenCalledWith('https://vrcc.cc/models/10');
+    });
+
+    it('没有公开页时外链回退到按 id 拼的星遇地址', async () => {
+        // `page` 是可选的：缺了也不能给一个打不开的空链接。
+        renderPanel({
+            models: board([model({ id: 11, short: '无页', page: null })])
         });
 
         await userEvent.click(
             screen.getByRole('button', { name: 'vrcc.models.open' })
         );
 
-        expect(openLink).toHaveBeenCalledWith('https://vrcc.cc/models/10');
+        expect(openLink).toHaveBeenCalledWith('https://vrcc.cc/models/11');
+    });
+
+    it('点整行打开评论对话框，而不是跳网页', async () => {
+        renderPanel({
+            models: board([model({ id: 12, short: '星', page: null })])
+        });
+
+        await userEvent.click(
+            screen.getByRole('button', { name: 'vrcc.models.comments: 星' })
+        );
+
+        // 对话框出现，并且说明了「只有热评」这个接口边界。
+        expect(
+            await screen.findByText('vrcc.models.hot_comments')
+        ).toBeTruthy();
+        expect(openLink).not.toHaveBeenCalled();
+    });
+
+    it('对话框显示拿到的热评和点赞数', async () => {
+        apiModel.mockResolvedValueOnce({
+            model: null,
+            at: 1,
+            hots: [
+                { text: '表情很多，换装方便', by: '某位彩蛋猎人', up: 3 },
+                { text: '换装方便', by: '某位星语者', up: 2 }
+            ]
+        });
+
+        renderPanel({
+            models: board([model({ id: 13, short: '星', page: null })])
+        });
+
+        await userEvent.click(
+            screen.getByRole('button', { name: 'vrcc.models.comments: 星' })
+        );
+
+        expect(await screen.findByText('表情很多，换装方便')).toBeTruthy();
+        expect(screen.getByText('某位彩蛋猎人')).toBeTruthy();
+        expect(screen.getByText('3')).toBeTruthy();
+        expect(screen.getByText('换装方便')).toBeTruthy();
+    });
+
+    it('模型不在榜上时说明原因，而不是当成错误', async () => {
+        // 后端把 `404 not_found` 收敛成 null，对话框要说清「已不在榜上」。
+        apiModel.mockResolvedValueOnce(null);
+
+        renderPanel({
+            models: board([model({ id: 14, short: '星', page: null })])
+        });
+
+        await userEvent.click(
+            screen.getByRole('button', { name: 'vrcc.models.comments: 星' })
+        );
+
+        expect(
+            await screen.findByText('vrcc.models.comments_gone')
+        ).toBeTruthy();
     });
 
     it('空榜显示空态而不是「没有这个接口」', () => {
