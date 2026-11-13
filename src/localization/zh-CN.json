@@ -5476,7 +5476,11 @@
                 "grade_unknown": "未分级",
                 "rooms_source": "本条目来源于【星遇同频】社团公开房间列表，它的信息不是实时的",
                 "likes": "{count} 个赞",
-                "followed": "已关注"
+                "followed": "已关注",
+                "notice": {
+                    "title": "星遇社团公告",
+                    "expired": "已失效"
+                }
             }
         },
         "favorite": {

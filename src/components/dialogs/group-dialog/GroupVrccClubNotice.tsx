@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: MPL-2.0
+
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+
+import { TranslatableText } from '@/components/translation/TranslatableText';
+import { queryKeys } from '@/lib/entityQueryCache';
+import { useNowMs } from '@/lib/useNowMs';
+import {
+    clubCodeForGroup,
+    vrccPublicClubQueryOptions
+} from '@/repositories/vrccClubRepository';
+import { fetchVrccScopeGrants } from '@/repositories/vrccMapRepository';
+
+/** 星遇把公告切成若干段，每段是一个 `["文字", 0|1]`；后端已经转成对象。 */
+type ClubTextSeg = { text?: string | null; hidden?: boolean };
+
+/**
+ * 把分段拼回一整段文字。
+ *
+ * **联系方式那段照常显示，不打码**：这是本仓库自己的选择——群组详情里的
+ * 其它长文本（描述、规则、动态）也都原样铺开，这里不做特殊处理会让同一
+ * 屏里两种规矩并存，玩家反而困惑。
+ */
+function joinSegments(segs: ClubTextSeg[] | null | undefined): string {
+    if (!Array.isArray(segs)) {
+        return '';
+    }
+    const parts: string[] = [];
+    for (const seg of segs) {
+        const text = typeof seg?.text === 'string' ? seg.text : '';
+        if (text) {
+            parts.push(text);
+        }
+    }
+    return parts.join('').trim();
+}
+
+/**
+ * 群组详情「概览」右栏里的一块：**星遇同频社团的公告**。
+ *
+ * ## 放在哪、为什么
+ *
+ * 插在「公告」（VRChat 群组动态）之下、「规则」之上。它和上面那块**不是
+ * 同一种东西**：上面是群组动态的第一条，这里是社团管理员写的置顶公告、
+ * 带到期时间。两块并排、标题不同，正好把「谁说的话」分开。
+ *
+ * ## 数据从哪来
+ *
+ * `/me/clubs/{code}` 才给 `notice`，公开接口没有——所以这一块**依赖
+ * `clubs` 权限**。没连接、没权限、群组没入驻、公告到期，全都整块不渲染，
+ * 不会留下空壳。
+ *
+ * ## 到期时间
+ *
+ * `notice.until` 是毫秒时间戳，过了就是**已失效**。星遇自己的语义是「公告到
+ * 哪天为止」，但**我们照常显示内容**，只在容器右下角固定一个灰字「已失效」
+ * ——玩家仍然能看到这条公告写了什么，只是知道它不再生效。直接隐藏反而会
+ * 让人以为社团从来没发过公告。
+ */
+export function GroupVrccClubNotice({
+    group
+}: {
+    group: {
+        shortCode?: string | null;
+        discriminator?: string | null;
+        id?: string;
+    };
+}) {
+    const { t } = useTranslation();
+    const code = clubCodeForGroup(group);
+    // `Date.now()` 在渲染期调用是副作用（React Compiler 的 purity 规则会拦）。
+    // 走仓库现成的钩子，每分钟刷一次就够——公告的到期精度不需要秒级。
+    const nowMs = useNowMs({ intervalMs: 60_000 });
+
+    const clubQuery = useQuery({
+        ...vrccPublicClubQueryOptions(code),
+        enabled: Boolean(code)
+    });
+
+    const scopeQuery = useQuery({
+        queryKey: queryKeys.vrccScope('clubs'),
+        queryFn: () => fetchVrccScopeGrants('clubs'),
+        staleTime: 60 * 1000,
+        retry: 0,
+        refetchOnWindowFocus: false
+    });
+
+    const detailQuery = useQuery({
+        queryKey: ['group', 'vrcc-club-detail', code] as const,
+        queryFn: async () => {
+            const { commands } = await import('@/platform/tauri/bindings');
+            return commands.appVrccMyClub(code);
+        },
+        enabled:
+            Boolean(code) &&
+            scopeQuery.data === true &&
+            Boolean(clubQuery.data?.club),
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
+        retry: 0
+    });
+
+    if (!code || !clubQuery.data?.club) {
+        return null;
+    }
+
+    const notice = detailQuery.data?.club?.notice;
+    if (!notice) {
+        return null;
+    }
+    // 过期**不影响显示**，只在右下角挂一个「已失效」。`until` 缺失当作长期。
+    const expired = typeof notice.until === 'number' && notice.until <= nowMs;
+
+    const text = joinSegments(notice.segs as ClubTextSeg[] | null | undefined);
+    if (!text) {
+        return null;
+    }
+
+    return (
+        <TranslatableText
+            source={text}
+            entityId={`vrcc-club-notice:${code}`}
+            density="button"
+        >
+            {({ action, meta, error, text: visibleText }) => (
+                <section className="bg-card/40 relative flex min-w-0 flex-col gap-2 rounded-md border p-3">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                        <div className="truncate text-sm font-medium">
+                            {t('dialog.group.vrcc.notice.title')}
+                        </div>
+                        {action}
+                    </div>
+                    <div className="min-w-0">
+                        {meta}
+                        <pre className="text-muted-foreground max-h-40 overflow-auto font-sans text-xs whitespace-pre-wrap">
+                            {visibleText || '\u2014'}
+                        </pre>
+                        {error}
+                    </div>
+                    {expired ? (
+                        <span className="text-muted-foreground/70 pointer-events-none absolute right-3 bottom-2 text-[10px] leading-none">
+                            {t('dialog.group.vrcc.notice.expired')}
+                        </span>
+                    ) : null}
+                </section>
+            )}
+        </TranslatableText>
+    );
+}

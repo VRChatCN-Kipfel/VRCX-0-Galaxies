@@ -5487,7 +5487,11 @@
                 "grade_unknown": "Unranked",
                 "rooms_source": "This room comes from the VRCC club room list; its details are not live",
                 "likes": "{count} likes",
-                "followed": "Following"
+                "followed": "Following",
+                "notice": {
+                    "title": "VRCC club notice",
+                    "expired": "Expired"
+                }
             }
         },
         "favorite": {

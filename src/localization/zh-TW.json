@@ -5467,7 +5467,11 @@
                 "grade_unknown": "未分級",
                 "rooms_source": "本條目來源於【星遇同頻】社團公開房間列表，它的資訊不是即時的",
                 "likes": "{count} 個讚",
-                "followed": "已關注"
+                "followed": "已關注",
+                "notice": {
+                    "title": "星遇社團公告",
+                    "expired": "已失效"
+                }
             }
         },
         "favorite": {

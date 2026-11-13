@@ -7642,8 +7642,10 @@ export type VrccClubEvent = {
 export type VrccClubNotice = {
     /**
      * 公告正文，分段规则同 [`VrccMyClubDetail::intro`]。
+     *
+     * **一层 `Vec`**：每一段就是一个 `["文字", 0|1]` 两元素数组。
      */
-    segs?: VrccClubTextSeg[][] | null;
+    segs?: VrccClubTextSeg[] | null;
     /**
      * 到什么时候为止（毫秒）。
      */
@@ -8556,8 +8558,12 @@ export type VrccMyClubDetail =
          * URL，所以打码只能靠点击展开，做不了可点链接。
          *
          * 段里还会有 `["\n", 0]` 这种只换行的段，渲染时别当空段落丢掉。
+         *
+         * **类型只有一层 `Vec`**：每一段就是一个 `["文字", 0|1]` 两元素数组，
+         * [`VrccClubTextSeg`] 自己负责解它。写成 `Vec<Vec<…>>` 会把 `"文字"`
+         * 和 `0` 当成两个段去解，结果全是空段。
          */
-        intro?: VrccClubTextSeg[][] | null;
+        intro?: VrccClubTextSeg[] | null;
         /**
          * 社团公告；没有时是 `null`。
          */
