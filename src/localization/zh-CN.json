@@ -5481,7 +5481,12 @@
                     "title": "星遇社团公告",
                     "expired": "已失效"
                 },
-                "not_followed": "未关注"
+                "not_followed": "未关注",
+                "grade_hint_1": "三等星：VRChat 群组成员满 100 人。",
+                "grade_hint_2": "二等星：VRChat 群组成员满 300 人。",
+                "grade_hint_3": "一等星：VRChat 群组成员满 1000 人。",
+                "grade_hint_4": "北极星：社区里大家熟知的代表社团。",
+                "grade_hint_unknown": "未分级：星遇同频还没有给这个社团评级。"
             }
         },
         "favorite": {

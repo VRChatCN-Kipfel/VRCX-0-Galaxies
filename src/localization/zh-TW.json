@@ -5472,7 +5472,12 @@
                     "title": "星遇社團公告",
                     "expired": "已失效"
                 },
-                "not_followed": "未關注"
+                "not_followed": "未關注",
+                "grade_hint_1": "三等星：VRChat 群組成員滿 100 人。",
+                "grade_hint_2": "二等星：VRChat 群組成員滿 300 人。",
+                "grade_hint_3": "一等星：VRChat 群組成員滿 1000 人。",
+                "grade_hint_4": "北極星：社群裡大家熟知的代表社團。",
+                "grade_hint_unknown": "未分級：星遇同頻還沒有給這個社團評級。"
             }
         },
         "favorite": {

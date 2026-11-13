@@ -17,6 +17,7 @@ import {
 } from '@/repositories/vrccClubRepository';
 import { fetchVrccScopeGrants } from '@/repositories/vrccMapRepository';
 import { openExternalLink } from '@/services/shellIntegrationService';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/shadcn/tooltip';
 
 /**
  * 评级徽章的配色。
@@ -191,6 +192,12 @@ export function GroupVrccClub({
             ? t('dialog.group.vrcc.grade_unknown')
             : club.gradeName?.trim() || t(`dialog.group.vrcc.grade_${grade}`);
     const gradeStyle = grade === null ? UNKNOWN_STYLE : GRADE_STYLES[grade];
+    // 每档一句自己的说明（官方口径）。兜底和标签同一套键，永远拿得到。
+    const gradeHint = t(
+        grade === null
+            ? 'dialog.group.vrcc.grade_hint_unknown'
+            : `dialog.group.vrcc.grade_hint_${grade}`
+    );
 
     const lede = club.lede?.trim() || '';
     const here = typeof club.here === 'number' ? club.here : 0;
@@ -247,12 +254,22 @@ export function GroupVrccClub({
                         {initial}
                     </div>
                 )}
-                <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border bg-gradient-to-r px-2 py-0.5 text-[11px] font-medium ${gradeStyle}`}
-                >
-                    <SparklesIcon className="size-3.5" />
-                    {gradeLabel}
-                </span>
+                {/* 评级徽章：名字是官方的，强弱靠颜色。悬停补一句它到底按什么
+                    评的——「北极星」四个字本身不解释任何东西。徽章不是按钮，
+                    所以 trigger 用 `render` 挂一个普通 `span`。 */}
+                <Tooltip>
+                    <TooltipTrigger
+                        render={
+                            <span
+                                className={`inline-flex shrink-0 cursor-help items-center gap-1 rounded-full border bg-gradient-to-r px-2 py-0.5 text-[11px] font-medium ${gradeStyle}`}
+                            >
+                                <SparklesIcon className="size-3.5" />
+                                {gradeLabel}
+                            </span>
+                        }
+                    />
+                    <TooltipContent side="left">{gradeHint}</TooltipContent>
+                </Tooltip>
             </div>
 
             {/* 一句话在**图标下边**，铺满整个宽度。

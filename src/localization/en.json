@@ -5492,7 +5492,12 @@
                     "title": "VRCC club notice",
                     "expired": "Expired"
                 },
-                "not_followed": "Not following"
+                "not_followed": "Not following",
+                "grade_hint_1": "Third Class: VRChat group with 100+ members.",
+                "grade_hint_2": "Second Class: VRChat group with 300+ members.",
+                "grade_hint_3": "First Class: VRChat group with 1,000+ members.",
+                "grade_hint_4": "Polaris: a well-known club in the community.",
+                "grade_hint_unknown": "Unranked: Orbitune has not rated this club yet."
             }
         },
         "favorite": {
