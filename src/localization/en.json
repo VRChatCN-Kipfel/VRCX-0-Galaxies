@@ -5474,6 +5474,30 @@
                 "join_state_invite": "Invite Only",
                 "join_state_closed": "Closed",
                 "allow_join_prompt": "Prompt people in group instances to join"
+            },
+            "vrcc": {
+                "club": "VRCC Club",
+                "open_page": "Club page",
+                "here": "{count} stars attached",
+                "source": "Data from VRCC, a VRChat Chinese community platform — not official VRChat",
+                "grade_1": "Third Class",
+                "grade_2": "Second Class",
+                "grade_3": "First Class",
+                "grade_4": "Polaris",
+                "grade_unknown": "Unranked",
+                "rooms_source": "This room comes from the VRCC club room list; its details are not live",
+                "likes": "{count} likes",
+                "followed": "Following",
+                "notice": {
+                    "title": "VRCC club notice",
+                    "expired": "Expired"
+                },
+                "not_followed": "Not following",
+                "grade_hint_1": "Third Class: VRChat group with 100+ members.",
+                "grade_hint_2": "Second Class: VRChat group with 300+ members.",
+                "grade_hint_3": "First Class: VRChat group with 1,000+ members.",
+                "grade_hint_4": "Polaris: a well-known club in the community.",
+                "grade_hint_unknown": "Unranked: Orbitune has not rated this club yet."
             }
         },
         "favorite": {
