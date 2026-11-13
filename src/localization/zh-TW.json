@@ -829,7 +829,9 @@
                 "top": "總榜",
                 "week": "本週",
                 "new": "新上榜"
-            }
+            },
+            "flip": "翻面",
+            "flip_back": "翻回正面"
         },
         "current_map": {
             "label": "你所在的地圖",

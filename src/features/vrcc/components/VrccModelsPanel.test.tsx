@@ -93,9 +93,18 @@ describe('VrccModelsPanel', () => {
             ])
         });
 
-        expect(screen.getByText('星')).toBeTruthy();
-        expect(screen.getByText('素体モデル')).toBeTruthy();
-        expect(screen.queryByText('オリジナル3Dモデル「星」')).toBeNull();
+        // 只看**卡片正面**（`.vrcc-model-card__face--front`）。
+        // 跟随指针的标签里放的是完整 BOOTH 原文，那是另一回事——它按设计
+        // 就该和正面显示的名字不同，用 `getByText` 全局找会撞上。
+        const fronts = [
+            ...document.querySelectorAll('.vrcc-model-card__face--front')
+        ];
+        const texts = fronts.map((node) => node.textContent ?? '');
+
+        expect(texts[0]).toContain('星');
+        expect(texts[0]).not.toContain('オリジナル3Dモデル「星」');
+        // short 全是空白 → 退回 BOOTH 原文。
+        expect(texts[1]).toContain('素体モデル');
     });
 
     it('价格原样显示，不解析成数字', () => {
@@ -131,7 +140,7 @@ describe('VrccModelsPanel', () => {
 
     it('本周榜用 place 当名次，并显示本周几个喜欢', () => {
         // 本周榜只按本周的喜欢排，`rank` 仍是总榜名次；本周名次是 `place`。
-        renderPanel({
+        const { container } = renderPanel({
             sort: 'week',
             models: board(
                 [
@@ -142,15 +151,21 @@ describe('VrccModelsPanel', () => {
             )
         });
 
-        // 第一行的 rank 是 9，若错用 rank 会显示 9 而不是 1。
-        expect(screen.getByText('1')).toBeTruthy();
+        // 名次只在卡片里找：分页条是常驻的，它也有一个写着「1」的页码按钮，
+        // 全局 `getByText('1')` 会同时命中两个。
+        const places = [...container.querySelectorAll('[data-model-rank]')].map(
+            (node) => node.textContent?.trim() ?? ''
+        );
+
+        // 第一张的 rank 是 9，若错用 rank 会显示 9 而不是 1。
+        expect(places).toEqual(['1', '2']);
         expect(
             screen.getByText('vrcc.models.week_count:{"count":2}')
         ).toBeTruthy();
     });
 
     it('place 缺失时本周名次退回列表位置', () => {
-        renderPanel({
+        const { container } = renderPanel({
             sort: 'week',
             models: board(
                 [
@@ -161,10 +176,12 @@ describe('VrccModelsPanel', () => {
             )
         });
 
-        // 第一行该显示 1、第二行 2（列表位置），而不是总榜名次 9 / 3。
-        expect(screen.getByText('2')).toBeTruthy();
-        expect(screen.queryByText('9')).toBeNull();
-        expect(screen.queryByText('3')).toBeNull();
+        const places = [...container.querySelectorAll('[data-model-rank]')].map(
+            (node) => node.textContent?.trim() ?? ''
+        );
+
+        // 该显示 1、2（列表位置），而不是总榜名次 9 / 3。
+        expect(places).toEqual(['1', '2']);
     });
 
     it('旧服务器上不显示排序切换，也不用转圈骗玩家', () => {

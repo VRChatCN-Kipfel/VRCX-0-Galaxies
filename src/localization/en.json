@@ -829,7 +829,9 @@
                 "top": "All time",
                 "week": "This week",
                 "new": "New"
-            }
+            },
+            "flip": "Flip card",
+            "flip_back": "Flip back"
         },
         "current_map": {
             "label": "Your current map",
