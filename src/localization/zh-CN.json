@@ -823,6 +823,13 @@
             "empty": "暂无模型榜数据",
             "unavailable": "这台服务器还没有模型榜",
             "likes": "喜欢",
+            "comments": "查看评论",
+            "likes_count": "喜欢 {count}",
+            "hot_comments": "星遇同频上的热评",
+            "comments_empty": "还没有人写评论。",
+            "comments_gone": "这个模型已经不在榜上，评论看不到了。",
+            "comments_error": "评论没能加载出来，稍后再试。",
+            "comments_note": "开放接口只给最多 2 条热评，也没有投票接口。想看完整页面请去星遇同频。",
             "week_count": "本周 {count}",
             "open": "在星遇同频打开",
             "sort": {
