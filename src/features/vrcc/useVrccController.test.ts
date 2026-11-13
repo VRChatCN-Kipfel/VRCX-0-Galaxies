@@ -736,4 +736,38 @@ describe('useVrccController', () => {
 
         consoleSpy.mockRestore();
     });
+
+    it('切回模型榜复用缓存，不重新请求', async () => {
+        // 离开页签几秒钟再回来，是很常见的动作。每次都重新拉整个榜，
+        // 玩家看到的就是一屏加载中。60 秒内必须直接用手上的那份。
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // 首屏拉了一次。
+        await waitFor(() => expect(mocks.models).toHaveBeenCalledTimes(1));
+
+        act(() => result.current.setTab('maps'));
+        act(() => result.current.setTab('models'));
+
+        // 切走再切回：仍然只有那一次请求。
+        expect(mocks.models).toHaveBeenCalledTimes(1);
+    });
+
+    it('未连接时切到模型榜也走缓存', async () => {
+        // 模型榜是开放数据，不需要连接。缓存复用那一行必须放在
+        // `connected` 检查**之前**，否则未连接的玩家每次切页签都会重新请求。
+        mocks.connection.mockResolvedValue({
+            ...connected,
+            connected: false
+        });
+
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        await waitFor(() => expect(mocks.models).toHaveBeenCalledTimes(1));
+
+        act(() => result.current.setTab('me'));
+        act(() => result.current.setTab('models'));
+
+        expect(mocks.models).toHaveBeenCalledTimes(1);
+    });
 });
