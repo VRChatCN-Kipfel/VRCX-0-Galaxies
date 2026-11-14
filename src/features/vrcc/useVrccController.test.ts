@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
     connection: vi.fn(),
     usage: vi.fn(),
     boards: vi.fn(),
+    models: vi.fn(),
+    model: vi.fn(),
     status: vi.fn(),
     announcements: vi.fn(),
     unread: vi.fn(),
@@ -62,6 +64,8 @@ vi.mock('@/platform/tauri/bindings', () => ({
         appVrccConnection: mocks.connection,
         appVrccUsage: mocks.usage,
         appVrccBoards: mocks.boards,
+        appVrccModels: mocks.models,
+        appVrccModel: mocks.model,
         appVrccStatus: mocks.status,
         appVrccAnnouncements: mocks.announcements,
         appVrccUnread: mocks.unread,
@@ -139,6 +143,16 @@ beforeEach(() => {
         })
     );
     mocks.status.mockResolvedValue({ at: 1, state: 'ok' });
+    // 模型榜：默认给一个空榜。它和地图榜是**两条独立调用**，只设 `boards`
+    // 会让这条返回 `undefined`，而那和「旧服务器回 null」在断言上看起来一样。
+    mocks.models.mockImplementation((_limit: number, sort: string | null) =>
+        Promise.resolve({
+            board: 'models',
+            sort: sort ?? 'top',
+            models: [],
+            at: 1
+        })
+    );
     mocks.announcements.mockResolvedValue({ stop: null, posts: [] });
     mocks.unread.mockResolvedValue({ inbox: 1, cross: 0, chats: 2, notes: 0 });
     mocks.notes.mockResolvedValue({ notes: [] });
@@ -721,5 +735,39 @@ describe('useVrccController', () => {
         expect(result.current.error).not.toBeNull();
 
         consoleSpy.mockRestore();
+    });
+
+    it('切回模型榜复用缓存，不重新请求', async () => {
+        // 离开页签几秒钟再回来，是很常见的动作。每次都重新拉整个榜，
+        // 玩家看到的就是一屏加载中。60 秒内必须直接用手上的那份。
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // 首屏拉了一次。
+        await waitFor(() => expect(mocks.models).toHaveBeenCalledTimes(1));
+
+        act(() => result.current.setTab('maps'));
+        act(() => result.current.setTab('models'));
+
+        // 切走再切回：仍然只有那一次请求。
+        expect(mocks.models).toHaveBeenCalledTimes(1);
+    });
+
+    it('未连接时切到模型榜也走缓存', async () => {
+        // 模型榜是开放数据，不需要连接。缓存复用那一行必须放在
+        // `connected` 检查**之前**，否则未连接的玩家每次切页签都会重新请求。
+        mocks.connection.mockResolvedValue({
+            ...connected,
+            connected: false
+        });
+
+        const { result } = renderHook(() => useVrccController());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        await waitFor(() => expect(mocks.models).toHaveBeenCalledTimes(1));
+
+        act(() => result.current.setTab('me'));
+        act(() => result.current.setTab('models'));
+
+        expect(mocks.models).toHaveBeenCalledTimes(1);
     });
 });
