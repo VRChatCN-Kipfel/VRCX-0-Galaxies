@@ -28,8 +28,7 @@
        兄弟画在前面的上面——不抬的话，越界的标签和倾斜后伸出的边角都会被右边
        那张卡盖住。`z-index` 写在标签上没用，那只在卡片自己的上下文里有效。 */
     .vrcc-model-card:hover,
-    .vrcc-model-card:focus-within,
-    .vrcc-model-card[data-flipped] {
+    .vrcc-model-card:focus-within {
         z-index: 2;
     }
 
@@ -39,14 +38,10 @@
         transform-style: preserve-3d;
     }
 
+    /* 翻面现在只发生在飞行副本上（见 card-morph.css）：正片在网格里不再转动，
+       这一层留着是因为正面就挂在它下面。 */
     .vrcc-model-card__flip {
-        transform: rotateY(0deg);
         transform-style: preserve-3d;
-        transition: transform var(--motion-flip) var(--ease-out-ui);
-    }
-
-    .vrcc-model-card[data-flipped] .vrcc-model-card__flip {
-        transform: rotateY(180deg);
     }
 
     /* 底色、描边、圆角、裁剪都放在**面**上，不能放到 li 上：
@@ -74,14 +69,6 @@
         position: relative;
         display: flex;
         flex-direction: column;
-    }
-
-    .vrcc-model-card__face--back {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        transform: rotateY(180deg);
     }
 
     .vrcc-model-card:hover .vrcc-model-card__face {

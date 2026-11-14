@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -16,6 +22,16 @@ vi.mock('../useOpenExternalLink', () => ({
     useOpenExternalLink: () => ({ open: vi.fn(), pending: false })
 }));
 
+const apiModel = vi.hoisted(() => vi.fn());
+vi.mock('../vrccApi', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../vrccApi')>();
+    return {
+        ...actual,
+        vrccApi: { ...actual.vrccApi, model: apiModel }
+    };
+});
+
+import { MORPH_ENTRY_MS } from '../cardMorph';
 import type { VrccBoardModel, VrccModelBoard } from '../vrccApi';
 import { VrccModelsPanel } from './VrccModelsPanel';
 
@@ -43,6 +59,10 @@ function tick(count = 1) {
 }
 
 beforeEach(() => {
+    // 详情请求走 IPC；测试里没有 `commands`。这条文件的用例只关心形变接线，
+    // 让请求直接失败即可，需要验 404 收回的用例自己铺 `mockResolvedValueOnce`。
+    apiModel.mockReset();
+    apiModel.mockRejectedValue(new Error('no ipc'));
     frames = [];
     clock = 0;
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -149,7 +169,147 @@ describe('VrccModelsPanel 倾斜接线', () => {
         expect(card.style.getPropertyValue('--tilt-y')).not.toBe('');
     });
 
-    it('点封面翻到背面，点背面翻回来', () => {
+    it('点封面打开评论弹窗', () => {
+        const { container } = render(
+            <VrccModelsPanel
+                models={board([model()])}
+                sort="top"
+                sortSupported
+                available
+                onSortChange={() => {}}
+                onRefresh={() => {}}
+            />
+        );
+
+        // 卡片上只有一个动作：点它开评论弹窗。翻面不再是独立状态，
+        // 它是形变的前半程（见 cardMorph.ts）。
+        expect(screen.queryByText('vrcc.models.hot_comments')).toBeNull();
+
+        fireEvent.click(
+            container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+        );
+
+        expect(screen.getByText('vrcc.models.hot_comments')).toBeTruthy();
+    });
+
+    it('同一时刻只开一个弹窗', () => {
+        const { container } = render(
+            <VrccModelsPanel
+                models={board([model({ id: 1 }), model({ id: 2 })])}
+                sort="top"
+                sortSupported
+                available
+                onSortChange={() => {}}
+                onRefresh={() => {}}
+            />
+        );
+
+        const covers = [
+            ...container.querySelectorAll<HTMLElement>(
+                '.vrcc-model-card__cover'
+            )
+        ];
+
+        fireEvent.click(covers[0]);
+        expect(screen.getAllByText('vrcc.models.hot_comments')).toHaveLength(1);
+
+        // 点第二张时第一张的弹窗被换掉，不会两个一起开着。
+        fireEvent.click(covers[1]);
+        expect(screen.getAllByText('vrcc.models.hot_comments')).toHaveLength(1);
+    });
+
+    it('换排序时把弹窗收起来', () => {
+        const { container, rerender } = render(
+            <VrccModelsPanel
+                models={board([model()])}
+                sort="top"
+                sortSupported
+                available
+                onSortChange={() => {}}
+                onRefresh={() => {}}
+            />
+        );
+
+        fireEvent.click(
+            container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+        );
+        expect(screen.getByText('vrcc.models.hot_comments')).toBeTruthy();
+
+        // 数据换了还留着旧详情，看到的就是另一条东西的内容。
+        rerender(
+            <VrccModelsPanel
+                models={board([model()])}
+                sort="week"
+                sortSupported
+                available
+                onSortChange={() => {}}
+                onRefresh={() => {}}
+            />
+        );
+
+        expect(screen.queryByText('vrcc.models.hot_comments')).toBeNull();
+    });
+
+    it('飞行途中要求关闭只是排队：入场落地之后才收（决策十）', () => {
+        vi.useFakeTimers();
+        try {
+            const { container } = render(
+                <VrccModelsPanel
+                    models={board([model()])}
+                    sort="top"
+                    sortSupported
+                    available
+                    onSortChange={() => {}}
+                    onRefresh={() => {}}
+                />
+            );
+
+            const card = container.querySelector<HTMLElement>('[data-tilt]')!;
+            stubRect(card);
+            fireEvent.click(
+                container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+            );
+
+            // 飞行层在 → 入场没落地。
+            const flight = document.querySelector('.vrcc-morph-flight');
+            expect(flight).not.toBeNull();
+            expect(flight!.hasAttribute('data-closing')).toBe(false);
+
+            // 此刻要求关闭（点弹窗的关闭按钮）：不该立刻消失，而是排队。
+            fireEvent.click(
+                document.querySelector<HTMLElement>(
+                    '[data-slot="dialog-close"]'
+                )!
+            );
+            expect(
+                document
+                    .querySelector('.vrcc-morph-flight')!
+                    .hasAttribute('data-closing')
+            ).toBe(false);
+
+            // 入场时长走完 → 排队的关闭这时才生效。
+            //
+            // 这里不断言 `data-closing`：定时器和 Base UI 的收起动画在 jsdom 里
+            // 没有真实时间轴，`advanceTimersByTime` 一推，收起、卸载、收尾
+            // 可能在同一拍里走完。真正要钉住的是**排队这件事本身** ——
+            // 也就是上一拍「要求关闭时没有立刻收」，以及下面这一拍「收掉了」。
+            act(() => {
+                vi.advanceTimersByTime(MORPH_ENTRY_MS + 10);
+            });
+            expect(document.querySelector('[data-slot="dialog-content"]')).toBe(
+                null
+            );
+            expect(document.querySelector('.vrcc-morph-flight')).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('入场途中被确认「不在榜上」就当场收回，不飞完（决策十三）', async () => {
+        // 404 是**正常状态**（下架/未过审），不是故障；但继续飞完 800ms 再
+        // 告诉用户「没有」，比当场收回去更怪。这是唯一允许中途反悔的情况。
+        apiModel.mockResolvedValue(null);
+
         const { container } = render(
             <VrccModelsPanel
                 models={board([model()])}
@@ -162,85 +322,126 @@ describe('VrccModelsPanel 倾斜接线', () => {
         );
 
         const card = container.querySelector<HTMLElement>('[data-tilt]')!;
-        const flipButton = container.querySelector<HTMLElement>(
-            '.vrcc-model-card__face--front button'
-        )!;
-        const backButton = container.querySelector<HTMLElement>(
-            '.vrcc-model-card__face--back'
-        )!;
+        stubRect(card);
+        fireEvent.click(
+            container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+        );
 
-        expect(card.hasAttribute('data-flipped')).toBe(false);
+        // 入场刚开始：飞行层在。
+        expect(document.querySelector('.vrcc-morph-flight')).not.toBeNull();
 
-        fireEvent.click(flipButton);
-        expect(card.hasAttribute('data-flipped')).toBe(true);
+        // 请求回来是 null → 立刻收起，不等 MORPH_ENTRY_MS。
+        await act(async () => {
+            await Promise.resolve();
+        });
 
-        fireEvent.click(backButton);
-        expect(card.hasAttribute('data-flipped')).toBe(false);
+        expect(document.querySelector('.vrcc-morph-flight')).toBeNull();
     });
 
-    it('同一时刻只允许一张翻着', () => {
-        const { container } = render(
-            <VrccModelsPanel
-                models={board([model({ id: 1 }), model({ id: 2 })])}
-                sort="top"
-                sortSupported
-                available
-                onSortChange={() => {}}
-                onRefresh={() => {}}
-            />
-        );
+    it('落地之后才收到 404：照常显示解释，不收回（决策十三的另一半）', async () => {
+        vi.useFakeTimers();
+        try {
+            apiModel.mockResolvedValue(null);
 
-        const cards = [
-            ...container.querySelectorAll<HTMLElement>('[data-tilt]')
-        ];
-        const flipButtons = [
-            ...container.querySelectorAll<HTMLElement>(
-                '.vrcc-model-card__face--front button'
-            )
-        ];
+            const { container } = render(
+                <VrccModelsPanel
+                    models={board([model()])}
+                    sort="top"
+                    sortSupported
+                    available
+                    onSortChange={() => {}}
+                    onRefresh={() => {}}
+                />
+            );
 
-        fireEvent.click(flipButtons[0]);
-        expect(cards[0].hasAttribute('data-flipped')).toBe(true);
+            const card = container.querySelector<HTMLElement>('[data-tilt]')!;
+            stubRect(card);
+            fireEvent.click(
+                container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+            );
 
-        // 翻第二张时第一张自己翻回去——网格是拿来扫的，全都翻过去就认不出谁了。
-        fireEvent.click(flipButtons[1]);
-        expect(cards[0].hasAttribute('data-flipped')).toBe(false);
-        expect(cards[1].hasAttribute('data-flipped')).toBe(true);
+            // 先让入场走完，请求再回来：这时弹窗已经在位，`onGone` 不该收回。
+            act(() => {
+                vi.advanceTimersByTime(MORPH_ENTRY_MS + 10);
+            });
+            await act(async () => {
+                await Promise.resolve();
+            });
+
+            expect(
+                document.querySelector('[data-slot="dialog-content"]')
+            ).not.toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
-    it('换排序时把翻着的收回来', () => {
-        const { container, rerender } = render(
-            <VrccModelsPanel
-                models={board([model()])}
-                sort="top"
-                sortSupported
-                available
-                onSortChange={() => {}}
-                onRefresh={() => {}}
-            />
-        );
+    it('减动效命中时不挂飞行层，直接开弹窗', () => {
+        // 两条通道都要关掉飞行：系统偏好，和设置里那个 `.reduce-effects`。
+        // 这里测系统偏好这一条。
+        const previous = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+            matches: query.includes('prefers-reduced-motion'),
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false
+        })) as typeof window.matchMedia;
 
-        const flipButton = container.querySelector<HTMLElement>(
-            '.vrcc-model-card__face--front button'
-        )!;
-        fireEvent.click(flipButton);
-        expect(
-            container.querySelector('[data-tilt]')!.hasAttribute('data-flipped')
-        ).toBe(true);
+        try {
+            const { container } = render(
+                <VrccModelsPanel
+                    models={board([model()])}
+                    sort="top"
+                    sortSupported
+                    available
+                    onSortChange={() => {}}
+                    onRefresh={() => {}}
+                />
+            );
 
-        rerender(
-            <VrccModelsPanel
-                models={board([model()])}
-                sort="week"
-                sortSupported
-                available
-                onSortChange={() => {}}
-                onRefresh={() => {}}
-            />
-        );
+            const card = container.querySelector<HTMLElement>('[data-tilt]')!;
+            stubRect(card);
+            fireEvent.click(
+                container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+            );
 
-        expect(
-            container.querySelector('[data-tilt]')!.hasAttribute('data-flipped')
-        ).toBe(false);
+            // 没有飞行体，弹窗照样开。
+            expect(document.querySelector('.vrcc-morph-flight')).toBeNull();
+            expect(
+                document.querySelector('[data-slot="dialog-content"]')
+            ).not.toBeNull();
+        } finally {
+            window.matchMedia = previous;
+        }
+    });
+
+    it('设置里关掉动效（.reduce-effects）时同样不挂飞行层', () => {
+        document.documentElement.classList.add('reduce-effects');
+        try {
+            const { container } = render(
+                <VrccModelsPanel
+                    models={board([model()])}
+                    sort="top"
+                    sortSupported
+                    available
+                    onSortChange={() => {}}
+                    onRefresh={() => {}}
+                />
+            );
+
+            const card = container.querySelector<HTMLElement>('[data-tilt]')!;
+            stubRect(card);
+            fireEvent.click(
+                container.querySelector<HTMLElement>('.vrcc-model-card__cover')!
+            );
+
+            expect(document.querySelector('.vrcc-morph-flight')).toBeNull();
+        } finally {
+            document.documentElement.classList.remove('reduce-effects');
+        }
     });
 });
