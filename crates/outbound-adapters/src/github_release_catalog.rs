@@ -98,15 +98,20 @@ fn parse_catalog_response(
     status: i32,
     data: &str,
 ) -> vrcx_0_application_core::Result<Vec<AppUpdateCatalogRelease>> {
+    let parsed = serde_json::from_str::<Value>(data);
+    // 拒绝或失败时 GitHub 把原因写在体的 `message` 里（限流的原文带着出口 IP，
+    // 代理自己拦下的请求则常常一点体都没有）。原文比「request failed (403)」有用。
+    if let Ok(value) = &parsed {
+        if let Some(message) = value.get("message").and_then(Value::as_str) {
+            return Err(Error::Custom(message.to_string()));
+        }
+    }
     if status != 200 {
         return Err(Error::Custom(format!(
             "GitHub release request failed ({status})."
         )));
     }
-    let value: Value = serde_json::from_str(data)?;
-    if let Some(message) = value.get("message").and_then(Value::as_str) {
-        return Err(Error::Custom(message.to_string()));
-    }
+    let value = parsed?;
     let releases = match value {
         Value::Array(_) => serde_json::from_value::<Vec<GitHubRelease>>(value)?,
         other => vec![serde_json::from_value::<GitHubRelease>(other)?],
@@ -148,6 +153,16 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "rate limited"
+        );
+        // 限流的 403 也带 message：原文里写着出口 IP，比「(403)」有用。
+        assert_eq!(
+            parse_catalog_response(
+                403,
+                r#"{"message":"API rate limit exceeded for 203.0.113.7."}"#
+            )
+            .unwrap_err()
+            .to_string(),
+            "API rate limit exceeded for 203.0.113.7."
         );
     }
 }

@@ -1,4 +1,9 @@
-import { HeartIcon, LanguagesIcon, StarIcon } from 'lucide-react';
+import {
+    HeartIcon,
+    LanguagesIcon,
+    RefreshCwIcon,
+    StarIcon
+} from 'lucide-react';
 import {
     type ComponentPropsWithoutRef,
     useEffect,
@@ -11,6 +16,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
+import { TranslatableText } from '@/components/translation/TranslatableText';
 import { formatDateFilter } from '@/lib/dateTime';
 import { userFacingErrorMessage } from '@/lib/errorDisplay';
 import { useActiveScrollSection } from '@/lib/useActiveScrollSection';
@@ -220,6 +226,7 @@ export function ChangelogDialog({
     const [activeLanguage, setActiveLanguage] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [reloadNonce, setReloadNonce] = useState(0);
     const scrollRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -277,7 +284,14 @@ export function ChangelogDialog({
         return () => {
             active = false;
         };
-    }, [i18n.language, i18n.resolvedLanguage, open, t, targetVersion]);
+    }, [
+        i18n.language,
+        i18n.resolvedLanguage,
+        open,
+        reloadNonce,
+        t,
+        targetVersion
+    ]);
 
     const sectionIds = useMemo(
         () => sections.map((section) => section.id),
@@ -359,8 +373,45 @@ export function ChangelogDialog({
                         <span>{t('dialog.change_log.loading')}</span>
                     </div>
                 ) : error ? (
-                    <div className="text-muted-foreground self-start rounded-md border p-3 text-sm">
-                        {error}
+                    <div className="text-muted-foreground max-h-full self-start overflow-auto rounded-md border p-3 text-sm">
+                        <TranslatableText
+                            source={error}
+                            entityId="change-log-error"
+                            density="icon"
+                        >
+                            {({
+                                text,
+                                action,
+                                meta,
+                                error: translationError
+                            }) => (
+                                <>
+                                    <div className="mb-1.5 flex items-center justify-end gap-1">
+                                        <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setReloadNonce(
+                                                    (nonce) => nonce + 1
+                                                )
+                                            }
+                                        >
+                                            <RefreshCwIcon data-icon="inline-start" />
+                                            <span>
+                                                {t('common.action.retry')}
+                                            </span>
+                                        </Button>
+                                        {action}
+                                    </div>
+                                    {meta}
+                                    <p className="font-mono text-xs break-words whitespace-pre-wrap">
+                                        {text}
+                                    </p>
+                                    {translationError}
+                                </>
+                            )}
+                        </TranslatableText>
                     </div>
                 ) : sections.length ? (
                     <div className="grid min-h-0 grid-cols-[9rem_minmax(0,1fr)] gap-4">
