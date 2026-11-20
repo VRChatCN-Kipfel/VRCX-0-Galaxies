@@ -44,6 +44,7 @@ pub fn forget_taskbar_overlay_notification() {
     TASKBAR_OVERLAY_NOTIFY.store(false, Ordering::Release);
 }
 
+#[cfg(target_os = "windows")]
 fn apply_overlay(window_handle: isize, notify: bool) {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::HWND;
