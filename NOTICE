@@ -29,3 +29,16 @@ nothing from VRCX-0 to build them.
 Exhibit B ("Incompatible With Secondary Licenses") is deliberately not
 attached to any of them, so the MPL-2.0 files remain combinable with GPL-3.0.
 
+Brand artwork
+
+The image assets under images/brand/ and src-tauri/icons/ reproduce the
+VRCX-0 application mark and a co-branded variant of it. The co-branded
+variant combines the VRCX-0 glyph with the 星遇同频 (VRCC) mark.
+
+Rights in the 星遇同频 (VRCC) mark remain with its owner. Nothing in this
+repository grants a license to that mark, and the GPL-3.0-only terms that
+apply to VRCX-0 do not extend to it.
+
+No trademark or service mark rights are granted for any name, logo, or mark
+that appears in this repository.
+

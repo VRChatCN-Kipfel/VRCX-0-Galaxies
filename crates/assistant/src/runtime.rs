@@ -10,6 +10,7 @@ use vrcx_0_contracts::llm::{LlmEndpointDetectModelsResult, LlmRequestOptions, To
 use vrcx_0_mcp::{spawn_in_process_tools, InProcessMcpTools, McpRuntime};
 
 use crate::agent::{run_turn, TurnContext};
+use crate::choices::PendingChoices;
 use crate::config::{should_apply_playbook, PlaybookMode};
 use crate::endpoints::{
     resolve_reasoning_effort, AssistantRuntimeSelection, AssistantRuntimeStatus, EndpointStore,
@@ -20,7 +21,17 @@ use crate::endpoints::{
 /// from the model unless the user has explicitly armed writes, so a prompt
 /// injection in attacker-controlled data (e.g. a friend's bio) cannot drive an
 /// autonomous write.
-const WRITE_TOOLS: &[&str] = &["favorite_local", "favorite_vrchat", "set_friend_note"];
+const WRITE_TOOLS: &[&str] = &[
+    "favorite_local",
+    "favorite_vrchat",
+    "set_friend_note",
+    // Chatbox writes go to the public chatbox everyone in the instance can read,
+    // so they need the same explicit arming: a friend's bio is attacker-controlled
+    // text and must not be able to drive the model into posting there.
+    "send_chatbox_message",
+    "set_chatbox_afk",
+    "update_chatbox",
+];
 use crate::error::AssistantError;
 use crate::events::AssistantEmitter;
 use crate::ports::{AssistantConfig, AssistantLlmClientFactory, AssistantSessionPersistence};
@@ -35,6 +46,7 @@ pub struct AssistantController {
     tools: Arc<InProcessMcpTools>,
     tool_defs: Arc<Vec<ToolDefinition>>,
     sessions: Arc<SessionStore>,
+    choices: PendingChoices,
     auth_scope: RuntimeAuthScope,
     cancels: Arc<Mutex<HashMap<String, (String, CancellationToken)>>>,
 }
@@ -69,6 +81,7 @@ impl AssistantController {
             tools,
             tool_defs,
             sessions: Arc::new(SessionStore::with_persistence(deps.session_persistence)),
+            choices: PendingChoices::default(),
             auth_scope: deps.auth_scope,
             cancels: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -178,6 +191,18 @@ impl AssistantController {
         }
     }
 
+    pub fn rename_session(&self, session_id: &str, title: &str) -> Result<(), AssistantError> {
+        self.sessions
+            .rename(&self.owner_user_id(), session_id, title)
+            .map_err(AssistantError::from)
+    }
+
+    pub fn set_session_pinned(&self, session_id: &str, pinned: bool) -> Result<(), AssistantError> {
+        self.sessions
+            .set_pinned(&self.owner_user_id(), session_id, pinned)
+            .map_err(AssistantError::from)
+    }
+
     pub fn delete_session(&self, session_id: &str) {
         let owner_user_id = self.owner_user_id();
         if self.sessions.is_visible_to(session_id, &owner_user_id) {
@@ -192,6 +217,15 @@ impl AssistantController {
             .is_visible_to(session_id, &self.owner_user_id())
         {
             self.cancel_visible(session_id);
+        }
+    }
+
+    pub fn answer_choice(&self, session_id: &str, choice_id: &str, user_id: Option<String>) {
+        if self
+            .sessions
+            .is_visible_to(session_id, &self.owner_user_id())
+        {
+            self.choices.answer(session_id, choice_id, user_id);
         }
     }
 
@@ -240,6 +274,7 @@ impl AssistantController {
                 model,
                 &stored_effort,
             ),
+            forbid_tool_calls: false,
         };
 
         let tool_defs = visible_tool_defs(&self.tool_defs, session.allow_writes);
@@ -281,6 +316,7 @@ impl AssistantController {
         let context = TurnContext {
             tools: Arc::clone(&self.tools),
             sessions: Arc::clone(&self.sessions),
+            choices: self.choices.clone(),
             emitter: AssistantEmitter::new(
                 self.bus.clone(),
                 owner_user_id,
@@ -372,6 +408,29 @@ impl Drop for CancelCleanup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every chatbox tool that changes what the instance sees stays hidden until
+    /// writes are armed; the read-only `get_chatbox` stays visible.
+    #[test]
+    fn chatbox_writes_stay_hidden_unless_writes_are_armed() {
+        let tool_defs = Arc::new(
+            [
+                "get_chatbox",
+                "send_chatbox_message",
+                "set_chatbox_afk",
+                "update_chatbox",
+            ]
+            .map(|name| crate::test_support::tool_def(name, serde_json::Value::Null))
+            .to_vec(),
+        );
+
+        let hidden = visible_tool_defs(&tool_defs, false);
+        let names: Vec<&str> = hidden.iter().map(|tool| tool.name.as_str()).collect();
+        assert_eq!(names, vec!["get_chatbox"]);
+
+        let armed = visible_tool_defs(&tool_defs, true);
+        assert_eq!(armed.len(), tool_defs.len());
+    }
 
     #[test]
     fn write_tools_stay_hidden_unless_writes_are_armed() {

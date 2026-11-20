@@ -2,29 +2,33 @@ use std::sync::{Arc, Mutex};
 
 use vrcx_0_application::auth::AuthCredentialStore;
 use vrcx_0_application_activity::notification::{
-    apply_location_notification_rules, extract_file_version, fallback_file_version,
-    load_overlay_activity_filters, rename_local_favorite_group_in_activity_filters,
-    CachedNotificationUserImageResolver, NotificationConfig, NotificationResolver,
+    extract_file_version, fallback_file_version, reload_activity_router,
+    rename_local_favorite_group_in_activity_filters, CachedNotificationUserImageResolver,
+    NotificationRemoteFuture, NotificationResolver,
 };
 use vrcx_0_application_activity::{ActivityRouter, ActivitySink, ActivitySinkRegistry};
 use vrcx_0_application_core::{
-    FriendProjection, HostSessionRuntime, ImageCache,
-    RealtimeNotificationProjectionObserverRegistry, RuntimeAuthScope, RuntimeEventBus,
-    TaskSupervisor, WebClient, WorldCache,
+    ConfigStore, HostSessionRuntime, ImageCache, RuntimeAuthScope, RuntimeEventBus, TaskSupervisor,
+    WebClient, WorldCache,
 };
 use vrcx_0_application_game::{
-    GameLogSideEffectEvent, GameLogSideEffectObserver, NowPlayingSnapshot, RuntimeSnapshot,
-    RuntimeSnapshotStore,
+    GameLogSideEffectEvent, GameLogSideEffectObserver, NowPlayingSnapshot, NowPlayingStore,
+    RuntimeSnapshot, RuntimeSnapshotStore,
 };
-use vrcx_0_application_realtime::{FriendProjectionObserver, RealtimeHostRuntime};
+use vrcx_0_application_realtime::{
+    FriendProjection, FriendProjectionObserver, RealtimeHostRuntime,
+    RealtimeNotificationProjectionObserverRegistry,
+};
 use vrcx_0_contracts::vrcc::VrccWristSummary;
 use vrcx_0_core::files::extract_file_id;
 use vrcx_0_core::friends::StateBucket;
 use vrcx_0_host_desktop::tts::{SystemTtsEngine, TtsEngine};
 #[cfg(any(windows, target_os = "linux"))]
 use vrcx_0_overlay_runtime::VrOverlayRuntimeServices;
-use vrcx_0_persistence::{config::ConfigRepository, DatabaseService};
+use vrcx_0_persistence::DatabaseService;
 
+use crate::chatbox::ChatboxRuntime;
+use crate::game_isolation::GameIsolationRuntime;
 use crate::host_actions::RuntimeHost;
 use crate::notification::{
     migrate_legacy_overlay_notification_keys, seed_hmd_notifications_default,
@@ -40,8 +44,7 @@ pub(crate) struct DesktopRuntimeServicesDeps {
     pub db: Arc<DatabaseService>,
     pub web: Arc<WebClient>,
     pub image_cache: Arc<ImageCache>,
-    pub config: ConfigRepository,
-    pub notification_config: Arc<dyn NotificationConfig>,
+    pub config: Arc<dyn ConfigStore>,
     pub notification_resolver: Arc<NotificationResolver>,
     pub auth_credentials: Arc<dyn AuthCredentialStore>,
     pub auth_scope: RuntimeAuthScope,
@@ -57,8 +60,7 @@ pub(crate) struct DesktopRuntimeServicesDeps {
 pub struct DesktopRuntimeServices {
     web: Arc<WebClient>,
     image_cache: Arc<ImageCache>,
-    config: ConfigRepository,
-    notification_config: Arc<dyn NotificationConfig>,
+    config: Arc<dyn ConfigStore>,
     auth_scope: RuntimeAuthScope,
     session: HostSessionRuntime,
     world_cache: Arc<WorldCache>,
@@ -67,6 +69,7 @@ pub struct DesktopRuntimeServices {
     activity_router: ActivityRouter,
     activity_sinks: ActivitySinkRegistry,
     notification_do_not_disturb: NotificationDoNotDisturbRuntime,
+    game_isolation: GameIsolationRuntime,
     notification_indicator: Arc<RealtimeNotificationIndicator>,
     privacy_lock: Arc<PrivacyLockRuntime>,
     notification_policy: Arc<LocalNotificationPolicy>,
@@ -79,21 +82,23 @@ pub struct DesktopRuntimeServices {
     notification_resolver: Arc<NotificationResolver>,
     realtime_user_image_resolver_owner: Mutex<Option<Arc<dyn CachedNotificationUserImageResolver>>>,
     game_log_snapshot: RuntimeSnapshotStore,
-    now_playing: Arc<Mutex<Arc<NowPlayingSnapshot>>>,
+    now_playing: NowPlayingStore,
+    chatbox: Arc<ChatboxRuntime>,
     /// 星遇同频运行时，构造后注入。
     ///
-    /// 和 `realtime_user_image_resolver_owner` 一样是"后挂"：
-    /// `DesktopRuntimeServices` 与 vrcc 运行时在装配时互相看不到，
-    /// 硬要同期构造会把两边的装配顺序绑死。
+    /// 和 `realtime_user_image_resolver_owner` 一样是"后挂"：`DesktopRuntimeServices`
+    /// 与 vrcc 运行时在装配时互相看不到，硬要同期构造会把两边的装配顺序绑死。
+    /// 上游把 `now_playing` 换成了 `NowPlayingStore`、新加了 `chatbox`，这两个字段
+    /// 照收；vrcc 这一格是本区新增，不冲突——上游那边没有这条链。
     vrcc: Mutex<Option<Arc<crate::vrcc::DesktopVrccRuntime>>>,
 }
 
 impl DesktopRuntimeServices {
     pub(crate) fn new(deps: DesktopRuntimeServicesDeps) -> vrcx_0_application_core::Result<Self> {
-        if let Err(error) = migrate_legacy_overlay_notification_keys(&deps.config) {
+        if let Err(error) = migrate_legacy_overlay_notification_keys(deps.config.as_ref()) {
             tracing::warn!(error = %error, "failed to migrate legacy overlay notification keys");
         }
-        if let Err(error) = seed_hmd_notifications_default(&deps.config) {
+        if let Err(error) = seed_hmd_notifications_default(deps.config.as_ref()) {
             tracing::warn!(error = %error, "failed to seed HMD notification preference");
         }
         let tts: Arc<dyn TtsEngine> = Arc::new(SystemTtsEngine::new());
@@ -107,9 +112,12 @@ impl DesktopRuntimeServices {
             host.clone(),
             deps.tasks.clone(),
         )?;
+        let game_isolation =
+            GameIsolationRuntime::new(deps.config.clone(), deps.event_bus.clone(), host.clone())?;
         let privacy_lock = Arc::new(PrivacyLockRuntime::new(
             deps.auth_credentials,
             deps.event_bus.clone(),
+            deps.web.proxy_url().map(str::to_string),
         )?);
         deps.auth_scope.add_observer(privacy_lock.clone());
         let notification_policy = Arc::new(LocalNotificationPolicy::new(
@@ -117,6 +125,7 @@ impl DesktopRuntimeServices {
             deps.session.clone(),
             notification_do_not_disturb.clone(),
             privacy_lock.clone(),
+            game_isolation.clone(),
         ));
         let notification_indicator = Arc::new(RealtimeNotificationIndicator::new(
             Arc::clone(&deps.db),
@@ -142,16 +151,23 @@ impl DesktopRuntimeServices {
                 proxy_url: deps.web.proxy_url().map(ToString::to_string),
             }));
         // 同一份 dispatcher 有两个身份：作为 `ActivitySink` 接 VRChat 活动，
-        // 以及被 vrcc 直接调用来投递站外提醒。留住具体类型，别只留 trait object。
+        // 以及被 vrcc 直接调用来投递站外提醒。`NotificationSink` 只是同一个
+        // `Arc` 的一层壳、不复制 dispatcher，所以上面那格留的是**具体类型**、
+        // 这里交出去的是 trait object——两者指向同一份有序投递队列。
         deps.activity_sinks
             .add(Arc::new(NotificationSink::new(Arc::clone(
                 &notification_dispatcher,
             ))));
+        let chatbox = Arc::new(ChatboxRuntime::new(
+            deps.config.clone(),
+            deps.session.clone(),
+            game_isolation.clone(),
+            deps.event_bus.clone(),
+        ));
         Ok(Self {
             web: deps.web,
             image_cache: deps.image_cache,
             config: deps.config,
-            notification_config: deps.notification_config,
             auth_scope: deps.auth_scope,
             session: deps.session,
             world_cache: deps.world_cache,
@@ -160,6 +176,7 @@ impl DesktopRuntimeServices {
             activity_router: deps.activity_router,
             activity_sinks: deps.activity_sinks,
             notification_do_not_disturb,
+            game_isolation,
             notification_indicator,
             privacy_lock,
             notification_policy,
@@ -170,7 +187,8 @@ impl DesktopRuntimeServices {
             notification_resolver: deps.notification_resolver,
             realtime_user_image_resolver_owner: Mutex::new(None),
             game_log_snapshot: RuntimeSnapshotStore::default(),
-            now_playing: Arc::new(Mutex::new(Arc::new(NowPlayingSnapshot::default()))),
+            now_playing: NowPlayingStore::default(),
+            chatbox,
             vrcc: Mutex::new(None),
         })
     }
@@ -181,7 +199,7 @@ impl DesktopRuntimeServices {
         new_group_name: &str,
     ) -> vrcx_0_application_core::Result<()> {
         rename_local_favorite_group_in_activity_filters(
-            self.notification_config.as_ref(),
+            self.config.as_ref(),
             group_name,
             new_group_name,
         )?;
@@ -190,11 +208,7 @@ impl DesktopRuntimeServices {
     }
 
     pub fn reload_overlay_activity_filters(&self) {
-        self.activity_router
-            .set_filters(load_overlay_activity_filters(
-                self.notification_config.as_ref(),
-            ));
-        apply_location_notification_rules(&self.activity_router, self.notification_config.as_ref());
+        reload_activity_router(&self.activity_router, self.config.as_ref());
     }
 
     pub fn set_overlay_activity_extra_sink(&self, extra_sink: Arc<dyn ActivitySink>) {
@@ -293,11 +307,21 @@ impl DesktopRuntimeServices {
         self.game_log_snapshot.snapshot()
     }
 
+    /// 星遇同频用的「玩家现在在哪张图」（所在地图卡片、腕表摘要）。
+    ///
+    /// 开启游戏隔离时不给：隔离是为了用另一个账号玩时不暴露本机在做什么，游戏日志
+    /// 里的位置可能已经是小号所在的世界。上游读本机位置的地方也只看这个开关（见
+    /// `IsolatedLocalGameContextSource`），所以这里一样：开关打开那一刻起就不给，
+    /// 不等游戏日志闸门在下一次换世界时才生效。
+    pub fn vrcc_world_id(&self) -> String {
+        if self.game_isolation.is_enabled() {
+            return String::new();
+        }
+        vrcx_0_core::location::world_id_from_location(&self.game_log_snapshot().location)
+    }
+
     pub fn now_playing(&self) -> Arc<NowPlayingSnapshot> {
-        self.now_playing
-            .lock()
-            .map(|snapshot| Arc::clone(&snapshot))
-            .unwrap_or_else(|_| Arc::new(NowPlayingSnapshot::default()))
+        self.now_playing.snapshot()
     }
 
     pub fn activity_router(&self) -> ActivityRouter {
@@ -312,6 +336,14 @@ impl DesktopRuntimeServices {
         self.notification_do_not_disturb.clone()
     }
 
+    pub fn game_isolation(&self) -> GameIsolationRuntime {
+        self.game_isolation.clone()
+    }
+
+    pub fn chatbox(&self) -> Arc<ChatboxRuntime> {
+        Arc::clone(&self.chatbox)
+    }
+
     pub fn event_bus(&self) -> RuntimeEventBus {
         self.event_bus.clone()
     }
@@ -322,29 +354,6 @@ impl DesktopRuntimeServices {
 
     pub fn privacy_lock(&self) -> Arc<PrivacyLockRuntime> {
         Arc::clone(&self.privacy_lock)
-    }
-
-    fn observe_game_log_side_effect(&self, event: &GameLogSideEffectEvent) {
-        match event {
-            GameLogSideEffectEvent::NowPlaying(payload) => match self.now_playing.lock() {
-                Ok(mut current) => {
-                    Arc::make_mut(&mut current).apply(payload);
-                }
-                Err(error) => {
-                    tracing::warn!("failed to lock now playing snapshot: {error}");
-                }
-            },
-            GameLogSideEffectEvent::NowPlayingReset(_) => match self.now_playing.lock() {
-                Ok(mut current) => {
-                    *current = Arc::new(NowPlayingSnapshot::default());
-                }
-                Err(error) => {
-                    tracing::warn!("failed to lock now playing snapshot: {error}");
-                }
-            },
-            GameLogSideEffectEvent::ScreenshotProcessed(_)
-            | GameLogSideEffectEvent::GameNoVr(_) => {}
-        }
     }
 
     fn prefetch_online_friend_avatars(&self, projection: &FriendProjection) {
@@ -390,7 +399,7 @@ impl DesktopRuntimeServices {
 
 impl GameLogSideEffectObserver for DesktopRuntimeServices {
     fn on_game_log_side_effect(&self, event: &GameLogSideEffectEvent) {
-        self.observe_game_log_side_effect(event);
+        self.now_playing.observe(event);
     }
 }
 
@@ -402,7 +411,7 @@ impl FriendProjectionObserver for DesktopRuntimeServices {
 
 #[cfg(any(windows, target_os = "linux"))]
 impl VrOverlayRuntimeServices for DesktopRuntimeServices {
-    fn config(&self) -> &ConfigRepository {
+    fn config(&self) -> &Arc<dyn ConfigStore> {
         &self.config
     }
 
@@ -432,6 +441,18 @@ impl VrOverlayRuntimeServices for DesktopRuntimeServices {
 
     fn notification_friend_image(&self, endpoint: &str, user_id: &str) -> Option<String> {
         self.notification_resolver.friend_image(endpoint, user_id)
+    }
+
+    fn cached_notification_group_name(&self, group_id: &str) -> Option<String> {
+        self.notification_resolver.cached_group_name(group_id)
+    }
+
+    fn notification_group_name<'a>(
+        &'a self,
+        endpoint: &'a str,
+        group_id: &'a str,
+    ) -> NotificationRemoteFuture<'a, String> {
+        Box::pin(self.notification_resolver.group_name(endpoint, group_id))
     }
 
     fn set_hmd_afk(&self, is_hmd_afk: bool) {
@@ -464,9 +485,8 @@ impl VrOverlayRuntimeServices for DesktopRuntimeServices {
                 return None;
             }
         };
-        // 玩家当前在哪张图由游戏日志给；取不到就只显示未读数。
-        let world =
-            vrcx_0_core::location::world_id_from_location(&self.game_log_snapshot().location);
+        // 玩家当前在哪张图由游戏日志给；取不到（或开着游戏隔离）就只显示未读数。
+        let world = self.vrcc_world_id();
         let world = (!world.is_empty()).then_some(world.as_str());
         let summary = vrcc.wrist_summary(world)?;
         Some(summary)

@@ -73,4 +73,14 @@ describe('i18nService', () => {
 
         expect(bad).toEqual([]);
     });
+
+    // 上游新增：`returnEmptyString: true` 下，**故意留空**的译文必须渲染成空串，
+    // 而不是退回 key。星轨相交那批 `circles_suffix` 就靠这个 —— 它只在中文里
+    // 有内容，英文留空。
+    it('renders intentionally empty translations as empty text instead of the key', async () => {
+        await setI18nLanguage('en');
+        expect(i18n.t('view.player_list.mutual_friends.circles_suffix')).toBe(
+            ''
+        );
+    });
 });

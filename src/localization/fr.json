@@ -687,10 +687,12 @@
             "doNotDisturbThreeHours": "3 heures",
             "doNotDisturbUntilStopped": "Jusqu'à désactivation",
             "doNotDisturbTurnOff": "Désactiver",
+            "gameIsolation": "Isolation du jeu",
             "rebuildUi": "Recharger l'interface",
             "sidebarMode": "Mode barre latérale",
             "disableTheme": "Désactiver le thème",
-            "exit": "Quitter"
+            "exit": "Quitter",
+            "realtimeReconnecting": "Connexion en temps réel perdue, reconnexion en cours"
         },
         "notification": {
             "backgroundModeStarted": {
@@ -1570,7 +1572,6 @@
             "clear_results_tooltip": "Vider les résultats de la recherche",
             "user": {
                 "header": "Utilisateur",
-                "search_by_bio": "Rechercher dans la bio",
                 "sort_by_last_logged_in": "Trier par dernière connexion"
             },
             "world": {
@@ -2053,6 +2054,7 @@
                     "go_to_friend": "Aller à l'ami",
                     "cancelling": "Annulation...",
                     "find_friend": "Rechercher un ami",
+                    "open_profile": "Ouvrir le profil",
                     "hide_from_graph": "Masquer du graphe",
                     "clear_filters": "Effacer les filtres"
                 },

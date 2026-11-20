@@ -9,7 +9,7 @@ use serde_json::json;
 use vrcx_0_application::vrcc::{
     classify_vrcc_error, StoredCredential, VrccErrorKind, VrccFailure, VrccService, VrccTokenStore,
 };
-use vrcx_0_application_core::{RuntimeAuthScopeObserver, RuntimeAuthScopeSnapshot};
+use vrcx_0_application_core::{ConfigStore, RuntimeAuthScopeObserver, RuntimeAuthScopeSnapshot};
 use vrcx_0_contracts::vrcc::{
     scope_grants, VrccAnnouncements, VrccBoard, VrccBoardSort, VrccClubResponse, VrccClubs,
     VrccConnectionSnapshot, VrccCredentialState, VrccGuidanceState, VrccMapPage, VrccModelBoard,
@@ -19,7 +19,6 @@ use vrcx_0_contracts::vrcc::{
     VrccWristSummary,
 };
 use vrcx_0_outbound_adapters::LocalVrccTokenStore;
-use vrcx_0_persistence::config::ConfigRepository;
 use vrcx_0_persistence::DatabaseService;
 use vrcx_0_vrcc_client::{resolve_client_id, VrccError};
 
@@ -106,11 +105,23 @@ pub struct DesktopVrccRuntime {
     /// 后台循环会同时把请求打出去。
     health: vrcx_0_application::vrcc::VrccHealthService,
     /// 通知中心那一行要落到当前账号的库表里，句柄与令牌存储共用同一个。
+    ///
+    /// 为什么只持句柄、不在这里查表：架构测试
+    /// `desktop_runtime_host_reaches_infrastructure_only_through_listed_modules`
+    /// 钉住「桌面宿主只能通过白名单模块碰 persistence」。
+    /// `DatabaseService` 在白名单里（允许持有），而真正的 `notification_add_v2` /
+    /// `notification_mark_seen_up_to` 落在 outbound-adapters 的 `vrcc_notices`——
+    /// 本文件对 persistence 的 `notifications` 模块零引用。**别在这里补一次直查**：
+    /// 那是绕过端口，扩白名单只是掩盖。
     db: Arc<DatabaseService>,
     /// 读当前登录账号。装配发生在登录之前，所以取闭包而不是固定 id。
     owner: Arc<dyn Fn() -> Option<vrcx_0_core::OwnerId> + Send + Sync>,
     /// 界面语言所在的配置。服务名要按它取官方译名，见 [`Self::service_name_for`]。
-    config: ConfigRepository,
+    ///
+    /// 走 `ConfigStore` 端口而不是 persistence 的 `config::ConfigRepository`：上游
+    /// 已经把「读配置」收成应用层端口，装配侧只给端口、不再给具体仓库
+    /// （`composition` 的 `config()` 访问器已删除，只剩 `config_store()`）。
+    config: Arc<dyn ConfigStore>,
 }
 
 impl DesktopVrccRuntime {
@@ -178,7 +189,7 @@ impl DesktopVrccRuntime {
         store: LocalVrccTokenStore,
         proxy_url: Option<&str>,
         owner: Arc<dyn Fn() -> Option<vrcx_0_core::OwnerId> + Send + Sync>,
-        config: ConfigRepository,
+        config: Arc<dyn ConfigStore>,
         event_bus: vrcx_0_application_core::RuntimeEventBus,
     ) -> Self {
         let db = Arc::clone(store.db());
@@ -239,7 +250,7 @@ impl DesktopVrccRuntime {
     /// 变），也用作提醒缺标题时的兜底。两处都不是渲染期再本地化的通道，所以只能
     /// 在这里定死。系统通知的标题走 `ActivityText::message`，那是渲染期取，不受
     /// 这里影响。
-    fn service_name_for(config: &ConfigRepository) -> String {
+    fn service_name_for(config: &dyn ConfigStore) -> String {
         let language = config
             .get_string(Self::APP_LANGUAGE_CONFIG_KEY, "en")
             .unwrap_or_else(|_| "en".to_string());
@@ -399,9 +410,9 @@ impl DesktopVrccRuntime {
             None if viewed => i64::MAX,
             None => return,
         };
-        if let Err(error) = vrcx_0_persistence::notifications::notification_mark_seen_up_to(
+        if let Err(error) = vrcx_0_outbound_adapters::mark_vrcc_notice_rows_seen_up_to(
             &self.db,
-            owner.as_str().to_string(),
+            owner.as_str(),
             Self::NOTICE_ROW_ID_PREFIX,
             cutoff,
         ) {
@@ -742,7 +753,7 @@ impl DesktopVrccRuntime {
                     } else if snapshot.connected {
                         // 每轮现取：玩家中途改语言时，写进通知中心的发送者名
                         // 和兜底标题都会跟着变。
-                        let service_name = Self::service_name_for(&config);
+                        let service_name = Self::service_name_for(config.as_ref());
                         let ctx = PollContext {
                             service: &service,
                             dispatcher: dispatcher.as_ref(),
@@ -1065,6 +1076,10 @@ fn notice_row(
         // 留空，`openSender` 据此落到 `link` 分支，而不是去开一个不存在的玩家资料。
         "senderUserId": String::new(),
         "senderUsername": sender,
+        // 提醒没有配图。显式写空串而不是省掉这一列：省掉时 persistence 读不到键、
+        // 也会落成空串，两种写法等价；写出来是为了让下面的键集合断言能钉住
+        // 「产出的键 == 表里的列」这个完整不变量（少写一列就是漏一列）。
+        "imageUrl": "",
         "data": {},
         "responses": [],
         "details": {},
@@ -1091,11 +1106,7 @@ fn persist_notices(
     let mut written = 0usize;
     for item in items {
         let row = notice_row(item, &now, sender);
-        match vrcx_0_persistence::notifications::notification_add_v2(
-            db,
-            owner.as_str().to_string(),
-            row,
-        ) {
+        match vrcx_0_outbound_adapters::upsert_vrcc_notice_row(db, owner.as_str(), row) {
             Ok(()) => written += 1,
             Err(error) => {
                 // 只记编号，不记正文：提醒内容属于玩家数据。
@@ -1698,6 +1709,68 @@ mod tests {
     }
 
     // -- 通知中心那一行 ---------------------------------------------------
+
+    /// 这一行要写进的列名，一个不多一个不少。
+    ///
+    /// 这 16 个名字**故意硬编码**，不要改成从 persistence 引用列定义——
+    /// `backend_architecture.rs` 的
+    /// `desktop_runtime_host_reaches_infrastructure_only_through_listed_modules`
+    /// 对 `crates/runtime-host-desktop/src` 做**整文件字符串扫描**（不认
+    /// `#[cfg(test)]`），写进 persistence 的路径会让架构测试挂。
+    ///
+    /// 改列名时，同步改这里与 `notice_row()` 的 `json!` 字面量。
+    const NOTICE_ROW_COLUMNS: [&str; 16] = [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "expiresAt",
+        "type",
+        "link",
+        "linkText",
+        "title",
+        "message",
+        "imageUrl",
+        "seen",
+        "senderUserId",
+        "senderUsername",
+        "data",
+        "responses",
+        "details",
+    ];
+
+    /// `notice_row()` 产出的键必须**恰好**是那 16 个列名。
+    ///
+    /// 为什么必须有这条：`NotificationSink` 之后，adapter 那一层不再做字段映射，
+    /// `row` 原样穿透到 `notification_add_v2`。那边按**别名**读列
+    /// （`"createdAt"` / `"created_at"` 之类），**拼错不报错，只是静默写 NULL**——
+    /// 界面表现为「通知在、但标题/正文/落点全空」，且没有任何日志。
+    ///
+    /// 用**集合相等**而不是逐个 `contains_key`：后者只能抓「少一个」，集合相等同时
+    /// 抓「少一个」与「多一个 / 拼错一个」，而拼错正是最危险的那种。
+    #[test]
+    fn a_row_produces_exactly_the_columns_the_table_expects() {
+        let row = notice_row(
+            &notice_at(1, Some("标题"), Some("正文"), Some(1_700_000_000_000)),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
+        let produced: std::collections::BTreeSet<&str> = row
+            .as_object()
+            .expect("通知中心那一行必须是一个 JSON 对象")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let expected: std::collections::BTreeSet<&str> =
+            NOTICE_ROW_COLUMNS.iter().copied().collect();
+
+        let missing: Vec<_> = expected.difference(&produced).collect();
+        let unexpected: Vec<_> = produced.difference(&expected).collect();
+        assert!(
+            missing.is_empty() && unexpected.is_empty(),
+            "列名漂移——缺失 {missing:?}，多出 {unexpected:?}。\
+             拼错的键不会报错，只会让那一列静默写空。"
+        );
+    }
 
     fn notice_at(
         id: i64,

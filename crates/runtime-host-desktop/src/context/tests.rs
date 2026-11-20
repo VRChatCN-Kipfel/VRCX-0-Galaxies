@@ -36,7 +36,7 @@ impl Drop for TestDir {
 fn test_services(name: &str) -> (TestDir, DesktopRuntimeServices) {
     let dir = TestDir::new(name);
     let db = Arc::new(DatabaseService::new(&dir.path.join("VRCX-0.sqlite3")).unwrap());
-    let storage = StorageService::new(&dir.path.join("storage.json")).unwrap();
+    let storage = Arc::new(StorageService::new(&dir.path.join("storage.json")).unwrap());
     let web = Arc::new(WebClient::new(
         vrcx_0_outbound_adapters::LocalWebClientAdapter::new(
             &storage,
@@ -53,7 +53,7 @@ fn test_services(name: &str) -> (TestDir, DesktopRuntimeServices) {
         )
         .unwrap(),
     )));
-    let context = RuntimeHostDesktopAssemblyDeps::new(db, web, image_cache);
+    let context = RuntimeHostDesktopAssemblyDeps::new(db, storage, web, image_cache);
     let services =
         DesktopRuntimeServices::new(crate::state::build_desktop_runtime_services_deps(&context))
             .unwrap();
@@ -65,8 +65,8 @@ fn game_log_side_effect_observer_merges_and_resets_now_playing() {
     let (_dir, services) = test_services("now-playing-observer");
     let event = GameLogSideEffectEvent::NowPlaying(Box::new(NowPlayingPayload {
         name: Some("Test Track".into()),
-        position: 42,
-        started_at: "start".into(),
+        position: Some(42),
+        started_at: Some("start".into()),
         updated_at: "update".into(),
         ..Default::default()
     }));
@@ -85,4 +85,24 @@ fn game_log_side_effect_observer_merges_and_resets_now_playing() {
         services.now_playing().as_ref(),
         &NowPlayingSnapshot::default()
     );
+}
+
+/// 星遇同频的「所在地图」：开启游戏隔离时不给，关掉以后照常。
+#[test]
+fn vrcc_world_id_is_hidden_while_game_isolation_is_on() {
+    let (_dir, services) = test_services("vrcc-world-isolation");
+    let world = "wrld_11111111-1111-4111-8111-111111111111";
+    services
+        .game_log_snapshot_handle()
+        .replace(vrcx_0_application_game::RuntimeSnapshot {
+            location: format!("{world}:12345~private(usr_x)"),
+            ..Default::default()
+        });
+    assert_eq!(services.vrcc_world_id(), world);
+
+    services.game_isolation().set_enabled(true).unwrap();
+    assert_eq!(services.vrcc_world_id(), "", "隔离时不暴露本机所在的世界");
+
+    services.game_isolation().set_enabled(false).unwrap();
+    assert_eq!(services.vrcc_world_id(), world);
 }

@@ -249,6 +249,14 @@ impl vrcx_0_application_activity::notification::NotificationRemote for UserIconR
     ) -> vrcx_0_application_activity::notification::NotificationRemoteFuture<'a, String> {
         Box::pin(async { None })
     }
+
+    fn group_name<'a>(
+        &'a self,
+        _endpoint: &'a str,
+        group_id: &'a str,
+    ) -> vrcx_0_application_activity::notification::NotificationRemoteFuture<'a, String> {
+        Box::pin(async move { (group_id == "grp_lookup").then(|| "Lookup Group".to_string()) })
+    }
 }
 
 fn image_job(actor_user_id: &str) -> super::NotificationJob {
@@ -427,4 +435,38 @@ fn external_plan_respects_the_delivery_itself() {
     assert!(!plan.ovrt);
     assert!(!plan.tts);
     assert!(!plan.has_local_transport());
+}
+
+/// 群实例名：位置串里只有 `grp_`，没有可读名时要按 id 查一次并缓存。
+///
+/// 这条是上游 2.34.0 加的（`resolve_group_name_with_budget`），本地通知
+/// 会读它拼标题。和站外提醒那两条互不相干，一并保留。
+#[tokio::test]
+async fn local_notifications_look_up_a_group_instance_name() {
+    let resolver = std::sync::Arc::new(
+        vrcx_0_application_activity::notification::NotificationResolver::new(std::sync::Arc::new(
+            UserIconRemote,
+        )),
+    );
+    let tasks = vrcx_0_application_core::TaskSupervisor::new();
+
+    let mut group_instance = image_job("usr_traveler");
+    group_instance.delivery.entry.content.location =
+        "wrld_named:123~group(grp_lookup)~groupAccessType(public)".into();
+    group_instance.delivery.entry.content.group_name = "grp_lookup".into();
+    assert_eq!(
+        super::resolve_group_name_with_budget(&tasks, resolver.clone(), &group_instance)
+            .await
+            .as_deref(),
+        Some("Lookup Group")
+    );
+    assert_eq!(
+        resolver.cached_group_name("grp_lookup").as_deref(),
+        Some("Lookup Group")
+    );
+
+    assert_eq!(
+        super::resolve_group_name_with_budget(&tasks, resolver, &image_job("usr_traveler")).await,
+        None
+    );
 }

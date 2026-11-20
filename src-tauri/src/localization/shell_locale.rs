@@ -10,6 +10,7 @@ pub(crate) struct TrayLabels {
     pub(crate) do_not_disturb_three_hours: String,
     pub(crate) do_not_disturb_until_stopped: String,
     pub(crate) do_not_disturb_turn_off: String,
+    pub(crate) game_isolation: String,
     pub(crate) rebuild_ui: String,
     pub(crate) sidebar_mode: String,
     pub(crate) disable_theme: String,
@@ -99,6 +100,11 @@ pub(crate) mod macos_menu {
         pub(crate) report_issue: String,
         pub(crate) github: String,
         pub(crate) discord: String,
+        /// QQ 群的入口文案。
+        ///
+        /// 取目录里的 `nativeShell.menu.help.qqGroup`，而不是写死 "QQ"：中文
+        /// 「QQ群」、繁体「QQ 群組」、德文「QQ-Gruppe」各不相同，西语/法语/葡语
+        /// 还带「（中国社区）」的注解。
         pub(crate) qq_group: String,
         #[cfg(feature = "devtools")]
         pub(crate) open_devtools: String,
@@ -195,6 +201,7 @@ pub(crate) fn tray_labels_for_language(language: &str) -> TrayLabels {
             ShellKey::NativeShellTrayDoNotDisturbUntilStopped,
         ),
         do_not_disturb_turn_off: text(language, ShellKey::NativeShellTrayDoNotDisturbTurnOff),
+        game_isolation: text(language, ShellKey::NativeShellTrayGameIsolation),
         rebuild_ui: text(language, ShellKey::NativeShellTrayRebuildUi),
         sidebar_mode: text(language, ShellKey::NativeShellTraySidebarMode),
         disable_theme: text(language, ShellKey::NativeShellTrayDisableTheme),
@@ -209,6 +216,10 @@ pub(crate) fn tray_labels_for_language(language: &str) -> TrayLabels {
         desktop_widget_close: native_text(language, DesktopWidgetKey::DesktopWidgetMenuClose),
         exit: text(language, ShellKey::NativeShellTrayExit),
     }
+}
+
+pub(crate) fn tray_realtime_reconnecting_for_language(language: &str) -> String {
+    text(language, ShellKey::NativeShellTrayRealtimeReconnecting)
 }
 
 pub(crate) fn background_mode_notification_labels_for_language(
