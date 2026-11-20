@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- VRCX-0 × 星遇同频 联名标（无 0 版，2026-11-18）：VRCC 社区气泡和 # 的原路径（assets/favicon.svg，主人授权 VRCX-0 使用），
+  <!-- VRCX-0 × 星遇同频 联名标（无 0 版，2026-11-18）：VRCC 社区气泡和 # 的原路径取自
+       assets/favicon.svg，经口头授权使用；授权范围仅限本仓库
+       github.com/VRChatCN-Kipfel/VRCX-0-Galaxies，且仅用于在本仓库内呈现应用标，
+       范围之外不授予任何许可（详见 NOTICE 的 Brand artwork 一节）。
        填 VRCX-0 的靛蓝；右上角只有 VRCX-0 的 X（Arial Black 字形转的路径），去掉定稿里的空心小 0。
        几何与定稿逐字一致，只删了 0 的两条 ellipse。 -->
   <defs>

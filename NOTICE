@@ -35,9 +35,20 @@ The image assets under images/brand/ and src-tauri/icons/ reproduce the
 VRCX-0 application mark and a co-branded variant of it. The co-branded
 variant combines the VRCX-0 glyph with the 星遇同频 (VRCC) mark.
 
-Rights in the 星遇同频 (VRCC) mark remain with its owner. Nothing in this
-repository grants a license to that mark, and the GPL-3.0-only terms that
-apply to VRCX-0 do not extend to it.
+The badge artwork under crates/host-desktop/assets/badge/ contains only the
+VRCX-0 glyph. It reproduces no part of the 星遇同频 (VRCC) mark.
+
+The bubble and # shapes in the co-branded variant are used under an oral
+permission from the owner of the 星遇同频 (VRCC) mark. That permission was
+given only for this repository, github.com/VRChatCN-Kipfel/VRCX-0-Galaxies,
+and only for presenting the application mark inside it. No written record of
+the permission is held in this repository.
+
+Outside that scope no permission is granted. Rights in the 星遇同频 (VRCC)
+mark remain with its owner. Nothing in this repository grants a license to
+that mark, and the GPL-3.0-only terms that apply to VRCX-0 do not extend to
+it. Anyone who wants to reuse the co-branded variant elsewhere must obtain
+their own permission from the mark's owner.
 
 No trademark or service mark rights are granted for any name, logo, or mark
 that appears in this repository.

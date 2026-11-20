@@ -36,3 +36,7 @@ tsconfig.tsbuildinfo
 .agent-teams/
 # 视频素材渲染台与采集产物（本地临时，不入库）。
 .capture/
+
+# VRChat 客户端以仓库目录为工作目录时写出的 LocalLow 配置。
+# 每次启动游戏都会改写，不是产品文件。
+LocalLow/

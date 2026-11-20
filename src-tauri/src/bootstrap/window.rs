@@ -303,9 +303,14 @@ pub(super) fn create_main_window(
 
     let main_window = builder.build()?;
     super::sidebar_auto_hide::attach(&main_window);
-    #[cfg(target_os = "windows")]
-    if let Ok(handle) = main_window.hwnd() {
-        vrcx_0_host_desktop::window_icon::apply_window_icon(handle.0 as isize);
+    // 窗口图标统一用纯主体标（气泡 + #，不带 X、不带缺口）。
+    // X 由任务栏角标常驻绘制，白/红切换表示有无未读。
+    //
+    // 这里只走 set_icon，不再调 window_icon::apply_window_icon：
+    // 它从 exe 的图标资源里 LoadImage 出来再 WM_SETICON，用的是带 X 的
+    // icon.ico，会和这里的 set_icon 抢同一个窗口图标，后跑的赢。
+    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../../icons/icon_no_x.png")) {
+        let _ = main_window.set_icon(icon);
     }
     #[cfg(target_os = "windows")]
     attach_window_chrome_state_events(&main_window);

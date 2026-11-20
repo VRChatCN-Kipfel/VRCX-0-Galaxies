@@ -5,9 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static TASKBAR_OVERLAY_NOTIFY: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
-const DOT_RGB: (u8, u8, u8) = (255, 0, 0);
-
-#[cfg(target_os = "windows")]
 const OVERLAY_DESCRIPTION: &[u16] = &[
     b'N' as u16,
     b'e' as u16,
@@ -47,11 +44,10 @@ pub fn forget_taskbar_overlay_notification() {
     TASKBAR_OVERLAY_NOTIFY.store(false, Ordering::Release);
 }
 
-#[cfg(target_os = "windows")]
 fn apply_overlay(window_handle: isize, notify: bool) {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
+    use windows::Win32::UI::WindowsAndMessaging::DestroyIcon;
 
     if window_handle == 0 {
         return;
@@ -59,16 +55,9 @@ fn apply_overlay(window_handle: isize, notify: bool) {
     let window = HWND(window_handle as *mut core::ffi::c_void);
 
     with_taskbar_list(|taskbar| {
-        if !notify {
-            if let Err(error) =
-                unsafe { taskbar.SetOverlayIcon(window, HICON::default(), PCWSTR::null()) }
-            {
-                tracing::warn!(%error, "Failed to clear the taskbar overlay icon");
-            }
-            return;
-        }
-
-        let Some(icon) = create_dot_icon(window) else {
+        // 角标常驻：没有未读时画白 X，有未读时画红 X。
+        // 图标本体不带 X，这个角标就是那个 X 本体。
+        let Some(icon) = create_badge_icon(window, notify) else {
             return;
         };
         let result =
@@ -126,8 +115,9 @@ fn with_taskbar_list(action: impl FnOnce(&windows::Win32::UI::Shell::ITaskbarLis
 }
 
 #[cfg(target_os = "windows")]
-fn create_dot_icon(
+fn create_badge_icon(
     window: windows::Win32::Foundation::HWND,
+    notify: bool,
 ) -> Option<windows::Win32::UI::WindowsAndMessaging::HICON> {
     use windows::Win32::Graphics::Gdi::{
         CreateBitmap, CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPV5HEADER, BI_BITFIELDS,
@@ -173,7 +163,7 @@ fn create_dot_icon(
         return None;
     }
 
-    let pixels = render_dot_premultiplied_bgra(size);
+    let pixels = render_badge_premultiplied_bgra(size, notify);
     unsafe {
         std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits as *mut u32, pixels.len());
     }
@@ -208,37 +198,64 @@ fn overlay_icon_size(raw_small_icon_metric: i32) -> u32 {
     (raw_small_icon_metric as u32).clamp(8, 64)
 }
 
+/// 角标图来自 `images/brand/Galaxy/VRCX-0-Galaxies.svg` 里那条 X，
+/// 由 `resvg` 按各档尺寸预渲染成 PNG，形状与标里的 X 完全一致（含 #2a2a6a 描边）。
 #[cfg(target_os = "windows")]
-fn render_dot_premultiplied_bgra(size: u32) -> Vec<u32> {
-    const SAMPLES: u32 = 4;
+const BADGE_IDLE: &[(u32, &[u8])] = &[
+    (16, include_bytes!("../assets/badge/badge-x-idle-16.png")),
+    (20, include_bytes!("../assets/badge/badge-x-idle-20.png")),
+    (24, include_bytes!("../assets/badge/badge-x-idle-24.png")),
+    (28, include_bytes!("../assets/badge/badge-x-idle-28.png")),
+    (32, include_bytes!("../assets/badge/badge-x-idle-32.png")),
+    (40, include_bytes!("../assets/badge/badge-x-idle-40.png")),
+    (48, include_bytes!("../assets/badge/badge-x-idle-48.png")),
+    (64, include_bytes!("../assets/badge/badge-x-idle-64.png")),
+];
 
-    let radius = size as f32 / 4.0;
-    let center = size as f32 / 2.0;
+#[cfg(target_os = "windows")]
+const BADGE_ACTIVE: &[(u32, &[u8])] = &[
+    (16, include_bytes!("../assets/badge/badge-x-active-16.png")),
+    (20, include_bytes!("../assets/badge/badge-x-active-20.png")),
+    (24, include_bytes!("../assets/badge/badge-x-active-24.png")),
+    (28, include_bytes!("../assets/badge/badge-x-active-28.png")),
+    (32, include_bytes!("../assets/badge/badge-x-active-32.png")),
+    (40, include_bytes!("../assets/badge/badge-x-active-40.png")),
+    (48, include_bytes!("../assets/badge/badge-x-active-48.png")),
+    (64, include_bytes!("../assets/badge/badge-x-active-64.png")),
+];
+
+/// 取不小于目标尺寸的最小一档，没有就取最大一档，避免放大导致模糊。
+#[cfg(target_os = "windows")]
+fn badge_bytes(notify: bool, size: u32) -> &'static [u8] {
+    let table = if notify { BADGE_ACTIVE } else { BADGE_IDLE };
+    let picked = table
+        .iter()
+        .find(|(candidate, _)| *candidate >= size)
+        .or_else(|| table.last())
+        .expect("badge table is never empty");
+    picked.1
+}
+
+/// 把预渲染的角标图转成 DIB 需要的预乘 ARGB 像素。
+#[cfg(target_os = "windows")]
+fn render_badge_premultiplied_bgra(size: u32, notify: bool) -> Vec<u32> {
+    let decoded = image::load_from_memory(badge_bytes(notify, size))
+        .expect("embedded badge png must decode")
+        .to_rgba8();
+    let scaled = if decoded.width() == size && decoded.height() == size {
+        decoded
+    } else {
+        image::imageops::resize(&decoded, size, size, image::imageops::FilterType::Lanczos3)
+    };
+
     let mut pixels = Vec::with_capacity((size * size) as usize);
-
-    for y in 0..size {
-        for x in 0..size {
-            let mut covered = 0u32;
-            for sub_y in 0..SAMPLES {
-                for sub_x in 0..SAMPLES {
-                    let sample_x = x as f32 + (sub_x as f32 + 0.5) / SAMPLES as f32 - center;
-                    let sample_y = y as f32 + (sub_y as f32 + 0.5) / SAMPLES as f32 - center;
-                    if sample_x * sample_x + sample_y * sample_y <= radius * radius {
-                        covered += 1;
-                    }
-                }
-            }
-            let alpha = (covered * 255) / (SAMPLES * SAMPLES);
-            let scale = |channel: u8| (channel as u32 * alpha) / 255;
-            pixels.push(
-                (alpha << 24)
-                    | (scale(DOT_RGB.0) << 16)
-                    | (scale(DOT_RGB.1) << 8)
-                    | scale(DOT_RGB.2),
-            );
-        }
+    for pixel in scaled.pixels() {
+        let alpha = pixel[3] as u32;
+        let scale = |channel: u8| (channel as u32 * alpha) / 255;
+        pixels.push(
+            (alpha << 24) | (scale(pixel[0]) << 16) | (scale(pixel[1]) << 8) | scale(pixel[2]),
+        );
     }
-
     pixels
 }
 
@@ -253,7 +270,7 @@ pub fn forget_taskbar_overlay_notification() {}
 
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
-    use super::{overlay_icon_size, render_dot_premultiplied_bgra, DOT_RGB};
+    use super::{badge_bytes, overlay_icon_size, render_badge_premultiplied_bgra};
 
     #[test]
     fn overlay_icon_size_keeps_usual_metrics_and_clamps_unusable_ones() {
@@ -267,27 +284,55 @@ mod tests {
     }
 
     #[test]
-    fn fills_the_center_and_leaves_the_corners_transparent() {
-        let size = 16u32;
-        let pixels = render_dot_premultiplied_bgra(size);
-        let center = pixels[((size / 2) * size + size / 2) as usize];
-        assert_eq!(
-            center,
-            0xFF00_0000 | ((DOT_RGB.0 as u32) << 16) | ((DOT_RGB.1 as u32) << 8) | DOT_RGB.2 as u32
-        );
+    fn the_badge_has_content_and_transparent_edges() {
+        // 只断言「有内容」和「有透明区」，不锁定 X 的具体像素位置：
+        // X 在角标画布里的位置是手调出来的设计参数（FILL / AX / AY），
+        // 以后微调位置不该让这条测试变红。位置对不对靠生成脚本和肉眼验收。
+        let size = 32u32;
+        let pixels = render_badge_premultiplied_bgra(size, false);
+        let opaque = pixels.iter().filter(|pixel| **pixel != 0).count();
+        let total = pixels.len();
 
-        let last = (size - 1) as usize;
-        let stride = size as usize;
-        for corner in [0, last, last * stride, last * stride + last] {
-            assert_eq!(pixels[corner], 0);
+        assert!(opaque > 0, "角标不能整块透明");
+        assert!(opaque < total, "角标不能整块实心，四周要留透明边");
+    }
+
+    #[test]
+    fn the_active_badge_is_red_and_the_idle_badge_is_not() {
+        let size = 32u32;
+        let idle = render_badge_premultiplied_bgra(size, false);
+        let active = render_badge_premultiplied_bgra(size, true);
+        let center = ((size / 2) as usize) * (size as usize) + (size / 2) as usize;
+
+        // 预乘后的 ARGB：低 8 位是蓝、中 8 位是绿、高 8 位（除 alpha）是红
+        let idle_red = (idle[center] >> 16) & 0xFF;
+        let active_red = (active[center] >> 16) & 0xFF;
+        let active_green = (active[center] >> 8) & 0xFF;
+        assert!(active_red > active_green, "触发态应当是偏红的");
+        assert!(idle_red >= active_red, "常态应当比触发态更亮或相等");
+    }
+
+    #[test]
+    fn badge_bytes_picks_a_size_that_is_not_smaller_than_requested() {
+        for size in [16u32, 20, 24, 28, 32, 40, 48, 64] {
+            let bytes = badge_bytes(true, size);
+            let decoded = image::load_from_memory(bytes)
+                .expect("badge png decodes")
+                .to_rgba8();
+            assert!(decoded.width() >= size, "尺寸 {size} 取到了更小的图");
         }
-        assert_eq!(pixels[size as usize / 2], 0);
+        // 超过最大档时取最大一档
+        let bytes = badge_bytes(true, 96);
+        let decoded = image::load_from_memory(bytes)
+            .expect("badge png decodes")
+            .to_rgba8();
+        assert_eq!(decoded.width(), 64);
     }
 
     #[test]
     fn keeps_every_channel_premultiplied_by_alpha() {
         for size in [8u32, 16, 24, 64] {
-            for pixel in render_dot_premultiplied_bgra(size) {
+            for pixel in render_badge_premultiplied_bgra(size, false) {
                 let alpha = pixel >> 24;
                 assert!((pixel >> 16) & 0xFF <= alpha);
                 assert!((pixel >> 8) & 0xFF <= alpha);

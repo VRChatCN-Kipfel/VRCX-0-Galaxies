@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- VRCX-0 × 星遇同频 联名标（无 0 + 红 X 版，2026-11-18）：在 no0 版的基础上，
-       把右上角 X 的填充从 #fff 改成 #F43F3F（与通知角标同色），描边保持 #2a2a6a。
-       气泡与 # 不动，仍为白色。 -->
+       把右上角 X 的填充从 #fff 改成 #F43F3F（与任务栏通知角标同色），描边保持 #2a2a6a。
+       气泡与 # 不动，仍为白色。
+       气泡与 # 经口头授权使用，授权范围仅限本仓库
+       github.com/VRChatCN-Kipfel/VRCX-0-Galaxies（详见 NOTICE 的 Brand artwork 一节）。 -->
   <defs>
     <linearGradient id="indigo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4ba0"/><stop offset="1" stop-color="#34357c"/></linearGradient>
     <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
