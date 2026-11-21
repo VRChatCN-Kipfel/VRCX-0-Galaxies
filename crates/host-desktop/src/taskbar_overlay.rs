@@ -53,11 +53,18 @@ fn apply_overlay(window_handle: isize, notify: bool) {
     if window_handle == 0 {
         return;
     }
+    // 调试：`VRCX_TASKBAR_BADGE_FORCE=active|idle` 固定渲染状态，
+    // 免去等真实通知即可观察两种形态。不设时按真实未读状态走。
+    let notify = match std::env::var("VRCX_TASKBAR_BADGE_FORCE") {
+        Ok(value) if value.trim() == "active" => true,
+        Ok(value) if value.trim() == "idle" => false,
+        _ => notify,
+    };
     let window = HWND(window_handle as *mut core::ffi::c_void);
 
     with_taskbar_list(|taskbar| {
-        // 角标常驻：没有未读时画白 X，有未读时画红 X。
-        // 图标本体不带 X，这个角标就是那个 X 本体。
+        // 角标常驻：无未读时画白 X，与图标自带的那个 X 重合；
+        // 有未读时画红 X，把那 X 盖成红色。
         let Some(icon) = create_badge_icon(window, notify) else {
             return;
         };

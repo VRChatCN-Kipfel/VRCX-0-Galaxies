@@ -300,18 +300,23 @@ pub(super) fn create_main_window(
         builder = builder.proxy_url(proxy_url);
     }
     builder = builder.browser_extensions_enabled(false);
+    // 窗口图标用带白 X 的完整标，与 exe 内嵌的 `icon.ico`、快捷方式、
+    // 资源管理器保持一致——全项目不存在「不带 X」的版本。
+    //
+    // 必须在 `build()` 之前设：任务栏按钮在窗口创建时取走图标并缓存，
+    // 建完之后再 `set_icon` 只改得动标题栏，任务栏不跟随。
+    //
+    // 实测还有一层：只要存在指向本 exe 的快捷方式，任务栏就按快捷方式的
+    // 图标渲染，窗口图标不参与。所以这里给带 X 的版本，与快捷方式同源。
+    //
+    // 不再调 `window_icon::apply_window_icon`：它从 exe 的图标资源里
+    // `LoadImage` 出 `icon.ico` 再 `WM_SETICON`，会和这里抢同一个窗口图标。
+    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../../icons/icon.png")) {
+        builder = builder.icon(icon)?;
+    }
 
     let main_window = builder.build()?;
     super::sidebar_auto_hide::attach(&main_window);
-    // 窗口图标统一用纯主体标（气泡 + #，不带 X、不带缺口）。
-    // X 由任务栏角标常驻绘制，白/红切换表示有无未读。
-    //
-    // 这里只走 set_icon，不再调 window_icon::apply_window_icon：
-    // 它从 exe 的图标资源里 LoadImage 出来再 WM_SETICON，用的是带 X 的
-    // icon.ico，会和这里的 set_icon 抢同一个窗口图标，后跑的赢。
-    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../../icons/icon_no_x.png")) {
-        let _ = main_window.set_icon(icon);
-    }
     #[cfg(target_os = "windows")]
     attach_window_chrome_state_events(&main_window);
     #[cfg(not(target_os = "windows"))]
