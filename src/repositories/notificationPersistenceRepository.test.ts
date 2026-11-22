@@ -49,7 +49,9 @@ describe('notificationPersistenceRepository', () => {
             filters: [],
             perTableLimit: 500,
             limit: 250,
-            includeUnseen: true
+            includeUnseen: true,
+            beforeCreatedAt: '',
+            beforeId: ''
         });
     });
 
@@ -70,7 +72,29 @@ describe('notificationPersistenceRepository', () => {
             filters: ['invite'],
             perTableLimit: 1200,
             limit: 1200,
-            includeUnseen: false
+            includeUnseen: false,
+            beforeCreatedAt: '',
+            beforeId: ''
+        });
+    });
+
+    /** 翻页时把游标原样带过去，并且**不**展开未读（那条 SQL 没有 LIMIT）。 */
+    it('passes the paging cursor and stops expanding unseen rows', async () => {
+        await queryNotifications({
+            userId: 'usr_1',
+            before: { createdAt: '2026-04-04T00:00:00.000Z', id: 'n3' },
+            limit: 50
+        });
+
+        expect(commandMocks.appNotificationListQuery).toHaveBeenCalledWith({
+            userId: 'usr_1',
+            search: '',
+            filters: [],
+            perTableLimit: 100,
+            limit: 50,
+            includeUnseen: false,
+            beforeCreatedAt: '2026-04-04T00:00:00.000Z',
+            beforeId: 'n3'
         });
     });
 
