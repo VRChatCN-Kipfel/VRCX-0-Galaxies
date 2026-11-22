@@ -6321,6 +6321,11 @@
                     "label": "Medien",
                     "description": "Videowiedergabe-Aktivität aus der aktuellen Sitzung.",
                     "example": "Video"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Benachrichtigungen der Community-Plattform Orbitune (vrcc.cc).",
+                    "example": "Neuer Stern, gegenseitige Verbindung"
                 }
             },
             "types": {
@@ -6360,7 +6365,8 @@
                 "BlockedOnPlayerLeft": "Blockierter Spieler hat verlassen",
                 "MutedOnPlayerJoined": "Stummgeschalteter Spieler beigetreten",
                 "MutedOnPlayerLeft": "Stummgeschalteter Spieler hat verlassen",
-                "VideoPlay": "Videowiedergabe"
+                "VideoPlay": "Videowiedergabe",
+                "vrcc_notice": "Hinweis"
             },
             "favorite_groups": {
                 "menu_label": "Favoritengruppen",

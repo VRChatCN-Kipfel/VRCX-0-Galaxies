@@ -6729,6 +6729,11 @@
                     "label": "Media",
                     "description": "Video playback activity from the current session.",
                     "example": "Video"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Notifications from the community platform Orbitune (vrcc.cc).",
+                    "example": "New star, mutual link"
                 }
             },
             "types": {
@@ -6768,7 +6773,8 @@
                 "BlockedOnPlayerLeft": "Blocked Player Left",
                 "MutedOnPlayerJoined": "Muted Player Joined",
                 "MutedOnPlayerLeft": "Muted Player Left",
-                "VideoPlay": "Video Play"
+                "VideoPlay": "Video Play",
+                "vrcc_notice": "Notice"
             },
             "favorite_groups": {
                 "menu_label": "Favorite groups",

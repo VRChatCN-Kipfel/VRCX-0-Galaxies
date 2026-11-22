@@ -6351,6 +6351,11 @@
                     "label": "Медиа",
                     "description": "Активность воспроизведения видео в текущей сессии.",
                     "example": "Видео"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Уведомления с платформы сообщества Orbitune (vrcc.cc).",
+                    "example": "Новая звезда, взаимная связь"
                 }
             },
             "types": {
@@ -6390,7 +6395,8 @@
                 "BlockedOnPlayerLeft": "Заблокированный игрок вышел",
                 "MutedOnPlayerJoined": "Заглушённый игрок присоединился",
                 "MutedOnPlayerLeft": "Вырезанный игрок слева",
-                "VideoPlay": "Видеоигра"
+                "VideoPlay": "Видеоигра",
+                "vrcc_notice": "Уведомление"
             },
             "favorite_groups": {
                 "menu_label": "Избранные группы",

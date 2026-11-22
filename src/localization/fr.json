@@ -5753,6 +5753,11 @@
                     "label": "Média",
                     "description": "Activité de lecture vidéo de la session en cours.",
                     "example": "Vidéo"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Notifications de la plateforme communautaire Orbitune (vrcc.cc).",
+                    "example": "Nouvelle étoile, lien mutuel"
                 }
             },
             "types": {
@@ -5792,7 +5797,8 @@
                 "BlockedOnPlayerLeft": "Utilisateur bloqué parti",
                 "MutedOnPlayerJoined": "Utilisateur avec le microphone désactivé arrivé",
                 "MutedOnPlayerLeft": "Utilisateur avec le microphone désactivé parti",
-                "VideoPlay": "Lecture vidéo"
+                "VideoPlay": "Lecture vidéo",
+                "vrcc_notice": "Notification"
             },
             "favorite_groups": {
                 "menu_label": "Groupes de favoris",

@@ -6356,6 +6356,11 @@
                     "label": "メディア",
                     "description": "現在のセッションでの動画再生です。",
                     "example": "動画"
+                },
+                "externalSource": {
+                    "label": "ほしあい",
+                    "description": "コミュニティプラットフォーム「ほしあい」（vrcc.cc）からの通知。",
+                    "example": "コネクト、相互接続"
                 }
             },
             "types": {
@@ -6395,7 +6400,8 @@
                 "BlockedOnPlayerLeft": "ブロック中プレイヤー退出",
                 "MutedOnPlayerJoined": "ミュート中プレイヤー参加",
                 "MutedOnPlayerLeft": "ミュート中プレイヤー退出",
-                "VideoPlay": "動画再生"
+                "VideoPlay": "動画再生",
+                "vrcc_notice": "お知らせ"
             },
             "favorite_groups": {
                 "menu_label": "お気に入りグループ",

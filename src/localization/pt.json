@@ -6321,6 +6321,11 @@
                     "label": "Mídia",
                     "description": "Atividade de reprodução de vídeo da sessão atual.",
                     "example": "Vídeo"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Notificações da plataforma da comunidade Orbitune (vrcc.cc).",
+                    "example": "Nova estrela, ligação mútua"
                 }
             },
             "types": {
@@ -6360,7 +6365,8 @@
                 "BlockedOnPlayerLeft": "Jogador Bloqueado Saiu",
                 "MutedOnPlayerJoined": "Jogador Silenciado Entrou",
                 "MutedOnPlayerLeft": "Jogador Silenciado Saiu",
-                "VideoPlay": "Reprodução de Vídeo"
+                "VideoPlay": "Reprodução de Vídeo",
+                "vrcc_notice": "Aviso"
             },
             "favorite_groups": {
                 "menu_label": "Grupos favoritos",

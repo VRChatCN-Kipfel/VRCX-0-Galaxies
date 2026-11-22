@@ -6298,6 +6298,11 @@
                     "label": "미디어",
                     "description": "현재 세션의 비디오 재생 활동.",
                     "example": "비디오"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "커뮤니티 플랫폼 Orbitune(vrcc.cc)의 알림입니다.",
+                    "example": "새 별, 상호 연결"
                 }
             },
             "types": {
@@ -6337,7 +6342,8 @@
                 "BlockedOnPlayerLeft": "차단한 플레이어 퇴장",
                 "MutedOnPlayerJoined": "음소거한 플레이어 입장",
                 "MutedOnPlayerLeft": "음소거한 플레이어 퇴장",
-                "VideoPlay": "비디오 재생"
+                "VideoPlay": "비디오 재생",
+                "vrcc_notice": "알림"
             },
             "favorite_groups": {
                 "menu_label": "즐겨찾기 그룹",

@@ -6716,6 +6716,11 @@
                     "label": "媒体",
                     "description": "当前会话中的视频播放活动。",
                     "example": "视频"
+                },
+                "externalSource": {
+                    "label": "星遇同频",
+                    "description": "来自星遇同频（vrcc.cc）的提醒。",
+                    "example": "有人连了你、互相连上"
                 }
             },
             "types": {
@@ -6755,7 +6760,8 @@
                 "BlockedOnPlayerLeft": "已屏蔽玩家离开",
                 "MutedOnPlayerJoined": "已静音玩家加入",
                 "MutedOnPlayerLeft": "已静音玩家离开",
-                "VideoPlay": "视频播放"
+                "VideoPlay": "视频播放",
+                "vrcc_notice": "提醒"
             },
             "favorite_groups": {
                 "menu_label": "收藏分组",

@@ -6357,6 +6357,11 @@
                     "label": "Média",
                     "description": "Přehrávání videa v aktuální relaci.",
                     "example": "Video"
+                },
+                "externalSource": {
+                    "label": "Orbitune",
+                    "description": "Oznámení z komunitní platformy Orbitune (vrcc.cc).",
+                    "example": "Nová hvězda, vzájemné propojení"
                 }
             },
             "types": {
@@ -6396,7 +6401,8 @@
                 "BlockedOnPlayerLeft": "Zablokovaný hráč odešel",
                 "MutedOnPlayerJoined": "Ztlumený hráč se připojil",
                 "MutedOnPlayerLeft": "Ztlumený hráč odešel",
-                "VideoPlay": "Přehrávání videa"
+                "VideoPlay": "Přehrávání videa",
+                "vrcc_notice": "Oznámení"
             },
             "favorite_groups": {
                 "menu_label": "Oblíbené skupiny",

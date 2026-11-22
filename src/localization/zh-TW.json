@@ -6707,6 +6707,11 @@
                     "label": "媒體",
                     "description": "目前工作階段中的影片播放活動。",
                     "example": "影片"
+                },
+                "externalSource": {
+                    "label": "星遇同頻",
+                    "description": "來自星遇同頻（vrcc.cc）的提醒。",
+                    "example": "有人連了你、互相連上"
                 }
             },
             "types": {
@@ -6746,7 +6751,8 @@
                 "BlockedOnPlayerLeft": "已封鎖用戶離開",
                 "MutedOnPlayerJoined": "已靜音用戶加入",
                 "MutedOnPlayerLeft": "已靜音用戶離開",
-                "VideoPlay": "影片播放"
+                "VideoPlay": "影片播放",
+                "vrcc_notice": "提醒"
             },
             "favorite_groups": {
                 "menu_label": "收藏群組",
