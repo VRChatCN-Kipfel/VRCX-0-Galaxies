@@ -162,6 +162,16 @@ impl DesktopVrccRuntime {
     /// 行 id 的形态是 `<前缀><提醒编号>`，写库和回标已读都用同一个形态。
     /// 前缀让这些行和 VRChat 自己的提醒（`not_…`）在同一个 id 空间里不撞车。
     const NOTICE_ROW_ID_PREFIX: &str = "vrcc_";
+    /// 通知中心里由 `me/notes` 生成的那些行的 id 前缀。
+    ///
+    /// 形态 `vrcc_n_<noteId>`，两个要求同时满足：
+    /// - 以 `vrcc_` 开头 —— 托盘排除（`LIKE 'vrcc_%'`）与前端整体识别都认它；
+    /// - `vrcc_n_` 之后是纯数字 —— 已读回标那套 `CAST(substr(...) AS INTEGER)`
+    ///   认纯数字，混进来非数字会被当成 0，一次回标把整批标成已读。
+    ///
+    /// `n_` 让 notes 与提醒（`vrcc_<noticeId>`）落在两个互不相干的编号空间：
+    /// 两个接口的编号各自从 1 开始，同前缀会互相吞行。
+    const NOTE_ROW_ID_PREFIX: &str = "vrcc_n_";
     /// 通知中心里那一行的类型。
     ///
     /// 前端按 `view.notification.filters.<type>` 取标签，所以这个名字同时
@@ -451,6 +461,29 @@ impl DesktopVrccRuntime {
             .notes()
             .await
             .map_err(|error| VrccFailure::from_error(&error))
+    }
+
+    /// 拉一次 `me/notes` 并写进通知中心，返回写成功的条数。
+    ///
+    /// **只在玩家打开抽屉时调用**：`me/notes` 属于「第一份读」（每个授权每天
+    /// 1000 次），不能进后台轮询，否则光这一项一天就要 1440 次。
+    ///
+    /// 已读直接采用服务端的 `seen`：那是权威结论，本地那套 id 游标只适用于
+    /// `/me/notifications` 的 `read` 游标，两者不是一回事。
+    pub async fn sync_notes(&self) -> Result<usize, VrccFailure> {
+        let Some(owner) = (self.owner)() else {
+            return Ok(0);
+        };
+        let Some(notes) = self
+            .service
+            .notes()
+            .await
+            .map_err(|error| VrccFailure::from_error(&error))?
+        else {
+            return Ok(0);
+        };
+        let sender = Self::service_name_for(self.config.as_ref());
+        Ok(persist_notes(&self.db, &owner, &notes.notes, &sender))
     }
 
     /// 当前所在地图在地图榜上的状态。`off` 的地图返回 `None`（不给看）。
@@ -1114,6 +1147,82 @@ fn persist_notices(
                     notice_id = item.id,
                     %error,
                     "vrcc: notice could not be written to the notification centre"
+                );
+            }
+        }
+    }
+    written
+}
+
+/// 把一条 `me/notes` 事实写成通知中心的一行。
+///
+/// 和 [`notice_row`] 的区别是**原料更全**：notes 自带 `kind` / `seen` /
+/// `post` / `world`，所以
+///
+/// - `seen` 直接采用服务端的结论——服务端才是已读权威，本地不再自己推；
+/// - `kind` 与落点进 `details.vrcc`，留给界面分族与跳转（P2.2 / P3 用）。
+fn note_row(
+    note: &vrcx_0_contracts::vrcc::VrccNote,
+    fallback_created_at: &str,
+    sender: &str,
+) -> serde_json::Value {
+    let created_at = note
+        .at
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .map(vrcx_0_core::time::iso_millis)
+        .unwrap_or_else(|| fallback_created_at.to_string());
+    let text = note.text.as_deref().unwrap_or_default().trim();
+    json!({
+        "id": format!("{}{}", DesktopVrccRuntime::NOTE_ROW_ID_PREFIX, note.id),
+        "createdAt": created_at,
+        "updatedAt": created_at.clone(),
+        // 和提醒行一样永不过期：这些是给玩家回查的历史。
+        "expiresAt": "",
+        "type": DesktopVrccRuntime::NOTICE_ROW_TYPE,
+        "link": DesktopVrccRuntime::NOTICE_ROW_LINK,
+        "linkText": String::new(),
+        "title": sender,
+        "message": text,
+        // 服务端说看过了就是看过了；老服务器没有 `seen` 时按未读处理。
+        "seen": note.seen.unwrap_or(false),
+        "senderUserId": String::new(),
+        "senderUsername": sender,
+        "imageUrl": String::new(),
+        "data": {},
+        "responses": [],
+        "details": {
+            "vrcc": {
+                "noteId": note.id,
+                "kind": note.kind.clone().unwrap_or_default(),
+                "post": note.post,
+                "world": note.world.clone().unwrap_or_default(),
+            }
+        },
+    })
+}
+
+/// 把一页 `me/notes` 写进通知中心。逐条写、单条失败只记日志。
+fn persist_notes(
+    db: &DatabaseService,
+    owner: &vrcx_0_core::OwnerId,
+    notes: &[vrcx_0_contracts::vrcc::VrccNote],
+    sender: &str,
+) -> usize {
+    if notes.is_empty() {
+        return 0;
+    }
+    let now = vrcx_0_core::time::now_iso();
+    let mut written = 0usize;
+    for note in notes {
+        let row = note_row(note, &now, sender);
+        match vrcx_0_outbound_adapters::upsert_vrcc_notice_row(db, owner.as_str(), row) {
+            Ok(()) => written += 1,
+            Err(error) => {
+                // 只记编号，不记正文：提醒内容属于玩家数据。
+                tracing::warn!(
+                    note_id = note.id,
+                    %error,
+                    "vrcc: note could not be written to the notification centre"
                 );
             }
         }
@@ -1789,6 +1898,91 @@ mod tests {
             body: body.map(str::to_string),
             at,
         }
+    }
+
+    fn note_at(
+        id: i64,
+        kind: Option<&str>,
+        text: Option<&str>,
+        at: Option<i64>,
+        seen: Option<bool>,
+    ) -> vrcx_0_contracts::vrcc::VrccNote {
+        vrcx_0_contracts::vrcc::VrccNote {
+            id,
+            kind: kind.map(str::to_string),
+            text: text.map(str::to_string),
+            at,
+            seen,
+            post: None,
+            world: None,
+        }
+    }
+
+    /// notes 行写的是同一张表，列名集合必须和提醒行完全一致。
+    #[test]
+    fn a_note_row_produces_exactly_the_same_columns() {
+        let row = note_row(
+            &note_at(
+                7,
+                Some("link"),
+                Some("有颗星连了你"),
+                Some(1_700_000_000_000),
+                Some(true),
+            ),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
+        let produced: std::collections::BTreeSet<&str> = row
+            .as_object()
+            .expect("通知中心那一行必须是一个 JSON 对象")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let expected: std::collections::BTreeSet<&str> =
+            NOTICE_ROW_COLUMNS.iter().copied().collect();
+        assert_eq!(produced, expected);
+    }
+
+    /// notes 与提醒是**两个互不相干的编号空间**，不能撞 id。
+    #[test]
+    fn a_note_row_lands_in_its_own_id_space() {
+        let row = note_row(
+            &note_at(42, None, None, None, None),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
+        assert_eq!(row["id"], json!("vrcc_n_42"));
+        // `vrcc_n_` 之后必须是纯数字：已读回标靠 `CAST(substr(...) AS INTEGER)`。
+        assert_eq!(
+            row["id"].as_str().unwrap().trim_start_matches("vrcc_n_"),
+            "42"
+        );
+        // 同编号的提醒行落在另一个空间，不会被合并掉。
+        assert_ne!(
+            row["id"],
+            notice_row(&notice_at(42, None, None, None), "x", "y")["id"]
+        );
+    }
+
+    /// `seen` 采用服务端结论；`kind` 与落点进 `details.vrcc` 留给界面。
+    #[test]
+    fn a_note_row_trusts_the_server_seen_flag_and_keeps_the_kind() {
+        let row = note_row(
+            &note_at(3, Some("map"), Some("给它打个分吧"), None, Some(true)),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
+        assert_eq!(row["seen"], json!(true));
+        assert_eq!(row["details"]["vrcc"]["kind"], json!("map"));
+        assert_eq!(row["details"]["vrcc"]["noteId"], json!(3));
+
+        // 老服务器没有 `seen`：按未读处理，不要猜成读过。
+        let unknown = note_row(
+            &note_at(4, None, None, None, None),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+        );
+        assert_eq!(unknown["seen"], json!(false));
     }
 
     /// 行 id 必须能解析回提醒编号：点通知时要靠它定位到具体一条。
