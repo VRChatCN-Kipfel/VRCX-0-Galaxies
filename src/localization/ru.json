@@ -1359,7 +1359,8 @@
             "no_unseen_notifications": "Нет непрочитанных уведомлений",
             "title_with_count": "Уведомления, непрочитанных: {count}",
             "loading_older": "Загрузка более старых уведомлений…",
-            "no_more_history": "Более старых уведомлений нет"
+            "no_more_history": "Более старых уведомлений нет",
+            "source_filter": "Источник уведомлений"
         },
         "success": {
             "vrchat_launch_request_sent": "Открыто VRChat",

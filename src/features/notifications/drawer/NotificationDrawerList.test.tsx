@@ -115,6 +115,16 @@ describe('NotificationDrawerList', () => {
         expect(onNavigateToTable).toHaveBeenCalledTimes(1);
     });
 
+    it('switches between the VRChat and VRCC panes with the source capsule', () => {
+        renderDrawer([activity('not_reply_1', 3)]);
+        expect(screen.getByText('reply not_reply_1')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'vrcc.title' }));
+
+        expect(screen.getByText('vrcc.notifications.empty')).toBeTruthy();
+        expect(screen.queryByText('reply not_reply_1')).toBeNull();
+    });
+
     it('marks the end of the history once paging runs out of older rows', () => {
         useVrcNotificationStore.setState({ historyStatus: 'done' });
         renderDrawer([activity('not_reply_1', 3)]);

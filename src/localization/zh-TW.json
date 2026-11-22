@@ -1663,7 +1663,8 @@
             "no_unseen_notifications": "沒有未讀通知",
             "title_with_count": "通知，{count} 則未讀",
             "loading_older": "正在載入更早的通知…",
-            "no_more_history": "沒有更早的通知了"
+            "no_more_history": "沒有更早的通知了",
+            "source_filter": "通知來源"
         },
         "success": {
             "vrchat_launch_request_sent": "已在 VRChat 中開啟",

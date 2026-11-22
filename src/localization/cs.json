@@ -1359,7 +1359,8 @@
             "no_unseen_notifications": "Žádná nepřečtená oznámení",
             "title_with_count": "Oznámení, nepřečtená: {count}",
             "loading_older": "Načítání starších oznámení…",
-            "no_more_history": "Žádná starší oznámení"
+            "no_more_history": "Žádná starší oznámení",
+            "source_filter": "Zdroj oznámení"
         },
         "success": {
             "vrchat_launch_request_sent": "Otevřeno ve VRChat",

@@ -1345,7 +1345,8 @@
             "no_unseen_notifications": "Keine ungelesenen Benachrichtigungen",
             "title_with_count": "Benachrichtigungen, {count} ungelesen",
             "loading_older": "Ältere Benachrichtigungen werden geladen…",
-            "no_more_history": "Keine älteren Benachrichtigungen"
+            "no_more_history": "Keine älteren Benachrichtigungen",
+            "source_filter": "Benachrichtigungsquelle"
         },
         "success": {
             "vrchat_launch_request_sent": "In VRChat geöffnet",

@@ -1345,7 +1345,8 @@
             "no_unseen_notifications": "Sem notificações não lidas",
             "title_with_count": "Notificações, {count} não lidas",
             "loading_older": "Carregando notificações anteriores…",
-            "no_more_history": "Não há notificações anteriores"
+            "no_more_history": "Não há notificações anteriores",
+            "source_filter": "Origem das notificações"
         },
         "success": {
             "vrchat_launch_request_sent": "Aberto no VRChat",

@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NotificationRow } from '@/repositories/notificationPersistenceRepository';
@@ -24,6 +24,10 @@ import {
     type NotificationLifecycleBucket
 } from './notificationDrawerBuckets';
 import { NotificationDrawerRow } from './NotificationDrawerRow';
+import {
+    NotificationSourceCapsule,
+    type NotificationSourceKey
+} from './NotificationSourceCapsule';
 
 export type NotificationDrawerHandlers = NotificationRowActionHandlers & {
     onDeleteNotification(notification: NotificationRow): void | Promise<void>;
@@ -89,6 +93,28 @@ export function NotificationDrawerList({
     );
     const scrollRef = useRef<HTMLDivElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
+    // 「我正在看哪一栏」不是配置，只在本次会话里保留。
+    const [source, setSource] = useState<NotificationSourceKey>('vrchat');
+    const unseenCount = useVrcNotificationStore((state) => state.unseenCount);
+    const vrccUnseenCount = useVrcNotificationStore(
+        (state) => state.vrccUnseenCount
+    );
+    // 两个数字各算各的：总数里含站外提醒，VRChat 那一段要把它减掉。
+    const sourceOptions = useMemo(
+        () => [
+            {
+                key: 'vrchat' as const,
+                label: 'VRChat',
+                count: Math.max(0, unseenCount - vrccUnseenCount)
+            },
+            {
+                key: 'vrcc' as const,
+                label: t('vrcc.title'),
+                count: vrccUnseenCount
+            }
+        ],
+        [t, unseenCount, vrccUnseenCount]
+    );
 
     /**
      * 触底续页：哨兵进入「滚动容器 + 160px」时读下一页。
@@ -103,6 +129,7 @@ export function NotificationDrawerList({
         const sentinel = sentinelRef.current;
         const root = scrollRef.current;
         if (
+            source !== 'vrchat' ||
             !hasAny ||
             !sentinel ||
             !root ||
@@ -125,7 +152,7 @@ export function NotificationDrawerList({
         );
         observer.observe(sentinel);
         return () => observer.disconnect();
-    }, [hasAny, historyStatus, loadOlderForCurrentUser]);
+    }, [hasAny, historyStatus, loadOlderForCurrentUser, source]);
 
     function renderRow(
         bucket: NotificationLifecycleBucket,
@@ -147,114 +174,150 @@ export function NotificationDrawerList({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
+            <div className="px-4 pt-2">
+                <NotificationSourceCapsule
+                    value={source}
+                    options={sourceOptions}
+                    onChange={setSource}
+                    label={t('side_panel.notification_center.source_filter')}
+                    className="w-full"
+                />
+            </div>
             <div
                 ref={scrollRef}
                 className="min-h-0 flex-1 overflow-y-auto py-2"
             >
-                {hasAny ? (
-                    NOTIFICATION_LIFECYCLE_ORDER.map(
-                        (bucket: NotificationLifecycleBucket) => {
-                            const items = groups[bucket];
-                            if (!items.length) {
-                                return null;
-                            }
-                            return (
-                                <div key={bucket} className="mb-2">
-                                    <div className="text-muted-foreground flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium">
-                                        <span>
-                                            {t(GROUP_LABEL_KEYS[bucket])}
-                                        </span>
-                                        <span>({items.length})</span>
-                                    </div>
-                                    {foldNotifications(
-                                        items,
-                                        (entry) => entry.notification,
-                                        (entry) => entry.isUnseen
-                                    ).map((fold) => {
-                                        if (fold.kind === 'single') {
-                                            return renderRow(bucket, fold.item);
-                                        }
-                                        const isExpanded = expanded.has(
-                                            fold.runKey
-                                        );
-                                        return (
-                                            <div
-                                                key={`${bucket}:group:${fold.runKey}`}
-                                                className={
-                                                    isExpanded
-                                                        ? 'border-border/50 border-b'
-                                                        : undefined
-                                                }
-                                            >
-                                                <NotificationGroupSummary
-                                                    variant="drawer"
-                                                    rows={fold.items.map(
-                                                        (entry) =>
-                                                            entry.notification
-                                                    )}
-                                                    unseen={fold.items.some(
-                                                        (entry) =>
-                                                            entry.isUnseen
-                                                    )}
-                                                    expanded={isExpanded}
-                                                    onToggle={() =>
-                                                        toggle(fold.runKey)
-                                                    }
-                                                />
-                                                {isExpanded ? (
-                                                    <NotificationGroupBranch
-                                                        variant="drawer"
-                                                        items={fold.items}
-                                                        getKey={(entry) =>
-                                                            String(
-                                                                entry
-                                                                    .notification
-                                                                    .id
-                                                            )
-                                                        }
-                                                        renderItem={(entry) =>
-                                                            renderRow(
-                                                                bucket,
-                                                                entry,
-                                                                true
-                                                            )
-                                                        }
-                                                    />
-                                                ) : null}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        }
-                    )
+                {source === 'vrcc' ? (
+                    <div className="text-muted-foreground flex items-center justify-center p-8 text-center text-sm">
+                        {t('vrcc.notifications.empty')}
+                    </div>
                 ) : (
-                    <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
-                        {t(
-                            'side_panel.notification_center.no_new_notifications'
+                    <>
+                        {hasAny ? (
+                            NOTIFICATION_LIFECYCLE_ORDER.map(
+                                (bucket: NotificationLifecycleBucket) => {
+                                    const items = groups[bucket];
+                                    if (!items.length) {
+                                        return null;
+                                    }
+                                    return (
+                                        <div key={bucket} className="mb-2">
+                                            <div className="text-muted-foreground flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium">
+                                                <span>
+                                                    {t(
+                                                        GROUP_LABEL_KEYS[bucket]
+                                                    )}
+                                                </span>
+                                                <span>({items.length})</span>
+                                            </div>
+                                            {foldNotifications(
+                                                items,
+                                                (entry) => entry.notification,
+                                                (entry) => entry.isUnseen
+                                            ).map((fold) => {
+                                                if (fold.kind === 'single') {
+                                                    return renderRow(
+                                                        bucket,
+                                                        fold.item
+                                                    );
+                                                }
+                                                const isExpanded = expanded.has(
+                                                    fold.runKey
+                                                );
+                                                return (
+                                                    <div
+                                                        key={`${bucket}:group:${fold.runKey}`}
+                                                        className={
+                                                            isExpanded
+                                                                ? 'border-border/50 border-b'
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        <NotificationGroupSummary
+                                                            variant="drawer"
+                                                            rows={fold.items.map(
+                                                                (entry) =>
+                                                                    entry.notification
+                                                            )}
+                                                            unseen={fold.items.some(
+                                                                (entry) =>
+                                                                    entry.isUnseen
+                                                            )}
+                                                            expanded={
+                                                                isExpanded
+                                                            }
+                                                            onToggle={() =>
+                                                                toggle(
+                                                                    fold.runKey
+                                                                )
+                                                            }
+                                                        />
+                                                        {isExpanded ? (
+                                                            <NotificationGroupBranch
+                                                                variant="drawer"
+                                                                items={
+                                                                    fold.items
+                                                                }
+                                                                getKey={(
+                                                                    entry
+                                                                ) =>
+                                                                    String(
+                                                                        entry
+                                                                            .notification
+                                                                            .id
+                                                                    )
+                                                                }
+                                                                renderItem={(
+                                                                    entry
+                                                                ) =>
+                                                                    renderRow(
+                                                                        bucket,
+                                                                        entry,
+                                                                        true
+                                                                    )
+                                                                }
+                                                            />
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                }
+                            )
+                        ) : (
+                            <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
+                                {t(
+                                    'side_panel.notification_center.no_new_notifications'
+                                )}
+                            </div>
                         )}
-                    </div>
+                        <div ref={sentinelRef} aria-hidden="true" />
+                        {historyStatus === 'loading' ? (
+                            <div className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-3 text-xs">
+                                <Spinner data-icon="inline-start" />
+                                {t(
+                                    'side_panel.notification_center.loading_older'
+                                )}
+                            </div>
+                        ) : null}
+                        {historyStatus === 'done' && hasAny ? (
+                            <div className="text-muted-foreground px-4 pt-3 text-center text-xs">
+                                {t(
+                                    'side_panel.notification_center.no_more_history'
+                                )}
+                            </div>
+                        ) : null}
+                        <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1 px-4 py-3 text-xs font-medium transition-colors hover:bg-(--state-hover-surface)"
+                            onClick={onNavigateToTable}
+                        >
+                            {t('side_panel.notification_center.view_more')}
+                            <ChevronRightIcon className="size-3.5" />
+                        </button>
+                    </>
                 )}
-                <div ref={sentinelRef} aria-hidden="true" />
-                {historyStatus === 'loading' ? (
-                    <div className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-3 text-xs">
-                        <Spinner data-icon="inline-start" />
-                        {t('side_panel.notification_center.loading_older')}
-                    </div>
-                ) : null}
-                {historyStatus === 'done' && hasAny ? (
-                    <div className="text-muted-foreground px-4 pt-3 text-center text-xs">
-                        {t('side_panel.notification_center.no_more_history')}
-                    </div>
-                ) : null}
-                <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1 px-4 py-3 text-xs font-medium transition-colors hover:bg-(--state-hover-surface)"
-                    onClick={onNavigateToTable}
-                >
-                    {t('side_panel.notification_center.view_more')}
-                    <ChevronRightIcon className="size-3.5" />
-                </button>
             </div>
         </div>
     );

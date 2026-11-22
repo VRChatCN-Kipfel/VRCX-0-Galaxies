@@ -1170,7 +1170,8 @@
             "no_new_notifications": "Aucune nouvelle notification au cours des dernières 24 heures",
             "no_unseen_notifications": "Aucune notification non lue",
             "loading_older": "Chargement des notifications plus anciennes…",
-            "no_more_history": "Aucune notification plus ancienne"
+            "no_more_history": "Aucune notification plus ancienne",
+            "source_filter": "Source des notifications"
         },
         "success": {
             "vrchat_launch_request_sent": "Ouvert dans VRChat",

@@ -1341,7 +1341,8 @@
             "no_unseen_notifications": "未読の通知はありません",
             "title_with_count": "通知（未読 {count} 件）",
             "loading_older": "以前の通知を読み込み中…",
-            "no_more_history": "これより古い通知はありません"
+            "no_more_history": "これより古い通知はありません",
+            "source_filter": "通知のソース"
         },
         "success": {
             "vrchat_launch_request_sent": "VRChat で開きました",
