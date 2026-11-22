@@ -99,6 +99,8 @@ fn notification_cache_hits_enrich_projection_and_persistence() -> Result<()> {
             per_table_limit: 10,
             limit: 10,
             include_unseen: false,
+            before_created_at: String::new(),
+            before_id: String::new(),
         },
     )?;
     let row = rows
@@ -497,6 +499,8 @@ fn unresolved_person_location_notification_persists_without_runtime_projection()
             per_table_limit: 10,
             limit: 10,
             include_unseen: false,
+            before_created_at: String::new(),
+            before_id: String::new(),
         },
     )?;
     let row = rows
@@ -776,6 +780,8 @@ fn notification_v2_update_sanitizes_id_like_names_before_persistence() -> Result
             per_table_limit: 10,
             limit: 10,
             include_unseen: false,
+            before_created_at: String::new(),
+            before_id: String::new(),
         },
     )?;
     let row = rows

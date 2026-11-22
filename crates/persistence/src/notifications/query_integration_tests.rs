@@ -109,8 +109,66 @@ fn query(
             per_table_limit,
             limit,
             include_unseen,
+            before_created_at: String::new(),
+            before_id: String::new(),
         },
     )
+}
+
+fn query_page(
+    db: &DatabaseService,
+    user_id: &str,
+    page_size: i64,
+    cursor: Option<&(String, String)>,
+) -> Result<Vec<NotificationListItemOutput>, Error> {
+    notification_list_query(
+        db,
+        NotificationListQueryInput {
+            user_id: user_id.into(),
+            search: String::new(),
+            filters: Vec::new(),
+            per_table_limit: page_size,
+            limit: page_size,
+            include_unseen: false,
+            before_created_at: cursor.map(|(at, _)| at.clone()).unwrap_or_default(),
+            before_id: cursor.map(|(_, id)| id.clone()).unwrap_or_default(),
+        },
+    )
+}
+
+/// 游标翻页：同一毫秒里的多行也不能重、不能漏。
+///
+/// 只用 `created_at <` 切不干净——三条挤在 `00:00:00` 时，要么整秒被跳过、
+/// 要么整秒重来一遍。`(created_at, id)` 复合游标才排得出先后。
+#[test]
+fn cursor_paging_walks_history_without_duplicates_or_gaps() -> Result<(), Error> {
+    let (_dir, db) = test_db("cursor-paging")?;
+    let user_id = "usr_owner";
+    for (id, created_at) in [
+        ("n4", "2026-04-04T00:00:01Z"),
+        ("n3", "2026-04-04T00:00:00Z"),
+        ("n2", "2026-04-04T00:00:00Z"),
+        ("n1", "2026-04-04T00:00:00Z"),
+        ("n0", "2026-04-03T00:00:00Z"),
+    ] {
+        add_v2(&db, user_id, id, created_at, true, "")?;
+    }
+
+    let mut collected: Vec<String> = Vec::new();
+    let mut cursor: Option<(String, String)> = None;
+    // 五条、每页两条：最多三页就该翻完，给十次是防死循环。
+    for _ in 0..10 {
+        let page = query_page(&db, user_id, 2, cursor.as_ref())?;
+        if page.is_empty() {
+            break;
+        }
+        let last = page.last().expect("non-empty page");
+        cursor = Some((last.created_at.clone(), last.id.clone()));
+        collected.extend(page.into_iter().map(|row| row.id));
+    }
+
+    assert_eq!(collected, vec!["n4", "n3", "n2", "n1", "n0"]);
+    Ok(())
 }
 
 #[test]
@@ -344,6 +402,8 @@ fn app_notifications_list_with_their_message_key_and_can_be_deleted() -> Result<
             per_table_limit: 10,
             limit: 10,
             include_unseen: true,
+            before_created_at: String::new(),
+            before_id: String::new(),
         },
     )?;
     assert_eq!(filtered.len(), 1);

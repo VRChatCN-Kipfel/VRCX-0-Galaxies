@@ -37,6 +37,7 @@ fn notification_filter_params(
     filters: &[String],
     search: &str,
     search_columns: &[&str],
+    cursor: Option<(&str, &str)>,
 ) -> (String, DbParams) {
     let mut params = HashMap::new();
     let mut clauses = Vec::new();
@@ -61,6 +62,29 @@ fn notification_filter_params(
                 .collect::<Vec<_>>()
                 .join(" OR ")
         ));
+    }
+
+    if let Some((created_at, id)) = cursor {
+        let created_at = created_at.trim();
+        let id = id.trim();
+        if !created_at.is_empty() {
+            params.insert(
+                "@before_created_at".into(),
+                Value::String(created_at.to_string()),
+            );
+            if id.is_empty() {
+                // 只有时间：严格早于。同一毫秒里的行会在页边界上丢掉，所以调用
+                // 方只要拿得到 id 就必须一起给。
+                clauses.push("created_at < @before_created_at".to_string());
+            } else {
+                params.insert("@before_id".into(), Value::String(id.to_string()));
+                clauses.push(
+                    "(created_at < @before_created_at \
+                     OR (created_at = @before_created_at AND id < @before_id))"
+                        .to_string(),
+                );
+            }
+        }
     }
 
     if clauses.is_empty() {
@@ -413,14 +437,17 @@ fn query_notification_list(
         "data",
         "details",
     ];
+    // 翻页游标。三张表都要带上，否则「更早的一页」里会混进已经被翻过去的新行。
+    let cursor = Some((query.before_created_at.as_str(), query.before_id.as_str()));
     let (v1_where_sql, mut v1_params) =
-        notification_filter_params(&query.filters, &search, &v1_search_columns);
+        notification_filter_params(&query.filters, &search, &v1_search_columns, cursor);
     let (v2_where_sql, mut v2_params) =
-        notification_filter_params(&query.filters, &search, &v2_search_columns);
+        notification_filter_params(&query.filters, &search, &v2_search_columns, cursor);
     let (app_where_sql, mut app_params) = notification_filter_params(
         &query.filters,
         &search,
         &["type", "subject_id", "subject_name"],
+        cursor,
     );
     v1_params.insert("@limit".into(), Value::from(per_table_limit));
     v2_params.insert("@limit".into(), Value::from(per_table_limit));

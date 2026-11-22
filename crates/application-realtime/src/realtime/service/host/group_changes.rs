@@ -116,6 +116,8 @@ mod tests {
                 per_table_limit: 10,
                 limit: 10,
                 include_unseen: false,
+                before_created_at: String::new(),
+                before_id: String::new(),
             },
         )?;
         assert_eq!(rows.len(), 1);

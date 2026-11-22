@@ -79,6 +79,18 @@ pub struct NotificationListQueryInput {
     pub limit: i64,
     #[serde(default)]
     pub include_unseen: bool,
+    /// 向前翻页的游标：上一页最后一行的时间（RFC3339）。
+    ///
+    /// 空串表示「没有游标」，从最新一页开始——用空串而不是 `Option`，与
+    /// `search` 等字段保持一致，前端不必区分「没传」和「传了空串」。
+    #[serde(default)]
+    pub before_created_at: String,
+    /// 复合游标的第二段：同一时刻的多行再按 id 倒序切一刀。
+    ///
+    /// 只给 `before_created_at` 不给 id 时按「严格早于该时刻」切，
+    /// **同一毫秒里的行会在页边界上丢掉**；两者都给才不重不漏。
+    #[serde(default)]
+    pub before_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, specta::Type)]

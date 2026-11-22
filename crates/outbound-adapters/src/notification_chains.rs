@@ -241,6 +241,8 @@ impl NotificationChainActions for LocalNotificationChainActions<'_> {
                 per_table_limit: BOOP_DISMISS_QUERY_LIMIT,
                 limit: BOOP_DISMISS_QUERY_LIMIT,
                 include_unseen: false,
+                before_created_at: String::new(),
+                before_id: String::new(),
             },
         )?
         .into_iter()
