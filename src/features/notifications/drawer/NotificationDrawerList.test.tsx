@@ -125,6 +125,30 @@ describe('NotificationDrawerList', () => {
         expect(screen.queryByText('reply not_reply_1')).toBeNull();
     });
 
+    /** VRCC 栏读本地表里属于站外的行；VRChat 栏看不到它们。 */
+    it('renders out-of-app rows in the VRCC pane only', () => {
+        useVrcNotificationStore.setState({
+            rows: [
+                {
+                    id: 'vrcc_12',
+                    type: 'vrcc.notice',
+                    version: 2,
+                    seen: false,
+                    message: '有颗星连了你',
+                    createdAt: '2026-10-29T10:00:00.000Z'
+                }
+            ]
+        });
+        renderDrawer([activity('not_reply_1', 3)]);
+
+        expect(screen.queryByText('有颗星连了你')).toBeNull();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'vrcc.title' }));
+
+        expect(screen.getByText('有颗星连了你')).toBeTruthy();
+        expect(screen.queryByText('reply not_reply_1')).toBeNull();
+    });
+
     it('marks the end of the history once paging runs out of older rows', () => {
         useVrcNotificationStore.setState({ historyStatus: 'done' });
         renderDrawer([activity('not_reply_1', 3)]);

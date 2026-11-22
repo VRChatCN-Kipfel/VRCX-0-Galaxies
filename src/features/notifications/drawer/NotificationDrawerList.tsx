@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NotificationRow } from '@/repositories/notificationPersistenceRepository';
+import { isUnseenNotification } from '@/shared/utils/notificationSeen';
+import { isVrccNotification } from '@/shared/utils/vrccNotification';
 import {
     useVrcNotificationStore,
     type NotificationBucket,
@@ -96,8 +98,21 @@ export function NotificationDrawerList({
     // 「我正在看哪一栏」不是配置，只在本次会话里保留。
     const [source, setSource] = useState<NotificationSourceKey>('vrchat');
     const unseenCount = useVrcNotificationStore((state) => state.unseenCount);
+    const rows = useVrcNotificationStore((state) => state.rows);
     const vrccUnseenCount = useVrcNotificationStore(
         (state) => state.vrccUnseenCount
+    );
+    /**
+     * VRCC 栏的内容：本地表里属于站外的那些行。
+     *
+     * 现在先把**已经在 `rows` 里**的取出来渲染——首屏本来就含全部未读 + 最近
+     * 24 小时，所以刚连上时看到的就是这些。更早的星遇历史要等 P2 换成
+     * `/me/notes` 的独立查询再翻页：`loadOlderForCurrentUser` 翻的是通知总表，
+     * 游标不按来源切分。
+     */
+    const vrccRows = useMemo(
+        () => rows.filter((row) => isVrccNotification(row)),
+        [rows]
     );
     // 两个数字各算各的：总数里含站外提醒，VRChat 那一段要把它减掉。
     const sourceOptions = useMemo(
@@ -188,9 +203,26 @@ export function NotificationDrawerList({
                 className="min-h-0 flex-1 overflow-y-auto py-2"
             >
                 {source === 'vrcc' ? (
-                    <div className="text-muted-foreground flex items-center justify-center p-8 text-center text-sm">
-                        {t('vrcc.notifications.empty')}
-                    </div>
+                    vrccRows.length ? (
+                        <div>
+                            {vrccRows.map((row) => (
+                                <NotificationDrawerRow
+                                    key={`vrcc:${row.id}`}
+                                    notification={row}
+                                    isUnseen={isUnseenNotification(row)}
+                                    currentUserId={currentUserId}
+                                    canInviteFromCurrentLocation={
+                                        canInviteFromCurrentLocation
+                                    }
+                                    handlers={handlers}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-muted-foreground flex items-center justify-center p-8 text-center text-sm">
+                            {t('vrcc.notifications.empty')}
+                        </div>
+                    )
                 ) : (
                     <>
                         {hasAny ? (
