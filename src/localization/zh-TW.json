@@ -1661,7 +1661,9 @@
             "tab_friend": "好友",
             "no_new_notifications": "最近 24 小時內沒有新通知",
             "no_unseen_notifications": "沒有未讀通知",
-            "title_with_count": "通知，{count} 則未讀"
+            "title_with_count": "通知，{count} 則未讀",
+            "loading_older": "正在載入更早的通知…",
+            "no_more_history": "沒有更早的通知了"
         },
         "success": {
             "vrchat_launch_request_sent": "已在 VRChat 中開啟",

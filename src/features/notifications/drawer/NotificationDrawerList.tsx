@@ -1,12 +1,14 @@
 import { ChevronRightIcon } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NotificationRow } from '@/repositories/notificationPersistenceRepository';
-import type {
-    NotificationBucket,
-    NotificationCategories
+import {
+    useVrcNotificationStore,
+    type NotificationBucket,
+    type NotificationCategories
 } from '@/state/vrcNotificationStore';
+import { Spinner } from '@/ui/shadcn/spinner';
 
 import { NotificationGroupBranch } from '../components/NotificationGroupBranch';
 import { NotificationGroupSummary } from '../components/NotificationGroupSummary';
@@ -42,6 +44,13 @@ const GROUP_LABEL_KEYS: Record<NotificationLifecycleBucket, string> = {
     system: 'side_panel.notification_center.group_system'
 };
 
+/**
+ * 离底部还有多远就开始读下一页。
+ *
+ * 160px 大约是一屏的提示距离：滚到底之前就已经在读了，玩家看不到等待。
+ */
+const HISTORY_ROOT_MARGIN = '160px';
+
 function notificationBuckets(
     value: NotificationCategories
 ): NotificationBucket[] {
@@ -72,6 +81,51 @@ export function NotificationDrawerList({
     const hasAny = NOTIFICATION_LIFECYCLE_ORDER.some(
         (bucket: NotificationLifecycleBucket) => groups[bucket].length > 0
     );
+    const historyStatus = useVrcNotificationStore(
+        (state) => state.historyStatus
+    );
+    const loadOlderForCurrentUser = useVrcNotificationStore(
+        (state) => state.loadOlderForCurrentUser
+    );
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+
+    /**
+     * 触底续页：哨兵进入「滚动容器 + 160px」时读下一页。
+     *
+     * 根节点是**这个**滚动容器而不是视口——抽屉本身不滚动，用视口当根时
+     * 哨兵永远「可见」，一打开抽屉就会把历史全读进来。
+     *
+     * jsdom 没有 `IntersectionObserver`，测试与降级环境直接跳过：翻页是增强，
+     * 不是能挡住通知中心的东西。
+     */
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        const root = scrollRef.current;
+        if (
+            !hasAny ||
+            !sentinel ||
+            !root ||
+            typeof IntersectionObserver === 'undefined'
+        ) {
+            return undefined;
+        }
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (!entries.some((entry) => entry.isIntersecting)) {
+                    return;
+                }
+                if (historyStatus !== 'idle') {
+                    return;
+                }
+                // 失败不写状态：留在 `idle`，下次滚到这里再试一次。
+                void loadOlderForCurrentUser().catch(() => undefined);
+            },
+            { root, rootMargin: HISTORY_ROOT_MARGIN }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [hasAny, historyStatus, loadOlderForCurrentUser]);
 
     function renderRow(
         bucket: NotificationLifecycleBucket,
@@ -93,7 +147,10 @@ export function NotificationDrawerList({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto py-2">
+            <div
+                ref={scrollRef}
+                className="min-h-0 flex-1 overflow-y-auto py-2"
+            >
                 {hasAny ? (
                     NOTIFICATION_LIFECYCLE_ORDER.map(
                         (bucket: NotificationLifecycleBucket) => {
@@ -178,6 +235,18 @@ export function NotificationDrawerList({
                         )}
                     </div>
                 )}
+                <div ref={sentinelRef} aria-hidden="true" />
+                {historyStatus === 'loading' ? (
+                    <div className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-3 text-xs">
+                        <Spinner data-icon="inline-start" />
+                        {t('side_panel.notification_center.loading_older')}
+                    </div>
+                ) : null}
+                {historyStatus === 'done' && hasAny ? (
+                    <div className="text-muted-foreground px-4 pt-3 text-center text-xs">
+                        {t('side_panel.notification_center.no_more_history')}
+                    </div>
+                ) : null}
                 <button
                     type="button"
                     className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1 px-4 py-3 text-xs font-medium transition-colors hover:bg-(--state-hover-surface)"

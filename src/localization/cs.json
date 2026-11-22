@@ -1357,7 +1357,9 @@
             "tab_friend": "Přítel",
             "no_new_notifications": "Za posledních 24 hodin žádná nová oznámení",
             "no_unseen_notifications": "Žádná nepřečtená oznámení",
-            "title_with_count": "Oznámení, nepřečtená: {count}"
+            "title_with_count": "Oznámení, nepřečtená: {count}",
+            "loading_older": "Načítání starších oznámení…",
+            "no_more_history": "Žádná starší oznámení"
         },
         "success": {
             "vrchat_launch_request_sent": "Otevřeno ve VRChat",

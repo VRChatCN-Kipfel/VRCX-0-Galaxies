@@ -1343,7 +1343,9 @@
             "tab_friend": "Freund",
             "no_new_notifications": "Keine neuen Benachrichtigungen in den letzten 24 Stunden",
             "no_unseen_notifications": "Keine ungelesenen Benachrichtigungen",
-            "title_with_count": "Benachrichtigungen, {count} ungelesen"
+            "title_with_count": "Benachrichtigungen, {count} ungelesen",
+            "loading_older": "Ältere Benachrichtigungen werden geladen…",
+            "no_more_history": "Keine älteren Benachrichtigungen"
         },
         "success": {
             "vrchat_launch_request_sent": "In VRChat geöffnet",

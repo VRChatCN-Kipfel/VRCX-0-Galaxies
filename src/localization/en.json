@@ -1665,7 +1665,9 @@
             "tab_friend": "Friend",
             "no_new_notifications": "No new notifications in the past 24 hours",
             "no_unseen_notifications": "No unread notifications",
-            "title_with_count": "Notifications, {count} unread"
+            "title_with_count": "Notifications, {count} unread",
+            "loading_older": "Loading older notifications…",
+            "no_more_history": "No older notifications"
         },
         "success": {
             "vrchat_launch_request_sent": "Opened in VRChat",

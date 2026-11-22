@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationRow } from '@/repositories/notificationPersistenceRepository';
+import { useVrcNotificationStore } from '@/state/vrcNotificationStore';
 import type { NotificationCategories } from '@/state/vrcNotificationStore';
 
 import { NotificationDrawerList } from './NotificationDrawerList';
@@ -12,7 +13,11 @@ vi.mock('../useNotificationActorImage', () => ({
     useNotificationActorImage: () => ''
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+    // 翻页状态是全局 store 的：每个用例自己设，跑完必须还原。
+    useVrcNotificationStore.setState({ historyStatus: 'idle' });
+    cleanup();
+});
 
 function handlers() {
     return {
@@ -108,6 +113,30 @@ describe('NotificationDrawerList', () => {
             })
         );
         expect(onNavigateToTable).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the end of the history once paging runs out of older rows', () => {
+        useVrcNotificationStore.setState({ historyStatus: 'done' });
+        renderDrawer([activity('not_reply_1', 3)]);
+
+        expect(
+            screen.getByText('side_panel.notification_center.no_more_history')
+        ).toBeTruthy();
+        expect(
+            screen.queryByText('side_panel.notification_center.loading_older')
+        ).toBeNull();
+    });
+
+    it('shows a spinner line while an older page is loading', () => {
+        useVrcNotificationStore.setState({ historyStatus: 'loading' });
+        renderDrawer([activity('not_reply_1', 3)]);
+
+        expect(
+            screen.getByText('side_panel.notification_center.loading_older')
+        ).toBeTruthy();
+        expect(
+            screen.queryByText('side_panel.notification_center.no_more_history')
+        ).toBeNull();
     });
 
     it('folds adjacent grouped rows into one expandable summary without changing bucket counts', () => {

@@ -1280,7 +1280,9 @@
             "tab_friend": "친구",
             "no_new_notifications": "지난 24시간 동안 새 알림이 없습니다.",
             "no_unseen_notifications": "읽지 않은 알림 없음",
-            "title_with_count": "알림, 읽지 않음 {count}개"
+            "title_with_count": "알림, 읽지 않음 {count}개",
+            "loading_older": "이전 알림을 불러오는 중…",
+            "no_more_history": "더 오래된 알림이 없습니다"
         },
         "success": {
             "vrchat_launch_request_sent": "VRChat에서 열었습니다.",
