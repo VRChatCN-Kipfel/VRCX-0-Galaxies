@@ -62,6 +62,8 @@ type NotificationDerivedState = Pick<
     'categories' | 'unseenCount' | 'pendingInviteCount'
 >;
 const NOTIFICATION_ROWS_MAX_ENTRIES = 2000;
+/** 「加载更早」每页几条。50 行大约一屏半，触底时刚好补得上。 */
+const NOTIFICATION_HISTORY_PAGE_SIZE = 50;
 
 const NOTIFICATION_DETAILS_PATCH_KEYS = [
     'worldName',
@@ -133,6 +135,14 @@ export type MarkAllSeenRowState = 'queued' | 'active' | 'failed' | null;
 export type MarkAllSeenResult = {
     failedCount: number;
 };
+/**
+ * 「加载更早」的状态。
+ *
+ * - `idle`：还能继续翻；
+ * - `loading`：这一页正在读；
+ * - `done`：已经翻到底（库里没有更早的了），不再发请求。
+ */
+export type NotificationHistoryStatus = 'idle' | 'loading' | 'done';
 type VrcNotificationStore = {
     rows: NotificationRow[];
     categories: NotificationCategories;
@@ -140,11 +150,20 @@ type VrcNotificationStore = {
     pendingInviteCount: number;
     isCenterOpen: boolean;
     loadStatus: LoadStatus;
+    historyStatus: NotificationHistoryStatus;
     detail: string;
     markAllSeenProgress: MarkAllSeenProgress | null;
     markAllSeenFailedIds: string[];
     loadForCurrentUser(): Promise<NotificationRow[]>;
     refreshForCurrentUser(): Promise<NotificationRow[]>;
+    /**
+     * 往前读一页更早的通知，接到 `rows` 尾巴上。
+     *
+     * 返回**新增**的条数（0 表示到底了或这一页全是重复的）。游标取当前最旧
+     * 那一行的 `(created_at, id)`——首屏已经把全部未读都读进来了，所以不存在
+     * 「比游标更早的未读」被漏掉的情况。
+     */
+    loadOlderForCurrentUser(): Promise<number>;
     setCenterOpen(isCenterOpen: boolean): void;
     openCenter(): void;
     upsertNotification(notification: NotificationRow): void;
@@ -428,6 +447,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
         pendingInviteCount: 0,
         isCenterOpen: false,
         loadStatus: 'idle',
+        historyStatus: 'idle',
         detail: '',
         markAllSeenProgress: null,
         markAllSeenFailedIds: [],
@@ -463,7 +483,9 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                 }
                 set({
                     ...createNotificationState(rows),
-                    loadStatus: 'ready'
+                    loadStatus: 'ready',
+                    // 整份重新读过：之前翻出来的历史不在 `rows` 里了，翻页状态归零。
+                    historyStatus: 'idle'
                 });
                 notificationRowsRevision += 1;
                 syncShellUnseenCount(true);
@@ -491,6 +513,63 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                 });
                 notificationRowsRevision += 1;
                 syncShellUnseenCount(true);
+                throw error;
+            }
+        },
+        async loadOlderForCurrentUser() {
+            const scope = captureNotificationScope();
+            if (!scope) {
+                return 0;
+            }
+            const state = get();
+            if (
+                state.historyStatus === 'loading' ||
+                state.historyStatus === 'done'
+            ) {
+                return 0;
+            }
+            // 行已经是倒序的，尾巴就是最旧那条。首屏把全部未读都读进来了，
+            // 所以「比它更早的未读」不存在，从这个点往前翻不会漏。
+            const oldest = state.rows[state.rows.length - 1];
+            if (!oldest) {
+                set({ historyStatus: 'done' });
+                return 0;
+            }
+            const createdAt = String(
+                oldest.createdAt ?? oldest.created_at ?? ''
+            ).trim();
+            const id = String(oldest.id ?? '').trim();
+            if (!createdAt || !id) {
+                set({ historyStatus: 'done' });
+                return 0;
+            }
+
+            set({ historyStatus: 'loading' });
+            try {
+                const page = applyPendingSeenRows(
+                    await notificationPersistenceRepository.queryNotifications({
+                        userId: scope.currentUserId,
+                        before: { createdAt, id },
+                        limit: NOTIFICATION_HISTORY_PAGE_SIZE
+                    })
+                );
+                if (!isCurrentNotificationScope(scope)) {
+                    return 0;
+                }
+                const currentRows = get().rows;
+                const merged = mergeLoadedNotificationRows(page, currentRows);
+                const added = merged.length - currentRows.length;
+                set({
+                    ...createNotificationState(merged),
+                    historyStatus:
+                        page.length < NOTIFICATION_HISTORY_PAGE_SIZE
+                            ? 'done'
+                            : 'idle'
+                });
+                notificationRowsRevision += 1;
+                return added;
+            } catch (error) {
+                set({ historyStatus: 'idle' });
                 throw error;
             }
         },
@@ -918,6 +997,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                 pendingInviteCount: 0,
                 isCenterOpen: false,
                 loadStatus: 'idle',
+                historyStatus: 'idle',
                 detail: '',
                 markAllSeenProgress: null,
                 markAllSeenFailedIds: []

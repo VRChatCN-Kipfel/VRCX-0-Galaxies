@@ -1036,4 +1036,64 @@ describe('vrcNotificationStore', () => {
         expect(useVrcNotificationStore.getState().unseenCount).toBe(1);
         expect(useShellStore.getState().vrcUnseenNotificationCount).toBe(0);
     });
+
+    /**
+     * 「加载更早」的接线：游标取当前最旧那一行的 `(created_at, id)`，
+     * 读回来的一页接到尾巴上，短页即到底。
+     */
+    it('pages older notifications from the oldest row and stops at a short page', async () => {
+        const row = (id: string, createdAt: string): NotificationRow => ({
+            id,
+            type: 'inviteResponse',
+            version: 2,
+            seen: true,
+            created_at: createdAt
+        });
+
+        notificationRepositoryMock.queryNotifications
+            .mockResolvedValueOnce([
+                row('n4', '2026-04-04T00:00:01.000Z'),
+                row('n3', '2026-04-04T00:00:00.000Z')
+            ])
+            .mockResolvedValueOnce([
+                row('n2', '2026-04-04T00:00:00.000Z'),
+                row('n1', '2026-04-03T00:00:00.000Z')
+            ]);
+
+        await useVrcNotificationStore.getState().loadForCurrentUser();
+        expect(
+            useVrcNotificationStore.getState().rows.map((entry) => entry.id)
+        ).toEqual(['n4', 'n3']);
+
+        const added = await useVrcNotificationStore
+            .getState()
+            .loadOlderForCurrentUser();
+
+        expect(added).toBe(2);
+        expect(
+            notificationRepositoryMock.queryNotifications
+        ).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                before: {
+                    createdAt: '2026-04-04T00:00:00.000Z',
+                    id: 'n3'
+                },
+                limit: 50
+            })
+        );
+        expect(
+            useVrcNotificationStore.getState().rows.map((entry) => entry.id)
+        ).toEqual(['n4', 'n3', 'n2', 'n1']);
+
+        // 两行 < 每页 50 → 到底了；再调不该再发请求。
+        expect(useVrcNotificationStore.getState().historyStatus).toBe('done');
+        const calls =
+            notificationRepositoryMock.queryNotifications.mock.calls.length;
+        await expect(
+            useVrcNotificationStore.getState().loadOlderForCurrentUser()
+        ).resolves.toBe(0);
+        expect(
+            notificationRepositoryMock.queryNotifications.mock.calls.length
+        ).toBe(calls);
+    });
 });

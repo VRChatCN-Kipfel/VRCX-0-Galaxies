@@ -66,6 +66,17 @@ export type NotificationRow = Omit<
 
 type NotificationRecord = NotificationRow;
 
+/**
+ * 向前翻页的复合游标：上一页最后一行的 `(created_at, id)`。
+ *
+ * 两段必须一起给。只用时间的话，同一毫秒里的多行会在页边界上整秒跳过或
+ * 整秒重来一遍——`notification_list_query` 的排序键正是这两列。
+ */
+export type NotificationCursor = {
+    createdAt: string;
+    id: string;
+};
+
 interface NotificationUserOptions {
     userId?: string;
 }
@@ -168,10 +179,16 @@ function unwrapVrchatNotificationResponse<TJson = NotificationRecord>(
 async function queryNotifications({
     userId,
     search = '',
-    filters = []
+    filters = [],
+    before,
+    limit: requestedLimit
 }: NotificationUserOptions & {
     search?: string;
     filters?: string[];
+    /** 向前翻页：上一页最后一行的游标。不给就是第一页（最新）。 */
+    before?: NotificationCursor;
+    /** 每页几条。翻页时由调用方指定；不传沿用配置里的上限。 */
+    limit?: number;
 } = {}): Promise<NotificationListRow[]> {
     const normalizedUserId = normalizeUserId(userId);
     if (!normalizedUserId) {
@@ -186,9 +203,10 @@ async function queryNotifications({
     ]);
     const isSearchOrFiltered =
         Boolean(normalizedSearch) || normalizedFilters.length > 0;
-    const limit = isSearchOrFiltered
-        ? normalizeNotificationLimit(searchLimit, 50000)
-        : normalizeNotificationLimit(maxTableSize, 500);
+    const limit = normalizeNotificationLimit(
+        requestedLimit ?? (isSearchOrFiltered ? searchLimit : maxTableSize),
+        isSearchOrFiltered ? 50000 : 500
+    );
     const perTableLimit = isSearchOrFiltered ? limit : limit * 2;
     const isDefaultList = !normalizedSearch && normalizedFilters.length === 0;
     const query = {
@@ -197,7 +215,10 @@ async function queryNotifications({
         filters: normalizedFilters,
         perTableLimit,
         limit,
-        includeUnseen: isDefaultList
+        // 翻页时不展开未读：那条 SQL 没有 LIMIT，会把整张未读表拖进来。
+        includeUnseen: isDefaultList && !before,
+        beforeCreatedAt: before?.createdAt ?? '',
+        beforeId: before?.id ?? ''
     } satisfies NotificationListQueryInput;
     const rows = await commands.appNotificationListQuery(query);
     return rows.map(normalizeNotificationListRow);
