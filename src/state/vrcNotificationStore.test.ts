@@ -1038,6 +1038,39 @@ describe('vrcNotificationStore', () => {
     });
 
     /**
+     * 站外提醒不进 VRChat 的分类桶（那是它自己分栏的地盘），
+     * 但仍然算应用内总数——「有几件事没看」和来源无关。
+     */
+    it('keeps out-of-app rows out of the VRChat buckets while still counting them', async () => {
+        notificationRepositoryMock.queryNotifications.mockResolvedValue([
+            {
+                id: 'not_friend',
+                type: 'friendRequest',
+                version: 2,
+                seen: false,
+                created_at: new Date().toISOString()
+            },
+            {
+                id: 'vrcc_9',
+                type: 'vrcc.notice',
+                version: 2,
+                seen: false,
+                created_at: new Date().toISOString()
+            }
+        ]);
+
+        await useVrcNotificationStore.getState().loadForCurrentUser();
+
+        const state = useVrcNotificationStore.getState();
+        expect(state.unseenCount).toBe(2);
+        expect(state.vrccUnseenCount).toBe(1);
+        expect(state.categories.friend.unseen.map((row) => row.id)).toEqual([
+            'not_friend'
+        ]);
+        expect(state.categories.other.unseen).toHaveLength(0);
+    });
+
+    /**
      * 「加载更早」的接线：游标取当前最旧那一行的 `(created_at, id)`，
      * 读回来的一页接到尾巴上，短页即到底。
      */

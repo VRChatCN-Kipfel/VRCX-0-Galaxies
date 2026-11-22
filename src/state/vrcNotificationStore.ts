@@ -54,12 +54,19 @@ type NotificationStateSnapshot = {
     rows: NotificationRow[];
     categories: NotificationCategories;
     unseenCount: number;
+    /**
+     * 其中属于站外来源（星遇同频）的未读数。
+     *
+     * 拆出来是为了分栏报数：`VRChat (n)` 要 `unseenCount - vrccUnseenCount`，
+     * `VRCC (m)` 要它自己。`unseenCount` 仍然是**总数**（应用内角标用）。
+     */
+    vrccUnseenCount: number;
     pendingInviteCount: number;
     detail: string;
 };
 type NotificationDerivedState = Pick<
     NotificationStateSnapshot,
-    'categories' | 'unseenCount' | 'pendingInviteCount'
+    'categories' | 'unseenCount' | 'vrccUnseenCount' | 'pendingInviteCount'
 >;
 const NOTIFICATION_ROWS_MAX_ENTRIES = 2000;
 /** 「加载更早」每页几条。50 行大约一屏半，触底时刚好补得上。 */
@@ -147,6 +154,8 @@ type VrcNotificationStore = {
     rows: NotificationRow[];
     categories: NotificationCategories;
     unseenCount: number;
+    /** `unseenCount` 里属于星遇同频的那部分；分栏报数用。 */
+    vrccUnseenCount: number;
     pendingInviteCount: number;
     isCenterOpen: boolean;
     loadStatus: LoadStatus;
@@ -189,9 +198,19 @@ function buildNotificationDerivedState(
     const categories = createEmptyCategories();
     const recentCutoff = Date.now() - RECENT_WINDOW_MS;
     let unseenCount = 0;
+    let vrccUnseenCount = 0;
     let pendingInviteCount = 0;
 
     for (const notification of rows) {
+        // 站外提醒不进 VRChat 的分类桶：它们在自己的来源分栏里渲染。
+        // 但它仍然算应用内角标——「有几件事没看」这件事和来源无关。
+        if (isVrccNotification(notification)) {
+            if (isUnseenNotification(notification)) {
+                unseenCount += 1;
+                vrccUnseenCount += 1;
+            }
+            continue;
+        }
         if (isPendingInvite(notification)) {
             pendingInviteCount += 1;
         }
@@ -212,7 +231,7 @@ function buildNotificationDerivedState(
         }
     }
 
-    return { categories, unseenCount, pendingInviteCount };
+    return { categories, unseenCount, vrccUnseenCount, pendingInviteCount };
 }
 
 function notificationRowsCapacity(currentLength: number): number {
@@ -444,6 +463,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
         rows: [],
         categories: createEmptyCategories(),
         unseenCount: 0,
+        vrccUnseenCount: 0,
         pendingInviteCount: 0,
         isCenterOpen: false,
         loadStatus: 'idle',
@@ -458,6 +478,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                     rows: [],
                     categories: createEmptyCategories(),
                     unseenCount: 0,
+                    vrccUnseenCount: 0,
                     pendingInviteCount: 0,
                     loadStatus: 'idle',
                     detail: 'No current user session is available.'
@@ -507,6 +528,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                     rows: [],
                     categories: createEmptyCategories(),
                     unseenCount: 0,
+                    vrccUnseenCount: 0,
                     pendingInviteCount: 0,
                     loadStatus: 'error',
                     detail: message
@@ -994,6 +1016,7 @@ export const useVrcNotificationStore = create<VrcNotificationStore>(
                 rows: [],
                 categories: createEmptyCategories(),
                 unseenCount: 0,
+                vrccUnseenCount: 0,
                 pendingInviteCount: 0,
                 isCenterOpen: false,
                 loadStatus: 'idle',
