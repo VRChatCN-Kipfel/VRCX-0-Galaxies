@@ -58,6 +58,10 @@ activity_kinds! {
     GroupTransfer => "group.transfer",
     Event => "Event",
     External => "External",
+    // 星遇同频（vrcc.cc）的站外提醒。**独立注册**，不借用 `External`：
+    // 玩家要能只关掉星遇的提醒，关掉「外部事件」也不该连带关掉它。
+    // 键串与通知中心那一行的 `type` 一致（见 `runtime-host-desktop::vrcc`）。
+    VrccNotice => "vrcc.notice",
     BlockedOnPlayerJoined => "BlockedOnPlayerJoined",
     BlockedOnPlayerLeft => "BlockedOnPlayerLeft",
     MutedOnPlayerJoined => "MutedOnPlayerJoined",

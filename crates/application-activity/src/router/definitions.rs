@@ -210,6 +210,18 @@ pub(super) fn definition(kind: ActivityKind) -> KindDefinition {
             S::Off,
             S::On,
         ),
+        // 星遇同频（vrcc.cc）的站外提醒：单独一类，不和 VRChat 的 `Event` 挤在
+        // `SystemSafety` 里。通道默认值刻意照抄 `Event`（腕表/桌面/弹窗开、TTS 关），
+        // 先保证玩家看到的行为与上线时一致；等星卡态行落地再按需要调。
+        K::VrccNotice => (
+            C::ExternalSource,
+            BOOLEAN_SCOPES,
+            S::On,
+            S::On,
+            S::On,
+            S::Off,
+            S::On,
+        ),
         K::BlockedOnPlayerJoined | K::MutedOnPlayerJoined => (
             C::SystemSafety,
             INSTANCE_ACTOR_SCOPES,

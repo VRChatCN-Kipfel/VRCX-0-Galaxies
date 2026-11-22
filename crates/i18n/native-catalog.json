@@ -165,6 +165,10 @@
                     "source": "notifications.external_title"
                 },
                 {
+                    "key": "notifications.vrcc_title",
+                    "source": "notifications.vrcc_title"
+                },
+                {
                     "key": "notifications.video_play_title",
                     "source": "notifications.video_play_title"
                 },

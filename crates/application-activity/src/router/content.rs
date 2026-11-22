@@ -213,6 +213,17 @@ pub(super) fn build_activity_content(event: &ActivityEvent) -> ActivityContent {
             OverlayMessage::notifications_external_title(),
             literal_body(message),
         ),
+        // 星遇同频（vrcc.cc）的站外提醒。标题取站方的官方译名（`notifications.vrcc_title`），
+        // 正文原样照抄——那已经是给人看的一句话，不做任何键值替换。
+        //
+        // 为什么不用 `vrcc.title`：桌面安全内容的标题必须落在 `notifications.` 命名空间
+        // （`application-activity` 的 `all_activity_types_build_desktop_safe_content`
+        // 钉住了这条），所以为覆盖层单开一个同文案的键。
+        ActivityKind::VrccNotice => keyed_title_body(
+            "system",
+            OverlayMessage::notifications_vrcc_title(),
+            literal_body(message),
+        ),
         ActivityKind::BlockedOnPlayerJoined => titled_body(
             "shield",
             &title_name,

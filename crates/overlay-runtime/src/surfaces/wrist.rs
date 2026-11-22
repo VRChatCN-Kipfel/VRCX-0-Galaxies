@@ -582,6 +582,9 @@ fn feed_kind(entry: &ActivityEntry) -> FeedKind {
         ActivityCategory::GroupSocial => FeedKind::Group,
         ActivityCategory::SystemSafety => FeedKind::System,
         ActivityCategory::Media => FeedKind::Media,
+        // 星遇同频暂时沿用系统档。等星卡态行落地（有星名/星位/头像）再单独给一个
+        // `FeedKind`，否则腕表上它和 VRChat 的系统事件长得一模一样。
+        ActivityCategory::ExternalSource => FeedKind::System,
     }
 }
 

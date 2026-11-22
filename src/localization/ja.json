@@ -7235,6 +7235,7 @@
         "instance_closed_location": "{location} が閉じられました",
         "event_title": "イベント",
         "external_title": "外部アプリ",
+        "vrcc_title": "ほしあい",
         "video_play_title": "動画再生",
         "tracker_title": "トラッカー",
         "tracker_disconnected": "接続が切れました",

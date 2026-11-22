@@ -7595,6 +7595,7 @@
         "instance_closed_location": "房间已关闭：{location}",
         "event_title": "事件",
         "external_title": "外部应用",
+        "vrcc_title": "星遇同频",
         "video_play_title": "视频播放",
         "tracker_title": "追踪器",
         "tracker_disconnected": "已断开",

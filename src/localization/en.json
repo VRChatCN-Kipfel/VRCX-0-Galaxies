@@ -7608,6 +7608,7 @@
         "instance_closed_location": "Instance closed: {location}",
         "event_title": "Event",
         "external_title": "External App",
+        "vrcc_title": "Orbitune",
         "video_play_title": "Video Play",
         "tracker_title": "Tracker",
         "tracker_disconnected": "disconnected",

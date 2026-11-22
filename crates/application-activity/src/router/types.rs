@@ -21,6 +21,12 @@ pub enum ActivityCategory {
     GroupSocial,
     SystemSafety,
     Media,
+    /// 站外来源：VRChat 之外的一整套提醒（目前是星遇同频 vrcc.cc）。
+    ///
+    /// 单独一类而不是塞进 `SystemSafety`：那个大类是「系统与安全」，
+    /// 星遇的「有人连了你」既不是系统消息也不是安全告警；更重要的是，
+    /// 两者共用一条 catalog 行时玩家没法只关掉其中一个。
+    ExternalSource,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]

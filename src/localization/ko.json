@@ -7177,6 +7177,7 @@
         "instance_closed_location": "{location} 인스턴스가 닫혔습니다.",
         "event_title": "이벤트",
         "external_title": "외부 앱",
+        "vrcc_title": "Orbitune",
         "video_play_title": "비디오 재생",
         "tracker_title": "트래커",
         "tracker_disconnected": "연결이 끊겼습니다",
