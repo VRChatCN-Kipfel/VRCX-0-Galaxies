@@ -487,7 +487,32 @@ impl DesktopVrccRuntime {
             return Ok(0);
         };
         let sender = Self::service_name_for(self.config.as_ref());
-        Ok(persist_notes(&self.db, &owner, &notes.notes, &sender))
+        // 身份补充：`me/notes` 只给文字，不给「是哪一位星」。互相连上的星友
+        // 列表（同一个抽屉打开动作里本来就该有）能按**星号**映射到对方的
+        // VRChat 用户 ID。拉不到也照写——没有身份的行退回星名/星位渲染。
+        let mutual_vrc_users = match self.service.mutuals().await {
+            Ok(mutuals) => mutuals
+                .stars
+                .iter()
+                .filter_map(|star| {
+                    let n = star.n;
+                    let vrc_user = star.vrc_user.as_deref()?.trim();
+                    (!vrc_user.is_empty()).then(|| (n, vrc_user.to_string()))
+                })
+                .collect(),
+            Err(error) => {
+                // 没有 `mutuals` 权限、或额度用尽：不是错误，只是这一批行没有身份。
+                tracing::debug!(%error, "vrcc: mutuals unavailable, notes keep their text only");
+                std::collections::BTreeMap::new()
+            }
+        };
+        Ok(persist_notes(
+            &self.db,
+            &owner,
+            &notes.notes,
+            &sender,
+            &mutual_vrc_users,
+        ))
     }
 
     /// 当前所在地图在地图榜上的状态。`off` 的地图返回 `None`（不给看）。
@@ -1192,6 +1217,7 @@ fn note_row(
     note: &vrcx_0_contracts::vrcc::VrccNote,
     fallback_created_at: &str,
     sender: &str,
+    vrc_user: Option<&str>,
 ) -> serde_json::Value {
     let created_at = note
         .at
@@ -1223,6 +1249,10 @@ fn note_row(
                 "kind": note.kind.clone().unwrap_or_default(),
                 "post": note.post,
                 "world": note.world.clone().unwrap_or_default(),
+                // 对方的 VRChat 用户 ID：**只有互相连上且对方公开已验证**才有，
+                // 靠 `me/mutuals` 按星号关联。有它就渲染对方真实的 VRChat 头像，
+                // 没有就退回星位徽章——别伪造一个不存在的头像。
+                "vrcUser": vrc_user.unwrap_or_default(),
             }
         },
     })
@@ -1234,6 +1264,7 @@ fn persist_notes(
     owner: &vrcx_0_core::OwnerId,
     notes: &[vrcx_0_contracts::vrcc::VrccNote],
     sender: &str,
+    mutual_vrc_users: &std::collections::BTreeMap<i64, String>,
 ) -> usize {
     if notes.is_empty() {
         return 0;
@@ -1241,7 +1272,8 @@ fn persist_notes(
     let now = vrcx_0_core::time::now_iso();
     let mut written = 0usize;
     for note in notes {
-        let row = note_row(note, &now, sender);
+        let vrc_user = mutual_vrc_users.get(&note.id).map(String::as_str);
+        let row = note_row(note, &now, sender, vrc_user);
         match vrcx_0_outbound_adapters::upsert_vrcc_notice_row(db, owner.as_str(), row) {
             Ok(()) => written += 1,
             Err(error) => {
@@ -1970,6 +2002,7 @@ mod tests {
             ),
             "2026-01-01T00:00:00.000Z",
             "星遇同频",
+            None,
         );
         let produced: std::collections::BTreeSet<&str> = row
             .as_object()
@@ -1989,6 +2022,7 @@ mod tests {
             &note_at(42, None, None, None, None),
             "2026-01-01T00:00:00.000Z",
             "星遇同频",
+            None,
         );
         assert_eq!(row["id"], json!("vrcc_n_42"));
         // `vrcc_n_` 之后必须是纯数字：已读回标靠 `CAST(substr(...) AS INTEGER)`。
@@ -2010,6 +2044,7 @@ mod tests {
             &note_at(3, Some("map"), Some("给它打个分吧"), None, Some(true)),
             "2026-01-01T00:00:00.000Z",
             "星遇同频",
+            None,
         );
         assert_eq!(row["seen"], json!(true));
         assert_eq!(row["details"]["vrcc"]["kind"], json!("map"));
@@ -2020,8 +2055,32 @@ mod tests {
             &note_at(4, None, None, None, None),
             "2026-01-01T00:00:00.000Z",
             "星遇同频",
+            None,
         );
         assert_eq!(unknown["seen"], json!(false));
+    }
+
+    /// 有身份时把对方的 VRChat 用户 ID 写进 `details.vrcc`，没有就留空——
+    /// 空串意味着「界面退回星名/星位」，而不是「这位星没有 VRChat 账号」。
+    #[test]
+    fn a_note_row_keeps_the_mutual_vrc_user_when_known() {
+        let known = note_row(
+            &note_at(9, Some("mutual"), Some("互相连上了"), None, Some(true)),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+            Some("usr_1234"),
+        );
+        assert_eq!(known["details"]["vrcc"]["vrcUser"], json!("usr_1234"));
+
+        let unknown = note_row(
+            &note_at(9, Some("mutual"), Some("互相连上了"), None, Some(true)),
+            "2026-01-01T00:00:00.000Z",
+            "星遇同频",
+            None,
+        );
+        assert_eq!(unknown["details"]["vrcc"]["vrcUser"], json!(""));
+        // 没身份时**别**伪造 senderUserId：那边的空串是「不是 VRChat 用户」的意思。
+        assert_eq!(unknown["senderUserId"], json!(""));
     }
 
     /// 行 id 必须能解析回提醒编号：点通知时要靠它定位到具体一条。
