@@ -401,7 +401,8 @@ describe('notification view model', () => {
         expect(linked.actor).toEqual({
             kind: 'user',
             id: 'usr_alice',
-            name: '星遇同频',
+            // 标题是**类型标签**，不是服务名：来源已经是这一栏了。
+            name: 'view.notification.filters.vrcc.note.link',
             imageUrl: ''
         });
 
@@ -415,7 +416,7 @@ describe('notification view model', () => {
         );
         expect(anonymous.actor).toEqual({
             kind: 'system',
-            name: '星遇同频'
+            name: 'view.notification.filters.vrcc.notice'
         });
 
         // 空白串也不能被当成用户 ID：`openSender` 会去开一个不存在的资料页。

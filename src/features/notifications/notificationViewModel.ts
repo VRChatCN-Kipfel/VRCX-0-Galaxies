@@ -30,12 +30,22 @@ const VRCC_TYPE_PREFIX = 'vrcc.';
  * 没有它（没互连、没公开、或者根本没权限）退回 `kind: 'system'`：显示星遇的
  * 服务名，绝不伪造一个头像或一个用户 ID。
  */
-function vrccActor(notification: NotificationRow): NotificationActor {
+function vrccActor(
+    notification: NotificationRow,
+    typeLabel: string
+): NotificationActor {
     const details = notification.details as
-        | { vrcc?: { vrcUser?: unknown } }
+        | { vrcc?: { starName?: unknown; vrcUser?: unknown } }
         | undefined;
     const vrcUser = String(details?.vrcc?.vrcUser ?? '').trim();
-    const name = firstText(notification.senderUsername, notification.title);
+    // 标题用**类型标签**（「有人连了你」「互相连上」），不再重复服务名：
+    // 来源已经是这一栏了，每行再喊一遍「星遇同频」等于白占一行。
+    // `starName` 目前恒为空（`/me/notes` 不给星号，也就拿不到星名），
+    // 留着是为了将来站方补 `n` 时不用再改这里。
+    const name =
+        String(details?.vrcc?.starName ?? '').trim() ||
+        typeLabel ||
+        firstText(notification.senderUsername, notification.title);
     if (!vrcUser) {
         return { kind: 'system', name };
     }
@@ -469,7 +479,7 @@ export function toNotificationViewModel(
     }
 
     const actor: NotificationActor = type.startsWith(VRCC_TYPE_PREFIX)
-        ? vrccActor(notification)
+        ? vrccActor(notification, String(t(notificationTypeLabelKey(type))))
         : isGroupSender(notification)
           ? groupActor(notification)
           : text(notification.senderUserId)
