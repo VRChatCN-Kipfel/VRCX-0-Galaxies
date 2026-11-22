@@ -1,5 +1,5 @@
 import { BellIcon, CheckCheckIcon, RefreshCcwIcon, XIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { InviteMessageDialog } from '@/components/dialogs/InviteMessageDialog';
@@ -17,6 +17,7 @@ import { preserveAppTitleBarOnOpenChange } from '@/lib/overlayTitlebar';
 import { cn } from '@/lib/utils';
 import { openWorldDialog } from '@/services/dialogService';
 import { toast } from '@/services/toastService';
+import { syncVrccNotesIfDue } from '@/services/vrccNotificationService';
 import { useShellStore } from '@/state/shellStore';
 import {
     selectCanMarkAllSeen,
@@ -109,6 +110,19 @@ export function VrcNotificationCenterHost() {
     function markAllRead() {
         void markAllSeen();
     }
+
+    /**
+     * 抽屉一打开就把星遇的通知中心拉一次。
+     *
+     * 节流在 `syncVrccNotesIfDue` 里面：`me/notes` 是「第一份读」，不能跟着
+     * 抽屉开合无限打。写进去之后那边会自己重读一次本地表。
+     */
+    useEffect(() => {
+        if (!isCenterOpen) {
+            return;
+        }
+        void syncVrccNotesIfDue();
+    }, [isCenterOpen]);
 
     function handleOpenChange(open: boolean) {
         if (!open) {

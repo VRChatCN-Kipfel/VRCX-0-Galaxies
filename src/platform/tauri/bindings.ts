@@ -386,6 +386,15 @@ export const commands = {
     /**  通知中心。读了不标已读。服务器还没有 `me/notes` 时返回 `null`。 */
     appVrccNotes: () => __TAURI_INVOKE<VrccNotes | null>('app__vrcc_notes'),
     /**
+     *  拉一次 `me/notes` 并写进通知中心，返回写成功的条数。
+     *
+     *  **由玩家打开抽屉触发**，带前端节流：`me/notes` 属于「第一份读」（每天
+     *  1000 次），后台轮询会直接把额度吃完。写库之后前端要自己重读一次通知
+     *  中心——这条命令不发 `vrccNoticesChanged`，因为它只服务于「刚打开抽屉」
+     *  这一个动作。
+     */
+    appVrccNotesSync: () => __TAURI_INVOKE<number>('app__vrcc_notes_sync'),
+    /**
      *  当前所在地图在地图榜上的状态与我自己的评分。
      *
      *  一张地图在榜上的状态与我自己的评分。需要 `maps` 普通权限。

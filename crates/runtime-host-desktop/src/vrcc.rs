@@ -471,6 +471,10 @@ impl DesktopVrccRuntime {
     /// 已读直接采用服务端的 `seen`：那是权威结论，本地那套 id 游标只适用于
     /// `/me/notifications` 的 `read` 游标，两者不是一回事。
     pub async fn sync_notes(&self) -> Result<usize, VrccFailure> {
+        // 没连上时直接返回 0：抽屉每次打开都会调它，报错只会在日志里刷噪音。
+        if !self.service.snapshot().connected {
+            return Ok(0);
+        }
         let Some(owner) = (self.owner)() else {
             return Ok(0);
         };

@@ -593,6 +593,24 @@ pub async fn app__vrcc_notes(state: State<'_, AppState>) -> Result<Option<VrccNo
         .map_err(|failure| AppError::Vrcc { failure })
 }
 
+/// 拉一次 `me/notes` 并写进通知中心，返回写成功的条数。
+///
+/// **由玩家打开抽屉触发**，带前端节流：`me/notes` 属于「第一份读」（每天
+/// 1000 次），后台轮询会直接把额度吃完。写库之后前端要自己重读一次通知
+/// 中心——这条命令不发 `vrccNoticesChanged`，因为它只服务于「刚打开抽屉」
+/// 这一个动作。
+#[tauri::command]
+#[specta::specta]
+pub async fn app__vrcc_notes_sync(state: State<'_, AppState>) -> Result<u32, AppError> {
+    state
+        .runtime_host()
+        .vrcc()
+        .sync_notes()
+        .await
+        .map(|written| written as u32)
+        .map_err(|failure| AppError::Vrcc { failure })
+}
+
 /// 当前所在地图在地图榜上的状态与我自己的评分。
 ///
 /// 一张地图在榜上的状态与我自己的评分。需要 `maps` 普通权限。

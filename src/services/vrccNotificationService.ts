@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { commands } from '@/platform/tauri/bindings';
 import { tauriClient } from '@/platform/tauri/client';
 import { openVrccTab } from '@/shared/utils/vrccNavigation';
 import { useVrcNotificationStore } from '@/state/vrcNotificationStore';
@@ -47,4 +48,40 @@ export async function bindVrccNotificationCenterEvents(): Promise<() => void> {
                 );
             });
     });
+}
+
+/**
+ * `me/notes` 的同步间隔。
+ *
+ * 它是「第一份读」，每个授权每天 1000 次。抽屉的开合频率远高于服务端更新
+ * 频率（通知中心本来就不会秒级变化），五分钟一次既够新，也留足余量给星遇
+ * 页面自己的请求。
+ */
+const NOTES_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+let notesSyncedAt = 0;
+
+/**
+ * 打开抽屉时把星遇的通知中心拉一次、写进本地表。
+ *
+ * 不接后台轮询：一天 1440 次的节奏会把 1000 次的额度吃穿。
+ *
+ * **先记时间再发请求**：失败也照样节流。否则一次网络故障会退化成「每开一次
+ * 抽屉打一次」，正好是要避免的那种浪费。
+ *
+ * 没连上星遇时后端直接返回 0（它自己判连接状态），这里不必再问一遍。
+ */
+export async function syncVrccNotesIfDue(): Promise<void> {
+    const now = Date.now();
+    if (now - notesSyncedAt < NOTES_SYNC_INTERVAL_MS) {
+        return;
+    }
+    notesSyncedAt = now;
+    try {
+        const written = await commands.appVrccNotesSync();
+        if (written > 0) {
+            await useVrcNotificationStore.getState().loadForCurrentUser();
+        }
+    } catch (error) {
+        console.warn('[vrcc] notes sync failed:', error);
+    }
 }
