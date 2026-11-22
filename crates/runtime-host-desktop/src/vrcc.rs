@@ -1212,11 +1212,12 @@ fn handle_recent_notices(
 
 /// 把一条星遇同频提醒包装成活动投递对象。
 ///
-/// ## 为什么用 `ActivityKind::External`
+/// ## 为什么是 `ActivityKind::VrccNotice`
 ///
-/// 这个 kind 存在的意义就是「来自 VRChat 之外的事件」，渲染时走
-/// `literal_body`——标题正文原样照抄，不做任何键值替换。正好是本功能需要的
-/// 语义，不必新增 kind，也不必给渲染层加分支。
+/// 以前借用 `ActivityKind::External`，和 VRChat 的 `Event` **共用同一条 catalog
+/// 行**：设置页里没有「星遇的提醒」这一行，关掉「外部事件」还会连带关掉它。
+/// 现在星遇有自己的 kind 与 `ActivityCategory::ExternalSource`，玩家可以只关
+/// 它一个。正文仍走 `literal_body`——原样照抄，不做任何键值替换。
 ///
 /// 标题用「星遇同频」：那是对方的**服务名**（不是社区名，也不是 logo），
 /// 只作文字归属使用，符合其《使用要求》对文字署名的允许。
@@ -1232,7 +1233,7 @@ fn external_notice_delivery(
     notice: &NoticeToNotify,
 ) -> vrcx_0_application_activity::ActivityDelivery {
     use vrcx_0_application_activity::{
-        ActivityActorRelation, ActivityCategory, ActivityContent, ActivityDelivery, ActivityEntry,
+        activity_category, ActivityActorRelation, ActivityContent, ActivityDelivery, ActivityEntry,
         ActivityText,
     };
     use vrcx_0_contracts::activity::ActivityKind;
@@ -1242,9 +1243,9 @@ fn external_notice_delivery(
             // 提醒 id 本身就是稳定的单调递增值，直接用。
             sequence: notice.id.unsigned_abs(),
             source_id: format!("vrcc:{}", notice.id),
-            kind: ActivityKind::External,
-            // 星遇同频的提醒不属于 VRChat 的任何分类，归到最中性的那一档。
-            category: ActivityCategory::SystemSafety,
+            kind: ActivityKind::VrccNotice,
+            // 归哪一档由 catalog 说了算（`ExternalSource`），宿主不再硬编码第二份。
+            category: activity_category(ActivityKind::VrccNotice),
             created_at: String::new(),
             // 星遇同频的提醒没有 VRChat 用户/世界 ID，这三个字段留空。
             actor_user_id: String::new(),
@@ -1544,11 +1545,10 @@ mod tests {
 
     // -- 通知投递：包装成活动对象、点哪里 --------------------------------
 
-    /// 每条提醒都要包装成 `ActivityKind::External`。
+    /// 每条提醒都要包装成星遇自己的 `ActivityKind::VrccNotice`。
     ///
-    /// 这个 kind 的语义就是「来自 VRChat 之外的事件」，渲染时用
-    /// `literal_body` 原样照抄正文。用别的 kind 会让界面套上不相干的
-    /// 模板文案（例如「加入了你所在的世界」）。
+    /// 不再是 `External`：那个 kind 和 VRChat 的 `Event` 共用一条 catalog 行，
+    /// 玩家没法只关掉星遇的提醒。渲染仍用 `literal_body` 原样照抄正文。
     #[test]
     fn notices_are_wrapped_as_external_activity() {
         use vrcx_0_contracts::activity::ActivityKind;
@@ -1559,7 +1559,12 @@ mod tests {
             body: Some("有人回复了你".to_string()),
         });
 
-        assert_eq!(delivery.entry.kind, ActivityKind::External);
+        assert_eq!(delivery.entry.kind, ActivityKind::VrccNotice);
+        // 大类来自 catalog，宿主里没有第二份真相源。
+        assert_eq!(
+            delivery.entry.category,
+            vrcx_0_application_activity::ActivityCategory::ExternalSource
+        );
         assert_eq!(delivery.entry.source_id, "vrcc:42");
         // 桌面和 VR 都要发：站外提醒不该因为「VRChat 没开」被丢掉。
         assert!(delivery.desktop);

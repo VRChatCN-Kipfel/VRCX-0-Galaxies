@@ -9,10 +9,10 @@ pub use activity_warmup::{
     ActivityWarmupRuntime,
 };
 pub use router::{
-    activity_type_definitions, ActivityActorRelation, ActivityCategory, ActivityContent,
-    ActivityDelivery, ActivityEntry, ActivityFavoriteGroupKeys, ActivityFavoriteGroups,
-    ActivityFilters, ActivityRouter, ActivityRule, ActivityScope, ActivitySink, ActivitySnapshot,
-    ActivitySurfaceFilters, ActivityText, ActivityTypeDefinition, GroupInstanceMonitor,
-    NotificationSurface,
+    activity_category, activity_type_definition, activity_type_definitions, ActivityActorRelation,
+    ActivityCategory, ActivityContent, ActivityDelivery, ActivityEntry, ActivityFavoriteGroupKeys,
+    ActivityFavoriteGroups, ActivityFilters, ActivityRouter, ActivityRule, ActivityScope,
+    ActivitySink, ActivitySnapshot, ActivitySurfaceFilters, ActivityText, ActivityTypeDefinition,
+    GroupInstanceMonitor, NotificationSurface,
 };
 pub use sink_registry::ActivitySinkRegistry;

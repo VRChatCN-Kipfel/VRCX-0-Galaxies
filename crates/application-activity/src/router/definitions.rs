@@ -270,23 +270,35 @@ fn definitions() -> impl Iterator<Item = KindDefinition> {
     ActivityKind::ALL.iter().copied().map(definition)
 }
 
+/// 一种活动类型在 catalog 里的完整定义。
+///
+/// 单一真相源：宿主（例如 `runtime-host-desktop` 投递星遇提醒的地方）要问
+/// 「这个 kind 归哪一档」时走这里，**不要**在调用点再硬编码一份
+/// `ActivityCategory`——那是第二个真相源，两边迟早漂移。
+pub(super) fn activity_type_definition(kind: ActivityKind) -> ActivityTypeDefinition {
+    let definition = definition(kind);
+    ActivityTypeDefinition {
+        key: definition.kind,
+        category: definition.category,
+        allowed_scopes: definition.allowed_scopes.to_vec(),
+        wrist_default_scope: definition.wrist_default_scope,
+        alert_default_scope: definition.alert_default_scope,
+        desktop_default_scope: definition.desktop_default_scope,
+        tts_default_scope: definition.tts_default_scope,
+        widget_default_scope: definition.widget_default_scope,
+        aliases: definition
+            .aliases
+            .iter()
+            .map(|alias| (*alias).to_string())
+            .collect(),
+    }
+}
+
 pub(super) fn activity_type_definitions() -> Vec<ActivityTypeDefinition> {
-    definitions()
-        .map(|definition| ActivityTypeDefinition {
-            key: definition.kind,
-            category: definition.category,
-            allowed_scopes: definition.allowed_scopes.to_vec(),
-            wrist_default_scope: definition.wrist_default_scope,
-            alert_default_scope: definition.alert_default_scope,
-            desktop_default_scope: definition.desktop_default_scope,
-            tts_default_scope: definition.tts_default_scope,
-            widget_default_scope: definition.widget_default_scope,
-            aliases: definition
-                .aliases
-                .iter()
-                .map(|alias| (*alias).to_string())
-                .collect(),
-        })
+    ActivityKind::ALL
+        .iter()
+        .copied()
+        .map(activity_type_definition)
         .collect()
 }
 

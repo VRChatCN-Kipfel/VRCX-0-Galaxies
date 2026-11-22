@@ -8,7 +8,7 @@ mod runtime;
 mod tests;
 mod types;
 
-pub use catalog::activity_type_definitions;
+pub use catalog::{activity_category, activity_type_definition, activity_type_definitions};
 pub use group_instance_monitor::GroupInstanceMonitor;
 pub use runtime::{ActivityFavoriteGroups, ActivityRouter, ActivitySink};
 pub use types::{
