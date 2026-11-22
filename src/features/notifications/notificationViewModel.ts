@@ -17,6 +17,30 @@ import {
 import { isRecord } from '@/shared/utils/record';
 
 const NOTIFICATION_TYPE_LABEL_PREFIX = 'view.notification.filters.';
+/** 站外（星遇同频）类型前缀：`vrcc.notice` 与 `vrcc.note.*` 都算。 */
+const VRCC_TYPE_PREFIX = 'vrcc.';
+
+/**
+ * 站外提醒的「发送者」。
+ *
+ * `details.vrcc.vrcUser` 由后端按星号从 `me/mutuals` 关联得到——**只有互相
+ * 连上、且对方公开已验证**时才有。有它就用 `kind: 'user'`：`useNotificationActorImage`
+ * 会走现有的 VRChat 头像管线，于是这一行显示的是对方**真实的 VRChat 头像**。
+ *
+ * 没有它（没互连、没公开、或者根本没权限）退回 `kind: 'system'`：显示星遇的
+ * 服务名，绝不伪造一个头像或一个用户 ID。
+ */
+function vrccActor(notification: NotificationRow): NotificationActor {
+    const details = notification.details as
+        | { vrcc?: { vrcUser?: unknown } }
+        | undefined;
+    const vrcUser = String(details?.vrcc?.vrcUser ?? '').trim();
+    const name = firstText(notification.senderUsername, notification.title);
+    if (!vrcUser) {
+        return { kind: 'system', name };
+    }
+    return { kind: 'user', id: vrcUser, name, imageUrl: '' };
+}
 const NOTIFICATION_TYPE_LABEL_KEY_OVERRIDES: Readonly<Record<string, string>> =
     Object.freeze({
         'invite.instance.contentGated': 'inviteInstanceContentGated'
@@ -444,11 +468,13 @@ export function toNotificationViewModel(
         };
     }
 
-    const actor: NotificationActor = isGroupSender(notification)
-        ? groupActor(notification)
-        : text(notification.senderUserId)
-          ? userActor(notification)
-          : { kind: 'system', name: firstText(notification.title) };
+    const actor: NotificationActor = type.startsWith(VRCC_TYPE_PREFIX)
+        ? vrccActor(notification)
+        : isGroupSender(notification)
+          ? groupActor(notification)
+          : text(notification.senderUserId)
+            ? userActor(notification)
+            : { kind: 'system', name: firstText(notification.title) };
     return {
         ...base,
         template: 'compact',
