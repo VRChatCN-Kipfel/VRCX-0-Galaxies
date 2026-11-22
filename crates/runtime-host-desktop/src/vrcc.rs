@@ -1183,6 +1183,28 @@ fn persist_notices(
     written
 }
 
+/// 一条 notes 的落点。
+///
+/// 星遇的提醒大多自带「去哪」，照着写成 scheme，前端按 scheme 分派：
+///
+/// - `vrcc:map:<wrld>` —— 地图提醒（「给它打个分吧」）：直接打开 VRCX-0 自己的
+///   世界卡片，比把人丢到浏览器有用；
+/// - `vrcc:post:<id>` —— 星友圈动态：落到星遇页；
+/// - `vrcc:notifications` —— 其余：星遇的「提醒」页。
+///
+/// `world` 只认 `wrld_` 开头（契约里它可能是空串或别的形态），别拿脏值去拼
+/// 一条点开没反应的通知。
+fn note_link(note: &vrcx_0_contracts::vrcc::VrccNote) -> String {
+    let world = note.world.as_deref().unwrap_or_default().trim();
+    if world.starts_with("wrld_") {
+        return format!("vrcc:map:{world}");
+    }
+    match note.post {
+        Some(post) => format!("vrcc:post:{post}"),
+        None => DesktopVrccRuntime::NOTICE_ROW_LINK.to_string(),
+    }
+}
+
 /// `me/notes` 的 `kind` → 通知中心行的 `type`。
 ///
 /// 不认识的 kind（站方以后新加的）退回 `vrcc.notice`：**不认识不是错误**，
@@ -1232,7 +1254,7 @@ fn note_row(
         // 和提醒行一样永不过期：这些是给玩家回查的历史。
         "expiresAt": "",
         "type": note_row_type(note.kind.as_deref().unwrap_or_default()),
-        "link": DesktopVrccRuntime::NOTICE_ROW_LINK,
+        "link": note_link(note),
         "linkText": String::new(),
         "title": sender,
         "message": text,
@@ -2081,6 +2103,28 @@ mod tests {
         assert_eq!(unknown["details"]["vrcc"]["vrcUser"], json!(""));
         // 没身份时**别**伪造 senderUserId：那边的空串是「不是 VRChat 用户」的意思。
         assert_eq!(unknown["senderUserId"], json!(""));
+    }
+
+    /// 落点：地图提醒落到世界卡片，星友圈落到星遇页，其余落提醒页。
+    #[test]
+    fn a_note_link_points_at_what_it_talks_about() {
+        let mut map_note = note_at(1, Some("map"), None, None, None);
+        map_note.world = Some("wrld_abc".into());
+        assert_eq!(note_link(&map_note), "vrcc:map:wrld_abc");
+
+        let mut post_note = note_at(2, Some("yq"), None, None, None);
+        post_note.post = Some(77);
+        assert_eq!(note_link(&post_note), "vrcc:post:77");
+
+        // 脏值不拼落点：没有 `wrld_` 前缀就当它没有。
+        let mut dirty = note_at(3, Some("map"), None, None, None);
+        dirty.world = Some("nonsense".into());
+        assert_eq!(note_link(&dirty), "vrcc:notifications");
+
+        assert_eq!(
+            note_link(&note_at(4, Some("link"), None, None, None)),
+            "vrcc:notifications"
+        );
     }
 
     /// 行 id 必须能解析回提醒编号：点通知时要靠它定位到具体一条。

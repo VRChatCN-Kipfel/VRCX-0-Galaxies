@@ -206,6 +206,16 @@ function openNotificationLink(link: unknown) {
         return false;
     }
     if (isVrccNotificationLink(value)) {
+        // `vrcc:map:<wrld>` 落到 VRCX-0 自己的世界卡片：星遇的地图提醒本来就是
+        // 「给这张图打个分」，在应用里看到世界详情比跳浏览器有用。
+        const vrccWorld = value.startsWith('vrcc:map:')
+            ? value.slice('vrcc:map:'.length).trim()
+            : '';
+        if (vrccWorld.startsWith('wrld_')) {
+            openWorldDialog({ worldId: vrccWorld });
+            return true;
+        }
+        // 其余（`vrcc:notifications` / `vrcc:post:<id>`）都落到星遇页。
         openVrccNotificationCenter();
         return true;
     }
