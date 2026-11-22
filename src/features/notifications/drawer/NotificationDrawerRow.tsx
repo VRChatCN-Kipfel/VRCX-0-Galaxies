@@ -11,6 +11,7 @@ import { useMinuteNowMs } from '@/lib/useMinuteNowMs';
 import { cn } from '@/lib/utils';
 import type { NotificationRow } from '@/repositories/notificationPersistenceRepository';
 import { getDismissResponse } from '@/shared/utils/notificationResponse';
+import { isVrccNotification } from '@/shared/utils/vrccNotification';
 import {
     selectMarkAllSeenRowState,
     useVrcNotificationStore
@@ -130,7 +131,11 @@ export function NotificationDrawerRow({
     const isBroadcast = view.template === 'broadcast';
     const senderName = isBroadcast
         ? view.actor.name || t('view.notification.feed.unknown_sender')
-        : String(getSenderName(notification) || '');
+        : // 站外来源的名字就是服务名（「星遇同频」），而来源已经是这一栏了：
+          // 再写一遍等于每行都以同一个词开头。行首交给类型徽章（提醒 / 有人连了你）。
+          isVrccNotification(notification)
+          ? ''
+          : String(getSenderName(notification) || '');
     const headline = isBroadcast
         ? view.headline || String(notification.title || '').trim()
         : '';
