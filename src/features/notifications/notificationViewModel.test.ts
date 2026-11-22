@@ -384,4 +384,49 @@ describe('notification view model', () => {
         expect(expired.expired).toBe(true);
         expect(legacySeen.unseen).toBe(false);
     });
+
+    /**
+     * 站外提醒的发送者：有 `details.vrcc.vrcUser` 就用它当 VRChat 用户
+     * （界面由此走现有头像管线），没有就退回服务名——**绝不伪造**。
+     */
+    it('uses the linked VRChat user as the actor for out-of-app rows', () => {
+        const linked = viewModel(
+            row({
+                type: 'vrcc.note.link',
+                title: '星遇同频',
+                senderUsername: '星遇同频',
+                details: { vrcc: { vrcUser: 'usr_alice' } }
+            })
+        );
+        expect(linked.actor).toEqual({
+            kind: 'user',
+            id: 'usr_alice',
+            name: '星遇同频',
+            imageUrl: ''
+        });
+
+        const anonymous = viewModel(
+            row({
+                type: 'vrcc.notice',
+                title: '星遇同频',
+                senderUsername: '星遇同频',
+                details: {}
+            })
+        );
+        expect(anonymous.actor).toEqual({
+            kind: 'system',
+            name: '星遇同频'
+        });
+
+        // 空白串也不能被当成用户 ID：`openSender` 会去开一个不存在的资料页。
+        const blank = viewModel(
+            row({
+                type: 'vrcc.note.map',
+                title: '星遇同频',
+                senderUsername: '星遇同频',
+                details: { vrcc: { vrcUser: '   ' } }
+            })
+        );
+        expect(blank.actor.kind).toBe('system');
+    });
 });
