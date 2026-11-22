@@ -2156,7 +2156,16 @@
                     "fulfilled": "Twitch Drop получен"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "Новый контакт",
+                        "mutual": "Взаимная связь",
+                        "gift": "Подарок",
+                        "invite": "Приглашение",
+                        "yq": "Лента",
+                        "map": "Оценка карты",
+                        "about": "О себе"
+                    }
                 }
             },
             "description": {

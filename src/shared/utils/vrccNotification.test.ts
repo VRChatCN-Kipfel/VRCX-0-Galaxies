@@ -36,6 +36,12 @@ describe('vrccNotification', () => {
 
     it('recognises a row by its type', () => {
         expect(isVrccNotification({ type: 'vrcc.notice' })).toBe(true);
+        // `me/notes` 细分出来的族：按前缀认，**新增一种 kind 时这里不用改**。
+        expect(isVrccNotification({ type: 'vrcc.note.link' })).toBe(true);
+        expect(isVrccNotification({ type: 'vrcc.note.map' })).toBe(true);
+        expect(isVrccNotification({ type: ' vrcc.note.yq ' })).toBe(true);
+        // 前缀必须以点收尾：`vrccX` 不是站外来源。
+        expect(isVrccNotification({ type: 'vrccX' })).toBe(false);
         expect(isVrccNotification({ type: 'invite' })).toBe(false);
         expect(isVrccNotification(null)).toBe(false);
         expect(isVrccNotification(undefined)).toBe(false);

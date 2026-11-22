@@ -2075,7 +2075,16 @@
                     "fulfilled": "Twitch 드롭 지급"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "새 연결",
+                        "mutual": "상호 연결",
+                        "gift": "선물",
+                        "invite": "초대",
+                        "yq": "피드",
+                        "map": "맵 평가",
+                        "about": "프로필"
+                    }
                 }
             },
             "description": {

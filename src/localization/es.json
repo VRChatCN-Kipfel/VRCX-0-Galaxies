@@ -2141,7 +2141,16 @@
                     "fulfilled": "Twitch Drop recibido"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "Nuevo vínculo",
+                        "mutual": "Vínculo mutuo",
+                        "gift": "Regalo",
+                        "invite": "Invitación",
+                        "yq": "Feed",
+                        "map": "Valoración de mapa",
+                        "about": "Sobre mí"
+                    }
                 }
             },
             "description": {

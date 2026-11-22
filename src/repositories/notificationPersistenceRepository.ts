@@ -129,7 +129,16 @@ export const NOTIFICATION_TYPES = Object.freeze([
     'text.adventure',
     // 站外来源的提醒。类型串是跨语言契约，与 Rust 侧
     // `runtime-host-desktop::vrcc` 的 `NOTICE_ROW_TYPE` 必须一致。
-    'vrcc.notice'
+    'vrcc.notice',
+    // `me/notes` 的 `kind` 细分出来的族，与 Rust 侧 `note_row_type()` 一一对应。
+    // 不认识的 kind 在那边会退回 `vrcc.notice`，所以这里多一个都不会漏行。
+    'vrcc.note.link',
+    'vrcc.note.mutual',
+    'vrcc.note.gift',
+    'vrcc.note.invite',
+    'vrcc.note.yq',
+    'vrcc.note.map',
+    'vrcc.note.about'
 ]);
 
 function normalizeUserId(value?: string | null): string {

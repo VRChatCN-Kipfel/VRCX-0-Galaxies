@@ -1919,7 +1919,16 @@
                     "fulfilled": "Drop twitch reçu"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "Nouveau lien",
+                        "mutual": "Lien mutuel",
+                        "gift": "Cadeau",
+                        "invite": "Invitation",
+                        "yq": "Fil",
+                        "map": "Note de la carte",
+                        "about": "À propos"
+                    }
                 }
             },
             "description": {

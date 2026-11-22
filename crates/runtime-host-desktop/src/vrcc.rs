@@ -1158,6 +1158,29 @@ fn persist_notices(
     written
 }
 
+/// `me/notes` 的 `kind` → 通知中心行的 `type`。
+///
+/// 不认识的 kind（站方以后新加的）退回 `vrcc.notice`：**不认识不是错误**，
+/// 显示成通用提醒，总比变成一条没有标签的陌生条目好。
+///
+/// 注意这**不是** `ActivityKind`：设置页与覆盖层的开关粒度仍然只有一个
+/// `vrcc.notice`——玩家要的是「关掉星遇提醒」这一个开关，不是七个。细分只
+/// 发生在行 `type` 上，供界面分族与堆叠用。
+///
+/// 键串带点，前端按嵌套 i18n key 取标签（`view.notification.filters.vrcc.note.link`）。
+fn note_row_type(kind: &str) -> &'static str {
+    match kind.trim() {
+        "link" => "vrcc.note.link",
+        "mutual" => "vrcc.note.mutual",
+        "gift" => "vrcc.note.gift",
+        "invite" => "vrcc.note.invite",
+        "yq" => "vrcc.note.yq",
+        "map" => "vrcc.note.map",
+        "about" => "vrcc.note.about",
+        _ => DesktopVrccRuntime::NOTICE_ROW_TYPE,
+    }
+}
+
 /// 把一条 `me/notes` 事实写成通知中心的一行。
 ///
 /// 和 [`notice_row`] 的区别是**原料更全**：notes 自带 `kind` / `seen` /
@@ -1182,7 +1205,7 @@ fn note_row(
         "updatedAt": created_at.clone(),
         // 和提醒行一样永不过期：这些是给玩家回查的历史。
         "expiresAt": "",
-        "type": DesktopVrccRuntime::NOTICE_ROW_TYPE,
+        "type": note_row_type(note.kind.as_deref().unwrap_or_default()),
         "link": DesktopVrccRuntime::NOTICE_ROW_LINK,
         "linkText": String::new(),
         "title": sender,
@@ -1920,6 +1943,18 @@ mod tests {
             post: None,
             world: None,
         }
+    }
+
+    /// `kind` 分族：认识的分到 `vrcc.note.*`，不认识（含缺失）退回通用提醒。
+    #[test]
+    fn a_note_kind_picks_its_row_type() {
+        assert_eq!(note_row_type("link"), "vrcc.note.link");
+        assert_eq!(note_row_type(" mutual "), "vrcc.note.mutual");
+        assert_eq!(note_row_type("yq"), "vrcc.note.yq");
+        assert_eq!(note_row_type("map"), "vrcc.note.map");
+        // 站方以后新加的 kind：不能变成一条没有标签的陌生条目。
+        assert_eq!(note_row_type("brand-new"), "vrcc.notice");
+        assert_eq!(note_row_type(""), "vrcc.notice");
     }
 
     /// notes 行写的是同一张表，列名集合必须和提醒行完全一致。

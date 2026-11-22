@@ -2463,7 +2463,16 @@
                     "fulfilled": "Twitch Drop Fulfilled"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "New link",
+                        "mutual": "Mutual link",
+                        "gift": "Gift",
+                        "invite": "Invite",
+                        "yq": "Feed",
+                        "map": "Map rating",
+                        "about": "About me"
+                    }
                 }
             },
             "description": {

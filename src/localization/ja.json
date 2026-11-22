@@ -2134,7 +2134,16 @@
                     "fulfilled": "Twitch ドロップの受け取り"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "コネクト",
+                        "mutual": "相互接続",
+                        "gift": "ギフト",
+                        "invite": "招待",
+                        "yq": "星友フィード",
+                        "map": "マップ評価",
+                        "about": "プロフィール"
+                    }
                 }
             },
             "description": {

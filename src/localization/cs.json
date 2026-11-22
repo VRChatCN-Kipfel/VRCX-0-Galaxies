@@ -2158,7 +2158,16 @@
                     "fulfilled": "Twitch Drop přijat"
                 },
                 "vrcc": {
-                    "notice": "Notice"
+                    "notice": "Notice",
+                    "note": {
+                        "link": "Nové propojení",
+                        "mutual": "Vzájemné propojení",
+                        "gift": "Dar",
+                        "invite": "Pozvánka",
+                        "yq": "Kanál",
+                        "map": "Hodnocení mapy",
+                        "about": "O mně"
+                    }
                 }
             },
             "description": {
