@@ -47,7 +47,9 @@ export function getNotificationMessage(
     t: TFunction
 ) {
     return [
-        notification?.title,
+        // 站外行的 `title` 就是服务名（「星遇同频」），而来源已经是那一栏了：
+        // 拼进来会让每条正文都以同一个词开头（实测就是这个现象）。
+        isVrccNotification(notification) ? '' : notification?.title,
         getNotificationBodyText(notification, t),
         notification?.details?.inviteMessage,
         notification?.details?.requestMessage,
